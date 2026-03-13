@@ -53,6 +53,21 @@ struct ProgressResponse: Codable {
     }
 }
 
+struct GoalResponse: Codable {
+    let goal: String
+    let deadline: String
+    let imageUrl: String?
+    let dailyCalorieTarget: Int
+    let daysUntilGoal: Int
+
+    enum CodingKeys: String, CodingKey {
+        case goal, deadline
+        case imageUrl = "image_url"
+        case dailyCalorieTarget = "daily_calorie_target"
+        case daysUntilGoal = "days_until_goal"
+    }
+}
+
 struct VisualJourneyResponse: Codable {
     let status: String
     let imageUrl: String?
@@ -120,6 +135,12 @@ class RenaAPI {
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(OnboardResponse.self, from: data)
+    }
+
+    func getGoal(userId: String) async throws -> GoalResponse {
+        let url = URL(string: "\(kBaseURL)/goal/\(userId)")!
+        let (data, _) = try await session.data(from: url)
+        return try JSONDecoder().decode(GoalResponse.self, from: data)
     }
 
     func devReset(userId: String) async throws {

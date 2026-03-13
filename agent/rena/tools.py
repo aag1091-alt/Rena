@@ -25,6 +25,10 @@ def _user_ref(user_id: str):
     return db.collection("users").document(user_id)
 
 
+def _goal_ref(user_id: str):
+    return db.collection("goals").document(user_id)
+
+
 def _today_log_ref(user_id: str):
     today = date.today().isoformat()
     return _user_ref(user_id).collection("logs").document(today)
@@ -81,7 +85,6 @@ def create_profile(
         "weight_kg": weight_kg,
         "activity_level": activity_level,
         "tdee": tdee,
-        "daily_calorie_target": daily_calorie_target,
         "created_at": firestore.SERVER_TIMESTAMP,
     }
     _user_ref(user_id).set(profile, merge=True)
@@ -130,11 +133,20 @@ def set_goal(user_id: str, goal: str, deadline: str) -> dict:
 
     daily_calorie_target = max(1200, tdee - deficit)
 
-    _user_ref(user_id).set({
+    _goal_ref(user_id).set({
         "goal": goal,
         "deadline": deadline,
         "daily_calorie_target": daily_calorie_target,
+        "days_until_goal": days_left,
+        "created_at": firestore.SERVER_TIMESTAMP,
     }, merge=True)
+
+    # Remove goal/deadline from user profile if present
+    _user_ref(user_id).update({
+        "goal": firestore.DELETE_FIELD,
+        "deadline": firestore.DELETE_FIELD,
+        "daily_calorie_target": firestore.DELETE_FIELD,
+    })
 
     return {
         "status": "saved",
@@ -142,6 +154,77 @@ def set_goal(user_id: str, goal: str, deadline: str) -> dict:
         "deadline": deadline,
         "daily_calorie_target": daily_calorie_target,
         "days_until_goal": days_left,
+    }
+
+
+def get_goal(user_id: str) -> dict:
+    """
+    Get the user's current goal, generating a goal image if not yet created.
+
+    Args:
+        user_id: The user's unique ID.
+
+    Returns:
+        Dict with goal, deadline, image_url, daily_calorie_target, days_until_goal.
+    """
+    goal_doc = _goal_ref(user_id).get().to_dict()
+
+    if not goal_doc:
+        return {
+            "goal": "Not set",
+            "deadline": "",
+            "image_url": None,
+            "daily_calorie_target": 1800,
+            "days_until_goal": 0,
+        }
+
+    # Lazily generate image if missing
+    if not goal_doc.get("image_url"):
+        goal_text = goal_doc.get("goal", "")
+        try:
+            client = _get_genai_client()
+            from google.genai import types as genai_types
+
+            prompt = (
+                f'Create a fun, vibrant, bold sticker-style illustration for this health goal: "{goal_text}"\n'
+                "Style: colorful, playful, exciting, motivational. Like a phone wallpaper or app icon.\n"
+                "Square composition. No text or words. High energy colors."
+            )
+
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-image",
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    response_modalities=["IMAGE", "TEXT"]
+                ),
+            )
+
+            image_data = None
+            for part in response.candidates[0].content.parts:
+                if part.inline_data:
+                    image_data = part.inline_data.data
+                    break
+
+            if image_data:
+                bucket_name = os.getenv("GCS_BUCKET", "rena-visual-journey")
+                storage_client = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
+                bucket = storage_client.bucket(bucket_name)
+
+                blob = bucket.blob(f"goals/{user_id}/goal_icon.jpg")
+                blob.upload_from_string(image_data, content_type="image/jpeg")
+                image_url = f"https://storage.googleapis.com/{bucket_name}/goals/{user_id}/goal_icon.jpg"
+
+                _goal_ref(user_id).set({"image_url": image_url}, merge=True)
+                goal_doc["image_url"] = image_url
+        except Exception:
+            pass  # image generation is best-effort
+
+    return {
+        "goal": goal_doc.get("goal", "Not set"),
+        "deadline": goal_doc.get("deadline", ""),
+        "image_url": goal_doc.get("image_url"),
+        "daily_calorie_target": goal_doc.get("daily_calorie_target", 1800),
+        "days_until_goal": goal_doc.get("days_until_goal", 0),
     }
 
 
@@ -157,15 +240,16 @@ def get_progress(user_id: str) -> dict:
     """
     profile = _user_ref(user_id).get().to_dict() or {}
     today_log = _today_log_ref(user_id).get().to_dict() or {}
+    goal_doc = _goal_ref(user_id).get().to_dict() or {}
 
     calories_consumed = sum(
         m.get("calories", 0) for m in today_log.get("meals", [])
     )
-    calorie_target = profile.get("daily_calorie_target", 1800)
+    calorie_target = goal_doc.get("daily_calorie_target", profile.get("daily_calorie_target", 1800))
 
     return {
-        "goal": profile.get("goal", "Not set"),
-        "deadline": profile.get("deadline", "Not set"),
+        "goal": goal_doc.get("goal", "Not set"),
+        "deadline": goal_doc.get("deadline", "Not set"),
         "calories_consumed": calories_consumed,
         "calories_target": calorie_target,
         "calories_remaining": calorie_target - calories_consumed,
@@ -439,5 +523,8 @@ def reset_user(user_id: str) -> dict:
     for sub in ["logs", "progress", "visual_journey"]:
         delete_collection(user_ref.collection(sub))
     user_ref.delete()
+
+    # Also delete goals doc
+    _goal_ref(user_id).delete()
 
     return {"status": "reset", "user_id": user_id}
