@@ -1,9 +1,10 @@
 import base64
 import os
+import uuid
 from datetime import date, datetime, timezone
 
 from google import genai
-from google.cloud import firestore
+from google.cloud import firestore, storage
 
 db = firestore.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
 
@@ -208,6 +209,94 @@ If no food is visible return {"identified": false}."""
     result = json.loads(raw)
     result["user_id"] = user_id
     return result
+
+
+def update_visual_journey(user_id: str) -> dict:
+    """
+    Generate or update the user's visual journey image based on their current progress.
+    Call this when the user hits a milestone (every 10% progress) or asks to see their progress.
+
+    Args:
+        user_id: The user's unique ID.
+
+    Returns:
+        Public URL of the generated image and the current progress percentage.
+    """
+    client = _get_genai_client()
+    from google.genai import types as genai_types
+
+    # Get current progress and goal
+    progress = get_progress(user_id)
+    goal = progress["goal"]
+    deadline = progress["deadline"]
+    calories_target = progress["calories_target"]
+    calories_consumed = progress["calories_consumed"]
+
+    # Calculate overall completion (simple daily % for now)
+    pct = min(100, int((calories_consumed / max(calories_target, 1)) * 100)) if calories_consumed > 0 else 0
+
+    # Craft a prompt that evolves with progress
+    if pct < 25:
+        mood = "early morning light, soft and hopeful, just beginning the journey, muted warm tones"
+    elif pct < 50:
+        mood = "mid-morning golden light, energy building, colors becoming more vivid and saturated"
+    elif pct < 75:
+        mood = "bright afternoon sunlight, strong vibrant colors, confident and glowing atmosphere"
+    else:
+        mood = "radiant golden hour, fully vibrant and luminous, triumphant and joyful atmosphere"
+
+    prompt = f"""Create a beautiful, motivational illustration representing this personal health journey:
+Goal: "{goal}"
+Progress: {pct}% of today's targets achieved
+Visual mood: {mood}
+
+Style: Warm, uplifting digital art. No text or words in the image.
+Show a symbolic scene that represents progress toward this specific goal.
+The image should feel {('like the very start of something exciting' if pct < 25 else 'like real momentum is building' if pct < 50 else 'like the goal is within reach' if pct < 75 else 'like the goal has been achieved — pure celebration')}."""
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-image",
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(
+            response_modalities=["IMAGE", "TEXT"]
+        ),
+    )
+
+    # Extract image bytes
+    image_data = None
+    for part in response.candidates[0].content.parts:
+        if part.inline_data:
+            image_data = part.inline_data.data
+            break
+
+    if not image_data:
+        return {"status": "error", "message": "Image generation returned no image"}
+
+    # Upload to Cloud Storage
+    bucket_name = os.getenv("GCS_BUCKET", "rena-visual-journey")
+    storage_client = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
+    bucket = storage_client.bucket(bucket_name)
+
+    filename = f"{user_id}/{date.today().isoformat()}_{pct}pct_{uuid.uuid4().hex[:8]}.jpg"
+    blob = bucket.blob(filename)
+    blob.upload_from_string(image_data, content_type="image/jpeg")
+    public_url = f"https://storage.googleapis.com/{bucket_name}/{filename}"
+
+    # Save to Firestore
+    version = datetime.now(timezone.utc).isoformat()
+    _user_ref(user_id).collection("visual_journey").document(version).set({
+        "image_url": public_url,
+        "progress_percent": pct,
+        "goal": goal,
+        "generated_at": version,
+    })
+
+    return {
+        "status": "generated",
+        "image_url": public_url,
+        "progress_percent": pct,
+        "goal": goal,
+    }
 
 
 def find_restaurants(user_id: str, location: str, cuisine_preference: str = "") -> dict:

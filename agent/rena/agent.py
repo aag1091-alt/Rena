@@ -33,6 +33,7 @@ Keep responses concise — this is a voice-first app.
         tools.log_water,
         tools.log_workout,
         tools.scan_image,
+        tools.update_visual_journey,
         tools.find_restaurants,
     ],
 )
