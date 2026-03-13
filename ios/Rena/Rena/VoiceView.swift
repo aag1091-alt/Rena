@@ -4,7 +4,6 @@ struct VoiceView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var voice = VoiceManager()
     @State private var isConnected = false
-    @State private var textInput = ""
 
     var body: some View {
         ZStack {
@@ -75,33 +74,9 @@ struct VoiceView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                // Text input for simulator / accessibility fallback
-                if isConnected {
-                    HStack {
-                        TextField("Type a message...", text: $textInput)
-                            .textFieldStyle(.roundedBorder)
-                            .submitLabel(.send)
-                            .onSubmit { sendText() }
-                        Button(action: sendText) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(Color(hex: "E76F51"))
-                        }
-                        .disabled(textInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
-                    .padding(.horizontal, 24)
-                }
-
                 Spacer()
             }
         }
-    }
-
-    private func sendText() {
-        let msg = textInput.trimmingCharacters(in: .whitespaces)
-        guard !msg.isEmpty else { return }
-        voice.sendText(msg)
-        textInput = ""
     }
 
     private var statusText: String {
