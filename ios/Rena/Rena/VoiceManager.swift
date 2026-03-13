@@ -35,6 +35,7 @@ class VoiceManager: NSObject, ObservableObject {
     func disconnect() {
         webSocket?.cancel(with: .normalClosure, reason: nil)
         webSocket = nil
+        audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
         state = .idle
     }
@@ -94,7 +95,9 @@ class VoiceManager: NSObject, ObservableObject {
             self.webSocket?.send(.data(data)) { _ in }
         }
 
-        try? audioEngine.start()
+        if !audioEngine.isRunning {
+            try? audioEngine.start()
+        }
     }
 
     // MARK: - Receive loop

@@ -24,7 +24,6 @@ session_service = InMemorySessionService()
 APP_NAME = "rena"
 
 RUN_CONFIG = RunConfig(
-    response_modalities=[genai_types.Modality.AUDIO],
     speech_config=genai_types.SpeechConfig(
         voice_config=genai_types.VoiceConfig(
             prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name="Aoede")
