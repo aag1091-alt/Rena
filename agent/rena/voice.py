@@ -14,6 +14,7 @@ import traceback
 from dotenv import load_dotenv
 from fastapi import WebSocket, WebSocketDisconnect
 from google.adk.agents.live_request_queue import LiveRequestQueue
+from google.adk.agents.run_config import RunConfig
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
@@ -25,8 +26,7 @@ session_service = InMemorySessionService()
 
 APP_NAME = "rena"
 
-# Audio config — 16kHz PCM16 matches iOS AVAudioEngine default
-AUDIO_INPUT_CONFIG = genai_types.LiveConnectConfig(
+RUN_CONFIG = RunConfig(
     response_modalities=["AUDIO"],
     speech_config=genai_types.SpeechConfig(
         voice_config=genai_types.VoiceConfig(
@@ -68,8 +68,8 @@ async def handle_voice(websocket: WebSocket, user_id: str):
             async for event in runner.run_live(
                 user_id=user_id,
                 session_id=session.id,
-                live_connect_config=AUDIO_INPUT_CONFIG,
                 live_request_queue=live_queue,
+                run_config=RUN_CONFIG,
             ):
                 if event.content and event.content.parts:
                     for part in event.content.parts:

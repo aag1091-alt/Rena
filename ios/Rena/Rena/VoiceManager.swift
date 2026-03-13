@@ -56,8 +56,8 @@ class VoiceManager: NSObject, ObservableObject {
         try? session.setActive(true)
 
         let inputNode = audioEngine.inputNode
-        // Use hardware native format for the tap — convert to 16kHz in the callback
-        let hwFormat = inputNode.outputFormat(forBus: 0)
+        // Use the input node's native hardware format — no forced format on tap
+        let hwFormat = inputNode.inputFormat(forBus: 0)
 
         // Setup playback node
         audioEngine.attach(audioPlayer)
@@ -74,14 +74,17 @@ class VoiceManager: NSObject, ObservableObject {
                                          sampleRate: 16000,
                                          channels: 1,
                                          interleaved: true)!
-        let converter = AVAudioConverter(from: hwFormat, to: targetFormat)
+        guard let converter = AVAudioConverter(from: hwFormat, to: targetFormat) else {
+            print("[audio] failed to create converter from \(hwFormat) to 16kHz")
+            return
+        }
 
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: hwFormat) { [weak self] buffer, _ in
-            guard let self, let converter else { return }
-            let ratio = 16000.0 / hwFormat.sampleRate
-            let outFrames = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
-            guard outFrames > 0,
-                  let converted = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outFrames) else { return }
+        // Install tap with nil format — uses hardware native format automatically
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
+            guard let self else { return }
+            let ratio = 16000.0 / buffer.format.sampleRate
+            let outFrames = AVAudioFrameCount(max(1, Double(buffer.frameLength) * ratio))
+            guard let converted = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outFrames) else { return }
             var error: NSError?
             converter.convert(to: converted, error: &error) { _, status in
                 status.pointee = .haveData

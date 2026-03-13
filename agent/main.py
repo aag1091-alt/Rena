@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from rena.voice import handle_voice
 from rena.tools import scan_image, log_meal, get_progress, update_visual_journey
@@ -42,6 +42,8 @@ async def scan_food(req: ScanRequest):
 @app.get("/progress/{user_id}")
 async def progress(user_id: str):
     """Get today's progress for the iOS home screen."""
+    if not user_id or user_id.strip() == "":
+        raise HTTPException(status_code=400, detail="user_id is required")
     return get_progress(user_id)
 
 
@@ -52,6 +54,8 @@ class VisualJourneyRequest(BaseModel):
 @app.post("/visual_journey")
 async def visual_journey(req: VisualJourneyRequest):
     """Generate/update the visual journey image."""
+    if not req.user_id or req.user_id.strip() == "":
+        raise HTTPException(status_code=400, detail="user_id is required")
     return update_visual_journey(req.user_id)
 
 
