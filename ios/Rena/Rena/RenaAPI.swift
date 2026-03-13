@@ -1,8 +1,7 @@
 import Foundation
 import UIKit
 
-// Change this to your Cloud Run URL when deployed, or use localhost for local dev
-let kBaseURL = "http://localhost:8000"
+let kBaseURL = "https://rena-agent-879054433521.us-central1.run.app"
 
 struct ScanResponse: Codable {
     let identified: Bool
