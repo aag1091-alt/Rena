@@ -109,25 +109,58 @@ struct GoalOnboardingView: View {
 
                 Spacer()
 
-                // Continue button — appears once goal is detected
+                // Goal confirmation card — appears once goal is detected
                 if goalDetected {
-                    Button(action: confirmGoal) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Let's get started!")
-                                .font(.headline)
+                    VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Your goal")
+                                .font(.caption)
+                                .foregroundColor(Color(hex: "7C5C45"))
+                                .textCase(.uppercase)
+                            Text(detectedGoal)
+                                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                .foregroundColor(Color(hex: "3D2B1F"))
+                            if detectedDeadline != "Not set" && !detectedDeadline.isEmpty {
+                                Text(formattedDeadline(detectedDeadline))
+                                    .font(.subheadline)
+                                    .foregroundColor(Color(hex: "7C5C45"))
+                            }
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color(hex: "E76F51"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(Color.white.opacity(0.9))
                         .cornerRadius(16)
+
+                        HStack(spacing: 12) {
+                            Button(action: resetGoal) {
+                                Text("Change")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(Color(hex: "E76F51"))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(Color(hex: "E76F51").opacity(0.1))
+                                    .cornerRadius(14)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(Color(hex: "E76F51").opacity(0.4), lineWidth: 1)
+                                    )
+                            }
+                            Button(action: confirmGoal) {
+                                Text("Looks good →")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(Color(hex: "E76F51"))
+                                    .cornerRadius(14)
+                            }
+                        }
                     }
                     .padding(.horizontal, 28)
-                    .padding(.bottom, 48)
+                    .padding(.bottom, 40)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
-                    Color.clear.frame(height: 48 + 48)
+                    Color.clear.frame(height: 130)
                 }
             }
         }
@@ -161,6 +194,25 @@ struct GoalOnboardingView: View {
         appState.goalDetected(goal: detectedGoal, deadline: detectedDeadline)
     }
 
+    private func resetGoal() {
+        withAnimation {
+            goalDetected = false
+            detectedGoal = ""
+            detectedDeadline = ""
+        }
+        // Tell Rena to ask again
+        voice.sendText("The user wants to change their goal. Please ask them again what they want to work toward and when.")
+        startPolling()
+    }
+
+    private func formattedDeadline(_ iso: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: iso) else { return iso }
+        formatter.dateFormat = "MMMM d, yyyy"
+        return "📅 " + formatter.string(from: date)
+    }
+
     // MARK: - Poll /progress for goal detection
 
     private func startPolling() {
@@ -185,10 +237,7 @@ struct GoalOnboardingView: View {
                 withAnimation(.spring(response: 0.5)) {
                     goalDetected = true
                 }
-                // Auto-transition after a short pause so Rena can finish her confirmation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                    self.confirmGoal()
-                }
+                stopPolling() // Stop polling — user now confirms or resets
             }
         } catch {
             // Silent — keep polling
