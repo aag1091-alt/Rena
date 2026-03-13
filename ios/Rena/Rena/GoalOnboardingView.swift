@@ -94,19 +94,6 @@ struct GoalOnboardingView: View {
 
                 Spacer()
 
-                // Last response bubble
-                if !voice.lastResponse.isEmpty {
-                    Text(voice.lastResponse)
-                        .font(.body)
-                        .foregroundColor(Color(hex: "3D2B1F"))
-                        .multilineTextAlignment(.center)
-                        .padding()
-                        .background(Color.white.opacity(0.8))
-                        .cornerRadius(16)
-                        .padding(.horizontal, 28)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
                 Spacer()
 
                 // Goal confirmation card — appears once goal is detected
