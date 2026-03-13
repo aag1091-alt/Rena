@@ -20,6 +20,7 @@ class AppState: ObservableObject {
     @Published var caloriesConsumed: Int = 0
     @Published var caloriesTarget: Int = 1800
     @Published var waterGlasses: Int = 0
+    @Published var mealsLogged: [MealEntry] = []
     @Published var visualJourneyURL: URL? = nil
 
     init() {

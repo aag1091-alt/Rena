@@ -36,6 +36,24 @@ struct ScanResponse: Codable {
     }
 }
 
+struct MealEntry: Codable, Identifiable {
+    var id: String { loggedAt ?? name }
+    let name: String
+    let calories: Int
+    let proteinG: Int
+    let carbsG: Int
+    let fatG: Int
+    let loggedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, calories
+        case proteinG  = "protein_g"
+        case carbsG    = "carbs_g"
+        case fatG      = "fat_g"
+        case loggedAt  = "logged_at"
+    }
+}
+
 struct ProgressResponse: Codable {
     let goal: String
     let deadline: String
@@ -43,13 +61,15 @@ struct ProgressResponse: Codable {
     let caloriesTarget: Int
     let caloriesRemaining: Int
     let waterGlasses: Int
+    let mealsLogged: [MealEntry]
 
     enum CodingKeys: String, CodingKey {
         case goal, deadline
-        case caloriesConsumed = "calories_consumed"
-        case caloriesTarget = "calories_target"
+        case caloriesConsumed  = "calories_consumed"
+        case caloriesTarget    = "calories_target"
         case caloriesRemaining = "calories_remaining"
-        case waterGlasses = "water_glasses"
+        case waterGlasses      = "water_glasses"
+        case mealsLogged       = "meals_logged"
     }
 }
 
