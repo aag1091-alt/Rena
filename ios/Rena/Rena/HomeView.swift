@@ -2,19 +2,20 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var appState: AppState
-    @Binding var selectedTab: Int
+    @StateObject private var voice = VoiceManager()
 
     @State private var goalImage: URL? = nil
     @State private var goalText: String = ""
     @State private var daysLeft: Int = 0
     @State private var isLoadingGoal = false
+    @State private var isConnected = false
 
     var body: some View {
         ZStack {
             Color.white.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Top greeting
+                // Greeting
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(greeting)
@@ -25,7 +26,6 @@ struct HomeView: View {
                             .foregroundColor(Color(hex: "3D2B1F"))
                     }
                     Spacer()
-                    // small calorie ring summary
                     MiniCalorieRing()
                 }
                 .padding(.horizontal, 24)
@@ -33,50 +33,86 @@ struct HomeView: View {
 
                 Spacer()
 
-                // Rena orb — tap to go to voice
-                VStack(spacing: 12) {
-                    Button(action: { selectedTab = 1 }) {
+                // Goal card — top half
+                GoalCard(imageURL: goalImage, goalText: goalText, daysLeft: daysLeft, isLoading: isLoadingGoal)
+                    .padding(.horizontal, 20)
+
+                Spacer()
+
+                // Rena orb — bottom
+                VStack(spacing: 10) {
+                    Button(action: toggleVoice) {
                         ZStack {
                             Circle()
-                                .fill(Color(hex: "E76F51").opacity(0.12))
+                                .fill(Color(hex: "E76F51").opacity(isPulsing ? 0.18 : 0.10))
                                 .frame(width: 160, height: 160)
+                                .scaleEffect(isPulsing ? 1.08 : 1.0)
+                                .animation(
+                                    isPulsing
+                                        ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true)
+                                        : .default,
+                                    value: isPulsing
+                                )
                             Circle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
+                                        colors: isConnected
+                                            ? [Color(hex: "E76F51"), Color(hex: "F4A261")]
+                                            : [Color(hex: "D4B8A0"), Color(hex: "C4A882")],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
                                 .frame(width: 120, height: 120)
-                                .shadow(color: Color(hex: "E76F51").opacity(0.35), radius: 20)
+                                .shadow(color: Color(hex: "E76F51").opacity(isConnected ? 0.35 : 0), radius: 20)
                             Text("✦")
                                 .font(.system(size: 40))
                                 .foregroundColor(.white)
                         }
                     }
-                    Text("Tap to talk to Rena")
+                    Text(orbLabel)
                         .font(.subheadline)
                         .foregroundColor(Color(hex: "7C5C45"))
+                        .animation(.easeInOut, value: orbLabel)
                 }
-
-                Spacer()
-
-                // Goal card
-                GoalCard(imageURL: goalImage, goalText: goalText, daysLeft: daysLeft, isLoading: isLoadingGoal)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 32)
+                .padding(.bottom, 40)
             }
         }
         .onAppear { Task { await loadGoal() } }
+        .onDisappear { if isConnected { toggleVoice() } }
     }
 
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 12 { return "Good morning," }
-        if hour < 17 { return "Good afternoon," }
-        return "Good evening,"
+    // MARK: - Voice
+
+    private func toggleVoice() {
+        if isConnected {
+            voice.disconnect()
+            isConnected = false
+        } else {
+            voice.connect(userId: appState.userId)
+            isConnected = true
+        }
     }
+
+    private var orbLabel: String {
+        switch voice.state {
+        case .connecting: return "Connecting…"
+        case .listening:  return "Listening…"
+        case .thinking:   return "Thinking…"
+        case .speaking:   return "Rena is speaking…"
+        case .error:      return "Tap to try again"
+        default:          return isConnected ? "Tap to end" : "Tap to talk to Rena"
+        }
+    }
+
+    private var isPulsing: Bool {
+        switch voice.state {
+        case .listening, .speaking: return true
+        default: return false
+        }
+    }
+
+    // MARK: - Goal
 
     private func loadGoal() async {
         isLoadingGoal = true
@@ -93,7 +129,16 @@ struct HomeView: View {
             isLoadingGoal = false
         }
     }
+
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour < 12 { return "Good morning," }
+        if hour < 17 { return "Good afternoon," }
+        return "Good evening,"
+    }
 }
+
+// MARK: - Mini calorie ring
 
 struct MiniCalorieRing: View {
     @EnvironmentObject var appState: AppState
@@ -121,6 +166,8 @@ struct MiniCalorieRing: View {
     }
 }
 
+// MARK: - Goal card
+
 struct GoalCard: View {
     let imageURL: URL?
     let goalText: String
@@ -129,7 +176,6 @@ struct GoalCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Goal image
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(
@@ -150,11 +196,8 @@ struct GoalCard: View {
                     }
                 } else if let url = imageURL {
                     AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: 180)
-                            .clipped()
+                        image.resizable().aspectRatio(contentMode: .fill)
+                            .frame(height: 180).clipped()
                     } placeholder: {
                         ProgressView().tint(Color(hex: "E76F51"))
                     }
@@ -166,22 +209,16 @@ struct GoalCard: View {
                 }
             }
 
-            // Goal info below image
             VStack(alignment: .leading, spacing: 6) {
                 Text("Working towards")
-                    .font(.caption)
-                    .foregroundColor(Color(hex: "7C5C45"))
-                    .textCase(.uppercase)
-                    .padding(.top, 14)
-
+                    .font(.caption).foregroundColor(Color(hex: "7C5C45"))
+                    .textCase(.uppercase).padding(.top, 14)
                 Text(goalText.isEmpty ? "Set your goal" : goalText)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: "3D2B1F"))
-
                 if daysLeft > 0 {
                     HStack(spacing: 6) {
-                        Text(urgencyEmoji)
-                            .font(.system(size: 14))
+                        Text(urgencyEmoji).font(.system(size: 14))
                         Text("\(daysLeft) days to go")
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(Color(hex: "E76F51"))
@@ -189,8 +226,7 @@ struct GoalCard: View {
                     .padding(.top, 2)
                 }
             }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 4)
+            .padding(.horizontal, 4).padding(.bottom, 4)
         }
         .padding(16)
         .background(Color.white)
