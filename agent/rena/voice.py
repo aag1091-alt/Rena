@@ -9,6 +9,7 @@ Flow:
 import asyncio
 import json
 import traceback
+import warnings
 
 from dotenv import load_dotenv
 from fastapi import WebSocket, WebSocketDisconnect
@@ -17,6 +18,9 @@ from google.adk.agents.run_config import RunConfig
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
+
+# Suppress ADK's internal Pydantic warning about response_modalities string vs enum
+warnings.filterwarnings("ignore", message=".*response_modalities.*", category=UserWarning)
 
 load_dotenv()
 
@@ -51,8 +55,10 @@ async def handle_voice(websocket: WebSocket, user_id: str):
     )
 
     live_queue = LiveRequestQueue()
+    ws_closed = False
 
     async def send_to_client():
+        nonlocal ws_closed
         try:
             async for event in runner.run_live(
                 user_id=user_id,
@@ -60,6 +66,8 @@ async def handle_voice(websocket: WebSocket, user_id: str):
                 live_request_queue=live_queue,
                 run_config=RUN_CONFIG,
             ):
+                if ws_closed:
+                    break
                 if event.content and event.content.parts:
                     for part in event.content.parts:
                         if part.inline_data:
@@ -68,14 +76,16 @@ async def handle_voice(websocket: WebSocket, user_id: str):
                             await websocket.send_text(
                                 json.dumps({"type": "text", "text": part.text})
                             )
-                if event.turn_complete:
+                if event.turn_complete and not ws_closed:
                     await websocket.send_text(json.dumps({"type": "turn_complete"}))
         except Exception:
-            traceback.print_exc()
+            if not ws_closed:
+                traceback.print_exc()
         finally:
             live_queue.close()
 
     async def recv_from_client():
+        nonlocal ws_closed
         try:
             while True:
                 message = await websocket.receive()
@@ -109,6 +119,7 @@ async def handle_voice(websocket: WebSocket, user_id: str):
         except Exception:
             traceback.print_exc()
         finally:
+            ws_closed = True
             live_queue.close()
 
     send_task = asyncio.create_task(send_to_client())
