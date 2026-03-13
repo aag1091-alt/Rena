@@ -122,6 +122,12 @@ class RenaAPI {
         return try JSONDecoder().decode(OnboardResponse.self, from: data)
     }
 
+    func devReset(userId: String) async throws {
+        var req = URLRequest(url: URL(string: "\(kBaseURL)/dev/reset/\(userId)")!)
+        req.httpMethod = "DELETE"
+        _ = try await session.data(for: req)
+    }
+
     func getVisualJourney(userId: String) async throws -> VisualJourneyResponse {
         var req = URLRequest(url: URL(string: "\(kBaseURL)/visual_journey")!)
         req.httpMethod = "POST"

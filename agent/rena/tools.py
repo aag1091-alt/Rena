@@ -419,3 +419,26 @@ def find_restaurants(user_id: str, location: str, cuisine_preference: str = "") 
         "cuisine_preference": cuisine_preference,
         "note": "Use this context to suggest appropriate restaurants and dishes that fit the user's remaining calories and goal timeline.",
     }
+
+
+def reset_user(user_id: str) -> dict:
+    """
+    DEV ONLY — delete all Firestore data for a user so onboarding can be re-tested.
+    Deletes the user profile document and all subcollections (logs, progress, visual_journey).
+    """
+    def delete_collection(col_ref, batch_size=50):
+        docs = col_ref.limit(batch_size).stream()
+        deleted = 0
+        for doc in docs:
+            doc.reference.delete()
+            deleted += 1
+        if deleted >= batch_size:
+            delete_collection(col_ref, batch_size)
+
+    user_ref = _user_ref(user_id)
+    for sub in ["logs", "progress", "visual_journey"]:
+        delete_collection(user_ref.collection(sub))
+    user_ref.delete()
+
+    return {"status": "reset", "user_id": user_id}
+    }

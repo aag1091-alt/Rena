@@ -24,7 +24,10 @@ struct MainTabView: View {
             VStack(spacing: 20) {
                 Text("Dev Tools").font(.headline)
                 Button(role: .destructive) {
-                    appState.signOut()
+                    Task {
+                        try? await RenaAPI.shared.devReset(userId: appState.userId)
+                        appState.signOut()
+                    }
                 } label: {
                     Label("Reset onboarding", systemImage: "arrow.counterclockwise")
                         .frame(maxWidth: .infinity)

@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from rena.voice import handle_voice
-from rena.tools import scan_image, log_meal, get_progress, update_visual_journey, create_profile
+from rena.tools import scan_image, log_meal, get_progress, update_visual_journey, create_profile, reset_user
 
 load_dotenv()
 
@@ -41,6 +41,14 @@ async def onboard(req: OnboardRequest):
         weight_kg=req.weight_kg,
         activity_level=req.activity_level,
     )
+
+
+@app.delete("/dev/reset/{user_id}")
+async def dev_reset(user_id: str):
+    """DEV ONLY — wipe all Firestore data for a user to re-test onboarding."""
+    if not user_id or user_id.strip() == "":
+        raise HTTPException(status_code=400, detail="user_id is required")
+    return reset_user(user_id)
 
 
 @app.get("/health")
