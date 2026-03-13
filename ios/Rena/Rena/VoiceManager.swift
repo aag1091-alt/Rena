@@ -50,13 +50,16 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Audio capture
 
     private func startAudioCapture() {
-        let inputNode = audioEngine.inputNode
-        let format = AVAudioFormat(commonFormat: .pcmFormatInt16,
-                                   sampleRate: 16000,
-                                   channels: 1,
-                                   interleaved: true)!
+        // AVAudioSession must be configured before engine setup
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: .defaultToSpeaker)
+        try? session.setActive(true)
 
-        // Setup output for playback
+        let inputNode = audioEngine.inputNode
+        // Use hardware native format for the tap — convert to 16kHz in the callback
+        let hwFormat = inputNode.outputFormat(forBus: 0)
+
+        // Setup playback node
         audioEngine.attach(audioPlayer)
         playerFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                       sampleRate: 24000,
@@ -66,13 +69,28 @@ class VoiceManager: NSObject, ObservableObject {
             audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: pf)
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
-            guard let self, let data = buffer.toData() else { return }
+        // Converter: hardware format → 16kHz PCM16 mono (what Gemini expects)
+        let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
+                                         sampleRate: 16000,
+                                         channels: 1,
+                                         interleaved: true)!
+        let converter = AVAudioConverter(from: hwFormat, to: targetFormat)
+
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: hwFormat) { [weak self] buffer, _ in
+            guard let self, let converter else { return }
+            let ratio = 16000.0 / hwFormat.sampleRate
+            let outFrames = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
+            guard outFrames > 0,
+                  let converted = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outFrames) else { return }
+            var error: NSError?
+            converter.convert(to: converted, error: &error) { _, status in
+                status.pointee = .haveData
+                return buffer
+            }
+            guard error == nil, let data = converted.toData() else { return }
             self.webSocket?.send(.data(data)) { _ in }
         }
 
-        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: .defaultToSpeaker)
-        try? AVAudioSession.sharedInstance().setActive(true)
         try? audioEngine.start()
     }
 

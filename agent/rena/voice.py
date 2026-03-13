@@ -113,14 +113,12 @@ async def handle_voice(websocket: WebSocket, user_id: str):
                     if data.get("type") == "text_input":
                         # Allow text input for testing without a mic
                         live_queue.send_nowait(
-                            genai_types.LiveClientToolResponse(
-                                function_responses=[]
-                            )
-                        )
-                        live_queue.send_nowait(
-                            genai_types.Content(
-                                role="user",
-                                parts=[genai_types.Part(text=data["text"])],
+                            genai_types.LiveClientContent(
+                                turns=[genai_types.Content(
+                                    role="user",
+                                    parts=[genai_types.Part(text=data["text"])],
+                                )],
+                                turn_complete=True,
                             )
                         )
         except WebSocketDisconnect:

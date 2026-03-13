@@ -162,7 +162,7 @@ struct VisualJourneyCard: View {
     private func generateVisual() async {
         isGenerating = true
         defer { isGenerating = false }
-        guard let resp = try? await RenaAPI.shared.getVisualJourney(userId: appState.visualJourneyURL?.absoluteString ?? ""),
+        guard let resp = try? await RenaAPI.shared.getVisualJourney(userId: appState.userId),
               let urlStr = resp.imageUrl,
               let url = URL(string: urlStr) else { return }
         await MainActor.run { appState.visualJourneyURL = url }
