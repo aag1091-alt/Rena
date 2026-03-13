@@ -3,6 +3,20 @@ import UIKit
 
 let kBaseURL = "https://rena-agent-879054433521.us-central1.run.app"
 
+// MARK: - Onboard
+
+struct OnboardResponse: Codable {
+    let status: String
+    let name: String
+    let tdee: Int
+    let dailyCalorieTarget: Int
+
+    enum CodingKeys: String, CodingKey {
+        case status, name, tdee
+        case dailyCalorieTarget = "daily_calorie_target"
+    }
+}
+
 struct ScanResponse: Codable {
     let identified: Bool
     let description: String?
@@ -80,6 +94,32 @@ class RenaAPI {
         let url = URL(string: "\(kBaseURL)/progress/\(userId)")!
         let (data, _) = try await session.data(from: url)
         return try JSONDecoder().decode(ProgressResponse.self, from: data)
+    }
+
+    func onboard(
+        userId: String,
+        name: String,
+        sex: String,
+        age: Int,
+        heightCm: Double,
+        weightKg: Double,
+        activityLevel: String
+    ) async throws -> OnboardResponse {
+        var req = URLRequest(url: URL(string: "\(kBaseURL)/onboard")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = [
+            "user_id": userId,
+            "name": name,
+            "sex": sex,
+            "age": age,
+            "height_cm": heightCm,
+            "weight_kg": weightKg,
+            "activity_level": activityLevel,
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, _) = try await session.data(for: req)
+        return try JSONDecoder().decode(OnboardResponse.self, from: data)
     }
 
     func getVisualJourney(userId: String) async throws -> VisualJourneyResponse {

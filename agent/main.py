@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from rena.voice import handle_voice
-from rena.tools import scan_image, log_meal, get_progress, update_visual_journey
+from rena.tools import scan_image, log_meal, get_progress, update_visual_journey, create_profile
 
 load_dotenv()
 
@@ -15,6 +15,32 @@ class ScanRequest(BaseModel):
     image_base64: str
     mime_type: str = "image/jpeg"
     auto_log: bool = False  # if True, log the meal automatically after scanning
+
+
+class OnboardRequest(BaseModel):
+    user_id: str
+    name: str
+    sex: str            # "male" | "female"
+    age: int
+    height_cm: float
+    weight_kg: float
+    activity_level: str  # sedentary | lightly_active | moderately_active | very_active
+
+
+@app.post("/onboard")
+async def onboard(req: OnboardRequest):
+    """Create user profile and calculate personalised calorie target."""
+    if not req.user_id or req.user_id.strip() == "":
+        raise HTTPException(status_code=400, detail="user_id is required")
+    return create_profile(
+        user_id=req.user_id,
+        name=req.name,
+        sex=req.sex,
+        age=req.age,
+        height_cm=req.height_cm,
+        weight_kg=req.weight_kg,
+        activity_level=req.activity_level,
+    )
 
 
 @app.get("/health")

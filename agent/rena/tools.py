@@ -30,6 +30,70 @@ def _today_log_ref(user_id: str):
     return _user_ref(user_id).collection("logs").document(today)
 
 
+_ACTIVITY_MULTIPLIERS = {
+    "sedentary": 1.2,
+    "lightly_active": 1.375,
+    "moderately_active": 1.55,
+    "very_active": 1.725,
+}
+
+
+def create_profile(
+    user_id: str,
+    name: str,
+    sex: str,
+    age: int,
+    height_cm: float,
+    weight_kg: float,
+    activity_level: str,
+) -> dict:
+    """
+    Create or update a user profile and calculate their daily calorie target.
+
+    Uses Mifflin-St Jeor BMR formula + activity multiplier, then applies a
+    300 kcal deficit as a sensible default (refined later when goal is set).
+
+    Args:
+        user_id: Google user ID.
+        name: First name the user wants to be called.
+        sex: "male" or "female".
+        age: Age in years.
+        height_cm: Height in centimetres.
+        weight_kg: Current weight in kilograms.
+        activity_level: One of sedentary | lightly_active | moderately_active | very_active.
+
+    Returns:
+        Saved profile including calculated daily_calorie_target.
+    """
+    # Mifflin-St Jeor BMR
+    bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age
+    bmr += 5 if sex.lower() == "male" else -161
+
+    multiplier = _ACTIVITY_MULTIPLIERS.get(activity_level, 1.375)
+    tdee = int(bmr * multiplier)
+    daily_calorie_target = max(1200, tdee - 300)  # 300 kcal deficit, floor at 1200
+
+    profile = {
+        "name": name,
+        "sex": sex.lower(),
+        "age": age,
+        "height_cm": height_cm,
+        "weight_kg": weight_kg,
+        "activity_level": activity_level,
+        "tdee": tdee,
+        "daily_calorie_target": daily_calorie_target,
+        "created_at": firestore.SERVER_TIMESTAMP,
+    }
+    _user_ref(user_id).set(profile, merge=True)
+
+    return {
+        "status": "created",
+        "name": name,
+        "tdee": tdee,
+        "daily_calorie_target": daily_calorie_target,
+    }
+
+
 def set_goal(user_id: str, goal: str, deadline: str, daily_calorie_target: int = 1800) -> dict:
     """
     Save the user's health goal and deadline. Call this during onboarding.

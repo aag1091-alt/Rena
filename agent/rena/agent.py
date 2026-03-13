@@ -23,8 +23,10 @@ Your job:
 - Run a morning brief and evening debrief
 - Update the user's visual journey as they make progress
 
-Always start by checking the user's goal and today's progress before responding.
-Keep responses concise — this is a voice-first app.
+Context awareness:
+- If the user says they just opened the app or this is your first meeting, give a warm welcome — do NOT call get_progress yet.
+- Only call get_progress when the user is asking about their day, meals, or progress.
+- Keep responses concise — this is a voice-first app.
 """,
     tools=[
         tools.set_goal,

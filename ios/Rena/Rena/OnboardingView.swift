@@ -1,119 +1,336 @@
 import SwiftUI
 
-struct OnboardingView: View {
-    @EnvironmentObject var appState: AppState
-    @StateObject private var voice = VoiceManager()
+// MARK: - Data types
 
-    @State private var goalText: String = ""
-    @State private var deadlineText: String = ""
-    @State private var step: Int = 0
-    @State private var isListening = false
+enum Sex: String, CaseIterable {
+    case male = "male"
+    case female = "female"
+    var label: String { rawValue.capitalized }
+    var icon: String { self == .male ? "👨" : "👩" }
+}
 
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(hex: "F9E4C8"), Color(hex: "F4A261")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+enum ActivityLevel: String, CaseIterable {
+    case sedentary        = "sedentary"
+    case lightlyActive    = "lightly_active"
+    case moderatelyActive = "moderately_active"
+    case veryActive       = "very_active"
 
-            VStack(spacing: 32) {
-                Spacer()
-
-                // Logo
-                VStack(spacing: 8) {
-                    Text("✦")
-                        .font(.system(size: 48))
-                    Text("Rena")
-                        .font(.system(size: 42, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(hex: "3D2B1F"))
-                    Text("your personal health companion")
-                        .font(.subheadline)
-                        .foregroundColor(Color(hex: "7C5C45"))
-                }
-
-                Spacer()
-
-                // Step content
-                VStack(spacing: 20) {
-                    if step == 0 {
-                        VStack(spacing: 12) {
-                            Text("What are you working toward?")
-                                .font(.title2.bold())
-                                .foregroundColor(Color(hex: "3D2B1F"))
-                                .multilineTextAlignment(.center)
-
-                            Text("Tell Rena your goal — a wedding, a trip,\na race, or simply feeling your best.")
-                                .font(.subheadline)
-                                .foregroundColor(Color(hex: "7C5C45"))
-                                .multilineTextAlignment(.center)
-
-                            TextField("e.g. Feel confident at Sarah's wedding", text: $goalText)
-                                .padding()
-                                .background(Color.white.opacity(0.8))
-                                .cornerRadius(14)
-                                .font(.body)
-                        }
-                    } else {
-                        VStack(spacing: 12) {
-                            Text("When is your goal date?")
-                                .font(.title2.bold())
-                                .foregroundColor(Color(hex: "3D2B1F"))
-                                .multilineTextAlignment(.center)
-
-                            Text("Rena will adapt your daily targets\nas your goal gets closer.")
-                                .font(.subheadline)
-                                .foregroundColor(Color(hex: "7C5C45"))
-                                .multilineTextAlignment(.center)
-
-                            TextField("YYYY-MM-DD  e.g. 2026-07-15", text: $deadlineText)
-                                .padding()
-                                .background(Color.white.opacity(0.8))
-                                .cornerRadius(14)
-                                .font(.body)
-                                .keyboardType(.numbersAndPunctuation)
-                        }
-                    }
-                }
-                .padding(.horizontal, 28)
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                ))
-
-                // CTA button
-                Button(action: advance) {
-                    Text(step == 0 ? "Next →" : "Start my journey")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(
-                            (step == 0 ? !goalText.isEmpty : !deadlineText.isEmpty)
-                                ? Color(hex: "E76F51")
-                                : Color.gray.opacity(0.4)
-                        )
-                        .cornerRadius(16)
-                }
-                .disabled(step == 0 ? goalText.isEmpty : deadlineText.isEmpty)
-                .padding(.horizontal, 28)
-
-                Spacer()
-            }
+    var label: String {
+        switch self {
+        case .sedentary:        return "Mostly sitting"
+        case .lightlyActive:    return "Light exercise (1–3×/week)"
+        case .moderatelyActive: return "Moderate exercise (3–5×/week)"
+        case .veryActive:       return "Very active (daily intense)"
         }
     }
-
-    private func advance() {
-        if step == 0 {
-            withAnimation { step = 1 }
-        } else {
-            appState.completeOnboarding(goal: goalText, deadline: deadlineText)
+    var icon: String {
+        switch self {
+        case .sedentary:        return "🪑"
+        case .lightlyActive:    return "🚶"
+        case .moderatelyActive: return "🏃"
+        case .veryActive:       return "🔥"
         }
     }
 }
 
-// MARK: - Color helper
+// MARK: - Main view
+
+struct OnboardingView: View {
+    @EnvironmentObject var appState: AppState
+
+    @State private var step: Int = 0
+
+    // Answers
+    @State private var name: String = ""
+    @State private var sex: Sex = .male
+    @State private var age: Double = 28
+    @State private var heightCm: String = ""
+    @State private var weightKg: String = ""
+    @State private var activity: ActivityLevel = .moderatelyActive
+
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: "FDF6EC"), Color(hex: "F4A261")],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Progress dots
+                HStack(spacing: 8) {
+                    ForEach(0..<5) { i in
+                        Circle()
+                            .fill(i == step ? Color(hex: "E76F51") : Color(hex: "E76F51").opacity(0.25))
+                            .frame(width: i == step ? 10 : 7, height: i == step ? 10 : 7)
+                            .animation(.spring(response: 0.3), value: step)
+                    }
+                }
+                .padding(.top, 56)
+
+                Spacer()
+
+                // Step content
+                Group {
+                    switch step {
+                    case 0: stepName
+                    case 1: stepSex
+                    case 2: stepAge
+                    case 3: stepBody
+                    default: stepActivity
+                    }
+                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+                .padding(.horizontal, 28)
+
+                Spacer()
+
+                // Error
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                }
+
+                // CTA — only show for steps that don't auto-advance
+                if step == 0 || step == 3 {
+                    Button(action: advance) {
+                        if isSubmitting {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text(step == 3 ? "Almost done →" : "Next →")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(ctaEnabled ? Color(hex: "E76F51") : Color.gray.opacity(0.35))
+                    .cornerRadius(16)
+                    .disabled(!ctaEnabled || isSubmitting)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 48)
+                } else {
+                    Color.clear.frame(height: 48 + 48)
+                }
+            }
+        }
+    }
+
+    // MARK: - Step views
+
+    private var stepName: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            prompt("What should I\ncall you?")
+            TextField("Your first name", text: $name)
+                .font(.title2)
+                .padding()
+                .background(Color.white.opacity(0.85))
+                .cornerRadius(14)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.words)
+                .submitLabel(.next)
+                .onSubmit { if !name.trimmingCharacters(in: .whitespaces).isEmpty { advance() } }
+        }
+    }
+
+    private var stepSex: some View {
+        VStack(spacing: 24) {
+            prompt("I'm a…")
+            HStack(spacing: 16) {
+                ForEach(Sex.allCases, id: \.self) { option in
+                    Button(action: {
+                        sex = option
+                        withAnimation { advance() }
+                    }) {
+                        VStack(spacing: 10) {
+                            Text(option.icon).font(.system(size: 40))
+                            Text(option.label).font(.headline)
+                        }
+                        .foregroundColor(sex == option ? .white : Color(hex: "3D2B1F"))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 28)
+                        .background(
+                            sex == option
+                                ? Color(hex: "E76F51")
+                                : Color.white.opacity(0.85)
+                        )
+                        .cornerRadius(18)
+                    }
+                }
+            }
+        }
+    }
+
+    private var stepAge: some View {
+        VStack(spacing: 24) {
+            prompt("How old are you?")
+            Text("\(Int(age))")
+                .font(.system(size: 80, weight: .bold, design: .rounded))
+                .foregroundColor(Color(hex: "3D2B1F"))
+
+            Slider(value: $age, in: 16...80, step: 1)
+                .tint(Color(hex: "E76F51"))
+
+            HStack {
+                Text("16").font(.caption).foregroundColor(Color(hex: "7C5C45"))
+                Spacer()
+                Text("80").font(.caption).foregroundColor(Color(hex: "7C5C45"))
+            }
+
+            Button(action: advance) {
+                Text("Next →")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color(hex: "E76F51"))
+                    .cornerRadius(16)
+            }
+            .padding(.top, 8)
+        }
+    }
+
+    private var stepBody: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            prompt("Tell me about\nyour body")
+
+            VStack(spacing: 14) {
+                bodyField(title: "Height", placeholder: "e.g. 170", unit: "cm", text: $heightCm)
+                bodyField(title: "Weight", placeholder: "e.g. 75", unit: "kg", text: $weightKg)
+            }
+
+            Text("💡 We'll be able to pull this from Apple Health in the future.")
+                .font(.caption)
+                .foregroundColor(Color(hex: "7C5C45").opacity(0.8))
+        }
+    }
+
+    private var stepActivity: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            prompt("How active\nare you?")
+            VStack(spacing: 12) {
+                ForEach(ActivityLevel.allCases, id: \.self) { level in
+                    Button(action: {
+                        activity = level
+                        withAnimation { submitOnboarding() }
+                    }) {
+                        HStack(spacing: 14) {
+                            Text(level.icon).font(.title2)
+                            Text(level.label)
+                                .font(.body)
+                                .foregroundColor(Color(hex: "3D2B1F"))
+                            Spacer()
+                            if activity == level {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(Color(hex: "E76F51"))
+                            }
+                        }
+                        .padding(16)
+                        .background(
+                            activity == level
+                                ? Color(hex: "E76F51").opacity(0.12)
+                                : Color.white.opacity(0.85)
+                        )
+                        .cornerRadius(14)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(
+                                    activity == level ? Color(hex: "E76F51") : Color.clear,
+                                    lineWidth: 1.5
+                                )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func prompt(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 34, weight: .bold, design: .rounded))
+            .foregroundColor(Color(hex: "3D2B1F"))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func bodyField(title: String, placeholder: String, unit: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(Color(hex: "7C5C45"))
+                .textCase(.uppercase)
+            HStack {
+                TextField(placeholder, text: text)
+                    .font(.title2)
+                    .keyboardType(.decimalPad)
+                Text(unit)
+                    .font(.body)
+                    .foregroundColor(Color(hex: "7C5C45"))
+            }
+            .padding()
+            .background(Color.white.opacity(0.85))
+            .cornerRadius(14)
+        }
+    }
+
+    private var ctaEnabled: Bool {
+        switch step {
+        case 0: return !name.trimmingCharacters(in: .whitespaces).isEmpty
+        case 3:
+            let h = Double(heightCm) ?? 0
+            let w = Double(weightKg) ?? 0
+            return h > 0 && w > 0
+        default: return true
+        }
+    }
+
+    private func advance() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            step = min(step + 1, 4)
+        }
+    }
+
+    private func submitOnboarding() {
+        guard
+            let h = Double(heightCm),
+            let w = Double(weightKg)
+        else { return }
+
+        isSubmitting = true
+        errorMessage = nil
+
+        Task {
+            do {
+                let result = try await RenaAPI.shared.onboard(
+                    userId: appState.userId,
+                    name: name.trimmingCharacters(in: .whitespaces),
+                    sex: sex.rawValue,
+                    age: Int(age),
+                    heightCm: h,
+                    weightKg: w,
+                    activityLevel: activity.rawValue
+                )
+                appState.completeOnboarding(name: result.name, caloriesTarget: result.dailyCalorieTarget)
+            } catch {
+                errorMessage = "Something went wrong. Please try again."
+                isSubmitting = false
+            }
+        }
+    }
+}
+
+// MARK: - Color extension
 
 extension Color {
     init(hex: String) {

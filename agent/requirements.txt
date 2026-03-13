@@ -1,5 +1,6 @@
 google-adk
 google-cloud-firestore
+google-cloud-texttospeech
 python-dotenv
 fastapi
 uvicorn

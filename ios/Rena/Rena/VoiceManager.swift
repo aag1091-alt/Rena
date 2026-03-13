@@ -36,10 +36,29 @@ class VoiceManager: NSObject, ObservableObject {
             DispatchQueue.main.async { self.state = .listening }
             self.receiveLoop()
             self.startAudioCapture()
-            // Trigger Rena's opening greeting
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                self.sendText("hi")
-            }
+        }
+    }
+
+    /// Connects without mic capture — Rena speaks, user just listens.
+    /// Used on the intro/welcome screen before sign-in.
+    func connectGreetOnly(prompt: String) {
+        state = .connecting
+        let guestId = "guest-\(UUID().uuidString)"
+        let url = URL(string: "\(kBaseURL.replacingOccurrences(of: "http", with: "ws"))/ws/\(guestId)")!
+
+        let avSession = AVAudioSession.sharedInstance()
+        try? avSession.setCategory(.playback, mode: .default)
+        try? avSession.setActive(true)
+
+        setupPlaybackOnly()
+
+        webSocket = session.webSocketTask(with: url)
+        webSocket?.resume()
+        DispatchQueue.main.async { self.state = .listening }
+        receiveLoop()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            self.sendText(prompt)
         }
     }
 
@@ -57,6 +76,22 @@ class VoiceManager: NSObject, ObservableObject {
               let str = String(data: data, encoding: .utf8) else { return }
         webSocket?.send(.string(str)) { _ in }
         state = .thinking
+    }
+
+    // MARK: - Playback-only setup (no mic)
+
+    private func setupPlaybackOnly() {
+        playerFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
+                                     sampleRate: 24000,
+                                     channels: 1,
+                                     interleaved: true)
+        audioEngine.attach(audioPlayer)
+        if let pf = playerFormat {
+            audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: pf)
+        }
+        if !audioEngine.isRunning {
+            try? audioEngine.start()
+        }
     }
 
     // MARK: - Audio capture

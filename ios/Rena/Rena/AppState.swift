@@ -2,8 +2,18 @@ import SwiftUI
 import Combine
 
 class AppState: ObservableObject {
-    @Published var userId: String
-    @Published var isOnboarded: Bool
+    // Auth
+    @Published var userId: String = ""
+    @Published var isSignedIn: Bool = false
+
+    // Onboarding
+    @Published var isOnboarded: Bool = false
+
+    // Profile
+    @Published var name: String = ""
+    @Published var email: String = ""
+
+    // Daily progress (populated from /progress)
     @Published var goal: String = ""
     @Published var deadline: String = ""
     @Published var caloriesConsumed: Int = 0
@@ -12,21 +22,43 @@ class AppState: ObservableObject {
     @Published var visualJourneyURL: URL? = nil
 
     init() {
-        let stored = UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString
-        UserDefaults.standard.set(stored, forKey: "userId")
-        self.userId = stored
-        self.isOnboarded = UserDefaults.standard.bool(forKey: "isOnboarded")
-        self.goal = UserDefaults.standard.string(forKey: "goal") ?? ""
-        self.deadline = UserDefaults.standard.string(forKey: "deadline") ?? ""
+        userId = UserDefaults.standard.string(forKey: "userId") ?? ""
+        isSignedIn = !userId.isEmpty
+        isOnboarded = UserDefaults.standard.bool(forKey: "isOnboarded")
+        name = UserDefaults.standard.string(forKey: "userName") ?? ""
+        email = UserDefaults.standard.string(forKey: "userEmail") ?? ""
+        goal = UserDefaults.standard.string(forKey: "goal") ?? ""
+        deadline = UserDefaults.standard.string(forKey: "deadline") ?? ""
     }
 
-    func completeOnboarding(goal: String, deadline: String) {
-        self.goal = goal
-        self.deadline = deadline
+    func signIn(userId: String, email: String, name: String) {
+        self.userId = userId
+        self.email = email
+        self.name = name
+        self.isSignedIn = true
+        UserDefaults.standard.set(userId, forKey: "userId")
+        UserDefaults.standard.set(email, forKey: "userEmail")
+        UserDefaults.standard.set(name, forKey: "userName")
+    }
+
+    func completeOnboarding(name: String, caloriesTarget: Int) {
+        self.name = name
+        self.caloriesTarget = caloriesTarget
         self.isOnboarded = true
         UserDefaults.standard.set(true, forKey: "isOnboarded")
-        UserDefaults.standard.set(goal, forKey: "goal")
-        UserDefaults.standard.set(deadline, forKey: "deadline")
+        UserDefaults.standard.set(name, forKey: "userName")
+    }
+
+    func signOut() {
+        userId = ""
+        isSignedIn = false
+        isOnboarded = false
+        name = ""
+        email = ""
+        UserDefaults.standard.removeObject(forKey: "userId")
+        UserDefaults.standard.removeObject(forKey: "userEmail")
+        UserDefaults.standard.removeObject(forKey: "userName")
+        UserDefaults.standard.removeObject(forKey: "isOnboarded")
     }
 
     var progressPercent: Double {
