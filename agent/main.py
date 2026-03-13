@@ -1,12 +1,19 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from google.adk.cli.fast_api import get_fast_api_app
+from fastapi import FastAPI, WebSocket
+from rena.voice import handle_voice
 
 load_dotenv()
 
-# Mount the ADK-generated app (handles /run, /run_sse, agent routes)
-adk_app = get_fast_api_app()
-
 app = FastAPI(title="Rena Agent API")
-app.mount("/", adk_app)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "agent": "rena"}
+
+
+@app.websocket("/ws/{user_id}")
+async def voice_endpoint(websocket: WebSocket, user_id: str):
+    """Real-time voice conversation with Rena via Gemini Live API."""
+    await handle_voice(websocket, user_id)
