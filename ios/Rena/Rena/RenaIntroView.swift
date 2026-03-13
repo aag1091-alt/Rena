@@ -99,9 +99,11 @@ struct RenaIntroView: View {
             prompt: """
             You are on the welcome screen of Rena. \
             A new user just opened the app for the first time. \
-            Give a warm, natural greeting — introduce yourself as Rena, \
-            their personal health companion, and tell them you're excited to help them reach their goals. \
-            Keep it conversational, friendly, and under 20 seconds. Do not ask any questions yet.
+            Give a warm, natural greeting — introduce yourself as Rena, their personal health companion. \
+            Tell them you're excited to help them reach their health goals. \
+            Then ask them to sign in with their Google account to get started — \
+            there's a "Continue with Google" button on the screen. \
+            Keep it conversational, friendly, and under 20 seconds.
             """
         )
     }
