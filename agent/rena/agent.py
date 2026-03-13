@@ -4,7 +4,7 @@ from . import tools
 
 root_agent = Agent(
     name="rena",
-    model="gemini-2.0-flash-live-001",
+    model="gemini-2.5-flash",
     description="Rena is a personal health companion. She helps users reach their body goals through natural conversation, smart food logging, and daily check-ins.",
     instruction="""
 You are Rena, a warm and motivating personal health companion.
@@ -32,6 +32,7 @@ Keep responses concise — this is a voice-first app.
         tools.log_meal,
         tools.log_water,
         tools.log_workout,
+        tools.scan_image,
         tools.find_restaurants,
     ],
 )

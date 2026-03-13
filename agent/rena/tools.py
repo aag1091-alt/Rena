@@ -1,8 +1,23 @@
+import base64
 import os
 from datetime import date, datetime, timezone
+
+from google import genai
 from google.cloud import firestore
 
 db = firestore.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
+
+_genai_client = None
+
+def _get_genai_client():
+    global _genai_client
+    if _genai_client is None:
+        _genai_client = genai.Client(
+            vertexai=True,
+            project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+            location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        )
+    return _genai_client
 
 
 def _user_ref(user_id: str):
@@ -144,6 +159,55 @@ def log_workout(user_id: str, workout_type: str, duration_min: int, calories_bur
         merge=True
     )
     return {"status": "logged", "workout": workout_type, "duration_min": duration_min}
+
+
+def scan_image(user_id: str, image_base64: str, mime_type: str = "image/jpeg") -> dict:
+    """
+    Identify food in a photo and estimate nutritional content using Gemini Vision.
+    Use this when the user shares a photo of food from their camera or gallery.
+
+    Args:
+        user_id: The user's unique ID.
+        image_base64: Base64-encoded image data.
+        mime_type: Image MIME type (default image/jpeg).
+
+    Returns:
+        Identified food items with calorie and macro estimates.
+    """
+    client = _get_genai_client()
+    image_bytes = base64.b64decode(image_base64)
+
+    from google.genai import types as genai_types
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+            """You are a nutrition expert. Analyze this food image and respond in JSON only.
+Identify every food item visible and estimate nutritional content.
+Return exactly this structure:
+{
+  "identified": true,
+  "description": "brief description of what you see",
+  "items": [{"name": "...", "estimated_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
+  "total_calories": 0,
+  "total_protein_g": 0,
+  "total_carbs_g": 0,
+  "total_fat_g": 0,
+  "confidence": "high|medium|low"
+}
+If no food is visible return {"identified": false}."""
+        ],
+    )
+
+    import json, re
+    raw = response.text.strip()
+    # Strip markdown code fences if present
+    raw = re.sub(r"^```(?:json)?\n?", "", raw)
+    raw = re.sub(r"\n?```$", "", raw)
+
+    result = json.loads(raw)
+    result["user_id"] = user_id
+    return result
 
 
 def find_restaurants(user_id: str, location: str, cuisine_preference: str = "") -> dict:
