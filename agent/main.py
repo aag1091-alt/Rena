@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket
 from pydantic import BaseModel
 from rena.voice import handle_voice
-from rena.tools import scan_image, log_meal
+from rena.tools import scan_image, log_meal, get_progress, update_visual_journey
 
 load_dotenv()
 
@@ -37,6 +37,22 @@ async def scan_food(req: ScanRequest):
         )
         result["logged"] = True
     return result
+
+
+@app.get("/progress/{user_id}")
+async def progress(user_id: str):
+    """Get today's progress for the iOS home screen."""
+    return get_progress(user_id)
+
+
+class VisualJourneyRequest(BaseModel):
+    user_id: str
+
+
+@app.post("/visual_journey")
+async def visual_journey(req: VisualJourneyRequest):
+    """Generate/update the visual journey image."""
+    return update_visual_journey(req.user_id)
 
 
 @app.websocket("/ws/{user_id}")
