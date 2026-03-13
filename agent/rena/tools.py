@@ -441,4 +441,3 @@ def reset_user(user_id: str) -> dict:
     user_ref.delete()
 
     return {"status": "reset", "user_id": user_id}
-    }
