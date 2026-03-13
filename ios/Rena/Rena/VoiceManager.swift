@@ -24,12 +24,23 @@ class VoiceManager: NSObject, ObservableObject {
 
     func connect(userId: String) {
         state = .connecting
-        let url = URL(string: "\(kBaseURL.replacingOccurrences(of: "http", with: "ws"))/ws/\(userId)")!
-        webSocket = session.webSocketTask(with: url)
-        webSocket?.resume()
-        state = .listening
-        receiveLoop()
-        startAudioCapture()
+        AVAudioApplication.requestRecordPermission { [weak self] granted in
+            guard let self else { return }
+            guard granted else {
+                DispatchQueue.main.async { self.state = .error("Microphone access denied") }
+                return
+            }
+            let url = URL(string: "\(kBaseURL.replacingOccurrences(of: "http", with: "ws"))/ws/\(userId)")!
+            self.webSocket = self.session.webSocketTask(with: url)
+            self.webSocket?.resume()
+            DispatchQueue.main.async { self.state = .listening }
+            self.receiveLoop()
+            self.startAudioCapture()
+            // Trigger Rena's opening greeting
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.sendText("hi")
+            }
+        }
     }
 
     func disconnect() {
