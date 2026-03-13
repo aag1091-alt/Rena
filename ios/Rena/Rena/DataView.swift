@@ -11,8 +11,9 @@ struct DataView: View {
                     CalorieSummaryCard()
                     WaterCard()
                     FoodLogCard()
-                    Spacer(minLength: 32)
+                    Spacer(minLength: 40)
                 }
+                // Note: Scan food will be added back as a feature later
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             }
