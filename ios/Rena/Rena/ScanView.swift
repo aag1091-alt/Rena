@@ -25,10 +25,11 @@ struct ScanView: View {
                             Task { await loadPhoto(item) }
                         }
 
-                        // Camera
+                        // Camera (unavailable on simulator)
                         Button { showCamera = true } label: {
                             SourceButton(icon: "camera.fill", label: "Camera")
                         }
+                        .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
                     }
                     .padding(.horizontal)
 
