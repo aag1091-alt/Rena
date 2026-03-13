@@ -11,14 +11,17 @@ struct GoalOnboardingView: View {
     @State private var pollTimer: Timer?
 
     private var greetPrompt: String {
-        """
-        You are having a focused goal-setting conversation with \(appState.name.components(separatedBy: " ").first ?? appState.name).
+        let firstName = appState.name.components(separatedBy: " ").first ?? appState.name
+        return """
+        You are having a focused goal-setting conversation with \(firstName). \
+        Their user_id is "\(appState.userId)" — you MUST use this exact value when calling any tool.
         Your ONLY job right now is to understand their health goal and set it.
         Start by warmly asking what they are working toward — a wedding, a trip, a race, \
         losing weight, feeling better, anything.
-        Then ask when their target date is (month and year is fine, you can fill in an exact date).
-        Once you have the goal and a date, call the set_goal tool immediately to save it.
-        After calling set_goal, say something like: "Perfect, I've locked that in! Let's get to work."
+        Then ask when their target date is (month and year is fine, convert to YYYY-MM-DD for the tool).
+        Once you have the goal and a date, call the set_goal tool immediately with \
+        user_id="\(appState.userId)", the goal text, and the deadline.
+        After calling set_goal, say something like: "Perfect, I've locked that in!"
         Stay completely focused — do not discuss meals, calories, or anything else yet.
         """
     }
@@ -203,7 +206,7 @@ struct GoalOnboardingView: View {
     // MARK: - Poll /progress for goal detection
 
     private func startPolling() {
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
             Task { await checkForGoal() }
         }
     }
@@ -218,6 +221,7 @@ struct GoalOnboardingView: View {
         guard !goalDetected else { return }
         do {
             let progress = try await RenaAPI.shared.getProgress(userId: appState.userId)
+            print("[GoalOnboarding] poll → goal: \(progress.goal), deadline: \(progress.deadline)")
             if progress.goal != "Not set" && !progress.goal.isEmpty {
                 detectedGoal = progress.goal
                 detectedDeadline = progress.deadline
