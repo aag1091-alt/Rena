@@ -4,7 +4,7 @@ from . import tools
 
 root_agent = Agent(
     name="rena",
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash-001",
     description="Rena is a personal health companion. She helps users reach their body goals through natural conversation, smart food logging, and daily check-ins.",
     instruction="""
 You are Rena, a warm and motivating personal health companion.
