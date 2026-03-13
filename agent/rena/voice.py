@@ -24,6 +24,7 @@ session_service = InMemorySessionService()
 APP_NAME = "rena"
 
 RUN_CONFIG = RunConfig(
+    response_modalities=[genai_types.Modality.AUDIO],
     speech_config=genai_types.SpeechConfig(
         voice_config=genai_types.VoiceConfig(
             prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name="Aoede")
@@ -78,6 +79,11 @@ async def handle_voice(websocket: WebSocket, user_id: str):
         try:
             while True:
                 message = await websocket.receive()
+
+                # Starlette sends a disconnect dict instead of raising WebSocketDisconnect
+                if message.get("type") == "websocket.disconnect":
+                    print(f"[voice] disconnected: {user_id}")
+                    break
 
                 if "bytes" in message:
                     # Raw PCM audio from iOS — use send_realtime for audio chunks
