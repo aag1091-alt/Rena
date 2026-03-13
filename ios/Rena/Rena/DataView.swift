@@ -28,12 +28,11 @@ struct DataView: View {
 
     private func refreshProgress() async {
         guard let resp = try? await RenaAPI.shared.getProgress(userId: appState.userId) else { return }
-        let meals = resp.mealsLogged
         await MainActor.run {
             appState.caloriesConsumed = resp.caloriesConsumed
             appState.caloriesTarget   = resp.caloriesTarget
             appState.waterGlasses     = resp.waterGlasses
-            appState.mealsLogged      = meals
+            appState.mealsLogged      = resp.mealsLogged ?? []
         }
     }
 }

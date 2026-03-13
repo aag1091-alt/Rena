@@ -36,7 +36,7 @@ struct ScanResponse: Codable {
     }
 }
 
-struct MealEntry: Codable, Identifiable {
+struct MealEntry: Identifiable {
     var id: String { loggedAt ?? name }
     let name: String
     let calories: Int
@@ -44,13 +44,33 @@ struct MealEntry: Codable, Identifiable {
     let carbsG: Int
     let fatG: Int
     let loggedAt: String?
+}
 
+extension MealEntry: Codable {
     enum CodingKeys: String, CodingKey {
-        case name, calories
-        case proteinG  = "protein_g"
-        case carbsG    = "carbs_g"
-        case fatG      = "fat_g"
-        case loggedAt  = "logged_at"
+        case name
+        case calories
+        case proteinG = "protein_g"
+        case carbsG   = "carbs_g"
+        case fatG     = "fat_g"
+        case loggedAt = "logged_at"
+    }
+
+    // Handles both Int and Double from Python/Firestore (e.g. 450 vs 450.0)
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name     = try c.decode(String.self, forKey: .name)
+        loggedAt = try? c.decode(String.self, forKey: .loggedAt)
+
+        func intOrDouble(_ key: CodingKeys) -> Int {
+            if let i = try? c.decode(Int.self,    forKey: key) { return i }
+            if let d = try? c.decode(Double.self, forKey: key) { return Int(d) }
+            return 0
+        }
+        calories = intOrDouble(.calories)
+        proteinG = intOrDouble(.proteinG)
+        carbsG   = intOrDouble(.carbsG)
+        fatG     = intOrDouble(.fatG)
     }
 }
 
@@ -61,7 +81,7 @@ struct ProgressResponse: Codable {
     let caloriesTarget: Int
     let caloriesRemaining: Int
     let waterGlasses: Int
-    let mealsLogged: [MealEntry]
+    let mealsLogged: [MealEntry]?
 
     enum CodingKeys: String, CodingKey {
         case goal, deadline
