@@ -38,10 +38,9 @@ enum ActivityLevel: String, CaseIterable {
 struct OnboardingView: View {
     @EnvironmentObject var appState: AppState
 
-    @State private var step: Int = 0
+    @State private var step: Int = 1
 
-    // Answers
-    @State private var name: String = ""
+    // Answers — name comes from Google Sign-In via appState
     @State private var sex: Sex = .male
     @State private var age: Double = 28
     @State private var heightCm: String = ""
@@ -61,9 +60,22 @@ struct OnboardingView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                // Welcome note
+                VStack(spacing: 4) {
+                    Text("Welcome, \(appState.name.isEmpty ? "there" : appState.name.components(separatedBy: " ").first ?? appState.name) 👋")
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundColor(Color(hex: "3D2B1F"))
+                    Text("Just a few quick questions to personalise your experience")
+                        .font(.caption)
+                        .foregroundColor(Color(hex: "7C5C45"))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 48)
+                .padding(.horizontal, 28)
+
                 // Progress dots
                 HStack(spacing: 8) {
-                    ForEach(0..<5) { i in
+                    ForEach(1..<5) { i in
                         Circle()
                             .fill(i == step ? Color(hex: "E76F51") : Color(hex: "E76F51").opacity(0.25))
                             .frame(width: i == step ? 10 : 7, height: i == step ? 10 : 7)
@@ -77,7 +89,6 @@ struct OnboardingView: View {
                 // Step content
                 Group {
                     switch step {
-                    case 0: stepName
                     case 1: stepSex
                     case 2: stepAge
                     case 3: stepBody
@@ -102,12 +113,12 @@ struct OnboardingView: View {
                 }
 
                 // CTA — only show for steps that don't auto-advance
-                if step == 0 || step == 3 {
+                if step == 3 {
                     Button(action: advance) {
                         if isSubmitting {
                             ProgressView().tint(.white)
                         } else {
-                            Text(step == 3 ? "Almost done →" : "Next →")
+                            Text("Almost done →")
                                 .font(.headline)
                                 .foregroundColor(.white)
                         }
@@ -127,21 +138,6 @@ struct OnboardingView: View {
     }
 
     // MARK: - Step views
-
-    private var stepName: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            prompt("What should I\ncall you?")
-            TextField("Your first name", text: $name)
-                .font(.title2)
-                .padding()
-                .background(Color.white.opacity(0.85))
-                .cornerRadius(14)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.words)
-                .submitLabel(.next)
-                .onSubmit { if !name.trimmingCharacters(in: .whitespaces).isEmpty { advance() } }
-        }
-    }
 
     private var stepSex: some View {
         VStack(spacing: 24) {
@@ -286,7 +282,6 @@ struct OnboardingView: View {
 
     private var ctaEnabled: Bool {
         switch step {
-        case 0: return !name.trimmingCharacters(in: .whitespaces).isEmpty
         case 3:
             let h = Double(heightCm) ?? 0
             let w = Double(weightKg) ?? 0
@@ -314,7 +309,7 @@ struct OnboardingView: View {
             do {
                 let result = try await RenaAPI.shared.onboard(
                     userId: appState.userId,
-                    name: name.trimmingCharacters(in: .whitespaces),
+                    name: appState.name,
                     sex: sex.rawValue,
                     age: Int(age),
                     heightCm: h,
