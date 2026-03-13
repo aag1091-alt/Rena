@@ -17,10 +17,12 @@ from google.adk.agents.live_request_queue import LiveRequestQueue
 from google.adk.agents.run_config import RunConfig
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.genai import errors as genai_errors
 from google.genai import types as genai_types
 
-# Suppress ADK's internal Pydantic warning about response_modalities string vs enum
-warnings.filterwarnings("ignore", message=".*response_modalities.*", category=UserWarning)
+# Suppress ADK's internal Pydantic warning — it sets response_modalities as a string
+# internally even when we pass the enum; the warning is cosmetic and doesn't affect behavior.
+warnings.filterwarnings("ignore", message=".*Pydantic serializer warnings.*", category=UserWarning)
 
 load_dotenv()
 
@@ -78,6 +80,10 @@ async def handle_voice(websocket: WebSocket, user_id: str):
                             )
                 if event.turn_complete and not ws_closed:
                     await websocket.send_text(json.dumps({"type": "turn_complete"}))
+        except genai_errors.APIError as e:
+            # 1000 = Gemini closed cleanly because we closed live_queue after iOS disconnect
+            if e.status_code != 1000:
+                traceback.print_exc()
         except Exception:
             if not ws_closed:
                 traceback.print_exc()
