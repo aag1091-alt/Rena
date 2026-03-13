@@ -134,6 +134,8 @@ class VoiceManager: NSObject, ObservableObject {
         // Install tap with nil format — uses hardware native format automatically
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
             guard let self else { return }
+            // Don't send mic audio while Rena is speaking — prevents self-interruption
+            if case .speaking = self.state { return }
             let ratio = 16000.0 / buffer.format.sampleRate
             let outFrames = AVAudioFrameCount(max(1, Double(buffer.frameLength) * ratio))
             guard let converted = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outFrames) else { return }
