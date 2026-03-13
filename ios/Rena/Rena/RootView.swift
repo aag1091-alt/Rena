@@ -9,11 +9,14 @@ struct RootView: View {
                 RenaIntroView()
             } else if !appState.isOnboarded {
                 OnboardingView()
+            } else if !appState.hasGoal {
+                GoalOnboardingView()
             } else {
                 MainTabView()
             }
         }
         .animation(.easeInOut(duration: 0.35), value: appState.isSignedIn)
         .animation(.easeInOut(duration: 0.35), value: appState.isOnboarded)
+        .animation(.easeInOut(duration: 0.35), value: appState.hasGoal)
     }
 }

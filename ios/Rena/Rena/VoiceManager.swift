@@ -22,7 +22,7 @@ class VoiceManager: NSObject, ObservableObject {
     private var playerFormat: AVAudioFormat?
     private let session = URLSession(configuration: .default)
 
-    func connect(userId: String) {
+    func connect(userId: String, greetPrompt: String? = nil) {
         state = .connecting
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self else { return }
@@ -36,6 +36,11 @@ class VoiceManager: NSObject, ObservableObject {
             DispatchQueue.main.async { self.state = .listening }
             self.receiveLoop()
             self.startAudioCapture()
+            if let prompt = greetPrompt {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.sendText(prompt)
+                }
+            }
         }
     }
 

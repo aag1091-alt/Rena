@@ -94,26 +94,55 @@ def create_profile(
     }
 
 
-def set_goal(user_id: str, goal: str, deadline: str, daily_calorie_target: int = 1800) -> dict:
+def set_goal(user_id: str, goal: str, deadline: str) -> dict:
     """
-    Save the user's health goal and deadline. Call this during onboarding.
+    Save the user's health goal and deadline. Call this once you've confirmed the goal
+    and target date with the user during the goal-setting conversation.
+
+    The calorie target is automatically refined based on how far away the deadline is:
+    - More than 16 weeks out: moderate deficit (-400 kcal)
+    - 8–16 weeks: aggressive deficit (-500 kcal)
+    - Under 8 weeks: maximum safe deficit (-600 kcal)
 
     Args:
         user_id: The user's unique ID.
         goal: A natural language description of the user's goal (e.g. 'Feel confident at Sarah's wedding').
-        deadline: Target date in YYYY-MM-DD format.
-        daily_calorie_target: Daily calorie target (default 1800).
+        deadline: Target date in YYYY-MM-DD format (YYYY-MM-DD).
 
     Returns:
-        Confirmation that the goal was saved.
+        Confirmation with the goal, deadline, and adjusted daily calorie target.
     """
+    profile = _user_ref(user_id).get().to_dict() or {}
+    tdee = profile.get("tdee", 2000)
+
+    # Adjust deficit based on time remaining
+    try:
+        days_left = (date.fromisoformat(deadline) - date.today()).days
+    except ValueError:
+        days_left = 90  # fallback
+
+    if days_left > 112:      # > 16 weeks
+        deficit = 400
+    elif days_left > 56:     # 8–16 weeks
+        deficit = 500
+    else:                    # < 8 weeks
+        deficit = 600
+
+    daily_calorie_target = max(1200, tdee - deficit)
+
     _user_ref(user_id).set({
         "goal": goal,
         "deadline": deadline,
         "daily_calorie_target": daily_calorie_target,
-        "created_at": firestore.SERVER_TIMESTAMP,
     }, merge=True)
-    return {"status": "saved", "goal": goal, "deadline": deadline}
+
+    return {
+        "status": "saved",
+        "goal": goal,
+        "deadline": deadline,
+        "daily_calorie_target": daily_calorie_target,
+        "days_until_goal": days_left,
+    }
 
 
 def get_progress(user_id: str) -> dict:

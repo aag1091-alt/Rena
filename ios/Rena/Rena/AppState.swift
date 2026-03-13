@@ -8,6 +8,7 @@ class AppState: ObservableObject {
 
     // Onboarding
     @Published var isOnboarded: Bool = false
+    @Published var hasGoal: Bool = false
 
     // Profile
     @Published var name: String = ""
@@ -25,6 +26,7 @@ class AppState: ObservableObject {
         userId = UserDefaults.standard.string(forKey: "userId") ?? ""
         isSignedIn = !userId.isEmpty
         isOnboarded = UserDefaults.standard.bool(forKey: "isOnboarded")
+        hasGoal = UserDefaults.standard.bool(forKey: "hasGoal")
         name = UserDefaults.standard.string(forKey: "userName") ?? ""
         email = UserDefaults.standard.string(forKey: "userEmail") ?? ""
         goal = UserDefaults.standard.string(forKey: "goal") ?? ""
@@ -49,16 +51,31 @@ class AppState: ObservableObject {
         UserDefaults.standard.set(name, forKey: "userName")
     }
 
+    func goalDetected(goal: String, deadline: String) {
+        self.goal = goal
+        self.deadline = deadline
+        self.hasGoal = true
+        UserDefaults.standard.set(true, forKey: "hasGoal")
+        UserDefaults.standard.set(goal, forKey: "goal")
+        UserDefaults.standard.set(deadline, forKey: "deadline")
+    }
+
     func signOut() {
         userId = ""
         isSignedIn = false
         isOnboarded = false
+        hasGoal = false
         name = ""
         email = ""
+        goal = ""
+        deadline = ""
         UserDefaults.standard.removeObject(forKey: "userId")
         UserDefaults.standard.removeObject(forKey: "userEmail")
         UserDefaults.standard.removeObject(forKey: "userName")
         UserDefaults.standard.removeObject(forKey: "isOnboarded")
+        UserDefaults.standard.removeObject(forKey: "hasGoal")
+        UserDefaults.standard.removeObject(forKey: "goal")
+        UserDefaults.standard.removeObject(forKey: "deadline")
     }
 
     var progressPercent: Double {
