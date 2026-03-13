@@ -43,8 +43,16 @@ struct OnboardingView: View {
     // Answers — name comes from Google Sign-In via appState
     @State private var sex: Sex = .male
     @State private var age: Double = 28
-    @State private var heightCm: String = ""
+    @State private var heightInches: Double = 70   // 5'10" default, stored as total inches
     @State private var weightKg: String = ""
+
+    private var heightCm: Double { heightInches * 2.54 }
+
+    private func heightDisplay(_ totalInches: Double) -> String {
+        let feet = Int(totalInches) / 12
+        let inches = Int(totalInches) % 12
+        return "\(feet)'\(inches)\""
+    }
     @State private var activity: ActivityLevel = .moderatelyActive
 
     @State private var isSubmitting = false
@@ -197,15 +205,33 @@ struct OnboardingView: View {
     }
 
     private var stepBody: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 28) {
             prompt("Tell me about\nyour body")
 
-            VStack(spacing: 14) {
-                bodyField(title: "Height", placeholder: "e.g. 170", unit: "cm", text: $heightCm)
-                bodyField(title: "Weight", placeholder: "e.g. 75", unit: "kg", text: $weightKg)
+            // Height slider
+            VStack(alignment: .leading, spacing: 10) {
+                Text("HEIGHT")
+                    .font(.caption)
+                    .foregroundColor(Color(hex: "7C5C45"))
+
+                Text(heightDisplay(heightInches))
+                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "3D2B1F"))
+
+                Slider(value: $heightInches, in: 48...84, step: 1)
+                    .tint(Color(hex: "E76F51"))
+
+                HStack {
+                    Text("4'0\"").font(.caption).foregroundColor(Color(hex: "7C5C45"))
+                    Spacer()
+                    Text("7'0\"").font(.caption).foregroundColor(Color(hex: "7C5C45"))
+                }
             }
 
-            Text("💡 We'll be able to pull this from Apple Health in the future.")
+            // Weight field
+            bodyField(title: "Weight", placeholder: "e.g. 75", unit: "kg", text: $weightKg)
+
+            Text("💡 We'll pull this from Apple Health automatically in the future.")
                 .font(.caption)
                 .foregroundColor(Color(hex: "7C5C45").opacity(0.8))
         }
@@ -283,9 +309,8 @@ struct OnboardingView: View {
     private var ctaEnabled: Bool {
         switch step {
         case 3:
-            let h = Double(heightCm) ?? 0
             let w = Double(weightKg) ?? 0
-            return h > 0 && w > 0
+            return w > 0
         default: return true
         }
     }
@@ -297,10 +322,8 @@ struct OnboardingView: View {
     }
 
     private func submitOnboarding() {
-        guard
-            let h = Double(heightCm),
-            let w = Double(weightKg)
-        else { return }
+        guard let w = Double(weightKg) else { return }
+        let h = heightCm
 
         isSubmitting = true
         errorMessage = nil
