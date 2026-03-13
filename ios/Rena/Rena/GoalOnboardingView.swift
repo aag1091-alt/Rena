@@ -185,6 +185,10 @@ struct GoalOnboardingView: View {
                 withAnimation(.spring(response: 0.5)) {
                     goalDetected = true
                 }
+                // Auto-transition after a short pause so Rena can finish her confirmation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    self.confirmGoal()
+                }
             }
         } catch {
             // Silent — keep polling
