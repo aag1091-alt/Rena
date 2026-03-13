@@ -24,10 +24,12 @@ struct HomeView: View {
                     Spacer(minLength: 32)
                 }
                 .padding(.horizontal)
+                .frame(maxWidth: .infinity)
             }
             .background(Color(hex: "FDF6EE").ignoresSafeArea())
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.large)
+            .scrollBounceBehavior(.always)
             .onAppear { Task { await refreshProgress() } }
         }
     }
