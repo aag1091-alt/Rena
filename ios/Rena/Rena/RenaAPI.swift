@@ -74,37 +74,78 @@ extension MealEntry: Codable {
     }
 }
 
+struct WorkoutEntry: Identifiable, Codable {
+    var id: String { "\(type)-\(loggedAt ?? "")" }
+    let type: String
+    let durationMin: Int
+    let caloriesBurned: Int
+    let loggedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case durationMin    = "duration_min"
+        case caloriesBurned = "calories_burned"
+        case loggedAt       = "logged_at"
+    }
+}
+
 struct ProgressResponse: Codable {
     let goal: String
     let deadline: String
     let caloriesConsumed: Int
+    let caloriesBurned: Int
     let caloriesTarget: Int
     let caloriesRemaining: Int
+    let burnRequired: Int
+    let proteinConsumedG: Int
+    let proteinTargetG: Int
     let waterGlasses: Int
+    let weightKg: Double?
     let mealsLogged: [MealEntry]?
+    let workoutsLogged: [WorkoutEntry]?
 
     enum CodingKeys: String, CodingKey {
         case goal, deadline
         case caloriesConsumed  = "calories_consumed"
+        case caloriesBurned    = "calories_burned"
         case caloriesTarget    = "calories_target"
         case caloriesRemaining = "calories_remaining"
+        case burnRequired      = "burn_required"
+        case proteinConsumedG  = "protein_consumed_g"
+        case proteinTargetG    = "protein_target_g"
         case waterGlasses      = "water_glasses"
+        case weightKg          = "weight_kg"
         case mealsLogged       = "meals_logged"
+        case workoutsLogged    = "workouts_logged"
     }
 }
 
 struct GoalResponse: Codable {
     let goal: String
+    let goalType: String
+    let startValue: Double
+    let targetValue: Double
+    let currentValue: Double
+    let unit: String
+    let direction: String
+    let progressPercent: Int
+    let progressLabel: String
     let deadline: String
     let imageUrl: String?
     let dailyCalorieTarget: Int
     let daysUntilGoal: Int
 
     enum CodingKeys: String, CodingKey {
-        case goal, deadline
-        case imageUrl = "image_url"
+        case goal, deadline, unit, direction
+        case goalType        = "goal_type"
+        case startValue      = "start_value"
+        case targetValue     = "target_value"
+        case currentValue    = "current_value"
+        case progressPercent = "progress_percent"
+        case progressLabel   = "progress_label"
+        case imageUrl        = "image_url"
         case dailyCalorieTarget = "daily_calorie_target"
-        case daysUntilGoal = "days_until_goal"
+        case daysUntilGoal      = "days_until_goal"
     }
 }
 
@@ -187,6 +228,15 @@ class RenaAPI {
         var req = URLRequest(url: URL(string: "\(kBaseURL)/dev/reset/\(userId)")!)
         req.httpMethod = "DELETE"
         _ = try await session.data(for: req)
+    }
+
+    func logWeight(userId: String, weightKg: Double) async throws -> [String: Any] {
+        var req = URLRequest(url: URL(string: "\(kBaseURL)/log/weight")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId, "weight_kg": weightKg])
+        let (data, _) = try await session.data(for: req)
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
     func getVisualJourney(userId: String) async throws -> VisualJourneyResponse {

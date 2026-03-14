@@ -10,20 +10,8 @@ struct GoalOnboardingView: View {
     @State private var detectedDeadline = ""
     @State private var pollTimer: Timer?
 
-    private var greetPrompt: String {
-        let firstName = appState.name.components(separatedBy: " ").first ?? appState.name
-        return """
-        You are having a focused goal-setting conversation with \(firstName). \
-        Their user_id is "\(appState.userId)" — you MUST use this exact value when calling any tool.
-        Your ONLY job right now is to understand their health goal and set it.
-        Start by warmly asking what they are working toward — a wedding, a trip, a race, \
-        losing weight, feeling better, anything.
-        Then ask when their target date is (month and year is fine, convert to YYYY-MM-DD for the tool).
-        Once you have the goal and a date, call the set_goal tool immediately with \
-        user_id="\(appState.userId)", the goal text, and the deadline.
-        After calling set_goal, say something like: "Perfect, I've locked that in!"
-        Stay completely focused — do not discuss meals, calories, or anything else yet.
-        """
+    private var firstName: String {
+        appState.name.components(separatedBy: " ").first ?? appState.name
     }
 
     var body: some View {
@@ -155,8 +143,10 @@ struct GoalOnboardingView: View {
             }
         }
         .onAppear {
-            // Auto-connect so Rena starts the conversation immediately
-            toggleConnection()
+            // Short delay so view is fully on screen, then auto-connect
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                toggleConnection()
+            }
         }
         .onDisappear {
             stopPolling()
@@ -172,7 +162,7 @@ struct GoalOnboardingView: View {
             isConnected = false
             stopPolling()
         } else {
-            voice.connect(userId: appState.userId, greetPrompt: greetPrompt)
+            voice.connect(userId: appState.userId, context: "goal", name: firstName)
             isConnected = true
             startPolling()
         }

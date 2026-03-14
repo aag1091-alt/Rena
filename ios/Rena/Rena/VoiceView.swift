@@ -97,12 +97,16 @@ struct VoiceView: View {
         }
     }
 
+    private var firstName: String {
+        appState.name.components(separatedBy: " ").first ?? appState.name
+    }
+
     private func toggleConnection() {
         if isConnected {
             voice.disconnect()
             isConnected = false
         } else {
-            voice.connect(userId: appState.userId)
+            voice.connect(userId: appState.userId, context: "home", name: firstName)
             isConnected = true
         }
     }

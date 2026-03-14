@@ -18,9 +18,15 @@ class AppState: ObservableObject {
     @Published var goal: String = ""
     @Published var deadline: String = ""
     @Published var caloriesConsumed: Int = 0
+    @Published var caloriesBurned: Int = 0
     @Published var caloriesTarget: Int = 1800
+    @Published var burnRequired: Int = 0
+    @Published var proteinConsumedG: Int = 0
+    @Published var proteinTargetG: Int = 112  // default 70kg × 1.6
     @Published var waterGlasses: Int = 0
+    @Published var todayWeightKg: Double? = nil
     @Published var mealsLogged: [MealEntry] = []
+    @Published var workoutsLogged: [WorkoutEntry] = []
     @Published var visualJourneyURL: URL? = nil
 
     init() {

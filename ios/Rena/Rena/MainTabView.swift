@@ -11,6 +11,9 @@ struct MainTabView: View {
             DataView()
                 .tabItem { Label("Data", systemImage: "chart.bar.fill") }
 
+            WorkbookView()
+                .tabItem { Label("Workbook", systemImage: "note.text") }
+
             // DEV ONLY — remove before submission
             VStack(spacing: 20) {
                 Text("Dev Tools").font(.headline)

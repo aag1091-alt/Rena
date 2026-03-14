@@ -22,7 +22,15 @@ class VoiceManager: NSObject, ObservableObject {
     private var playerFormat: AVAudioFormat?
     private let session = URLSession(configuration: .default)
 
-    func connect(userId: String, greetPrompt: String? = nil) {
+    /// Connect with mic for full conversation. Context and name are passed to the
+    /// server so the opening prompt is injected server-side — no client-side sendText needed.
+    func connect(userId: String, context: String? = nil, name: String? = nil) {
+        // Clear any stale connection first
+        webSocket?.cancel(with: .normalClosure, reason: nil)
+        webSocket = nil
+        audioEngine.inputNode.removeTap(onBus: 0)
+        if audioEngine.isRunning { audioEngine.stop() }
+
         state = .connecting
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self else { return }
@@ -30,26 +38,33 @@ class VoiceManager: NSObject, ObservableObject {
                 DispatchQueue.main.async { self.state = .error("Microphone access denied") }
                 return
             }
-            let url = URL(string: "\(kBaseURL.replacingOccurrences(of: "http", with: "ws"))/ws/\(userId)")!
+            let wsBase = kBaseURL.replacingOccurrences(of: "http", with: "ws")
+            var components = URLComponents(string: "\(wsBase)/ws/\(userId)")!
+            var queryItems: [URLQueryItem] = []
+            if let context { queryItems.append(URLQueryItem(name: "context", value: context)) }
+            if let name    { queryItems.append(URLQueryItem(name: "name",    value: name))    }
+            if !queryItems.isEmpty { components.queryItems = queryItems }
+            let url = components.url!
+
             self.webSocket = self.session.webSocketTask(with: url)
             self.webSocket?.resume()
             DispatchQueue.main.async { self.state = .listening }
             self.receiveLoop()
             self.startAudioCapture()
-            if let prompt = greetPrompt {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.sendText(prompt)
-                }
-            }
         }
     }
 
-    /// Connects without mic capture — Rena speaks, user just listens.
-    /// Used on the intro/welcome screen before sign-in.
-    func connectGreetOnly(prompt: String) {
+    /// Connects without mic capture — Rena speaks, user just listens (intro screen).
+    func connectGreetOnly() {
+        // Clear any stale connection first
+        webSocket?.cancel(with: .normalClosure, reason: nil)
+        webSocket = nil
+        if audioEngine.isRunning { audioEngine.stop() }
+
         state = .connecting
         let guestId = "guest-\(UUID().uuidString)"
-        let url = URL(string: "\(kBaseURL.replacingOccurrences(of: "http", with: "ws"))/ws/\(guestId)")!
+        let wsBase = kBaseURL.replacingOccurrences(of: "http", with: "ws")
+        let url = URL(string: "\(wsBase)/ws/\(guestId)?context=intro")!
 
         let avSession = AVAudioSession.sharedInstance()
         try? avSession.setCategory(.playback, mode: .default)
@@ -61,10 +76,6 @@ class VoiceManager: NSObject, ObservableObject {
         webSocket?.resume()
         DispatchQueue.main.async { self.state = .listening }
         receiveLoop()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            self.sendText(prompt)
-        }
     }
 
     func disconnect() {

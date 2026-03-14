@@ -39,11 +39,38 @@ RUN_CONFIG = RunConfig(
 )
 
 
-async def handle_voice(websocket: WebSocket, user_id: str):
+# Context-specific opening prompts injected together with user_id so there
+# is exactly ONE message trigger → ONE agent response at session start.
+_CONTEXT_PROMPTS = {
+    "intro": (
+        "You are on the welcome screen of Rena. "
+        "Introduce yourself warmly as Rena, their personal health companion. "
+        "Tell them you're excited to help them reach their health goals. "
+        "Ask them to sign in with the 'Continue with Google' button on screen. "
+        "Keep it under 20 seconds and do not ask any questions beyond signing in."
+    ),
+    "goal": (
+        "Say 'Hi {name}! Let's set your health goal.' "
+        "Then immediately tell them what kinds of goals they can set: "
+        "losing weight, building fitness, training for an event like a race or wedding, "
+        "or building a habit like working out more. "
+        "Ask which one resonates or what they have in mind. "
+        "Once they tell you, ask for a target date, then call set_goal. "
+        "Do NOT ask how they are doing. Jump straight to goal-setting after the greeting."
+    ),
+    "home": (
+        "Say 'Hi {name}! What would you like to do today?' "
+        "Keep it short and friendly — one sentence."
+    ),
+}
+
+
+async def handle_voice(websocket: WebSocket, user_id: str,
+                       context: str | None = None, name: str | None = None):
     from .agent import root_agent
 
     await websocket.accept()
-    print(f"[voice] connected: {user_id}")
+    print(f"[voice] connected: {user_id} context={context}")
 
     session = await session_service.create_session(
         app_name=APP_NAME,
@@ -58,6 +85,23 @@ async def handle_voice(websocket: WebSocket, user_id: str):
 
     live_queue = LiveRequestQueue()
     ws_closed = False
+
+    # Inject user_id + optional opening prompt as ONE combined message so the
+    # agent has a single trigger → single response with no double-greeting.
+    async def inject_opening():
+        await asyncio.sleep(0.2)
+        text = f"[user_id:{user_id}]"
+        if context and context in _CONTEXT_PROMPTS:
+            prompt = _CONTEXT_PROMPTS[context].replace("{name}", name or "there")
+            text = f"{text}\n{prompt}"
+        live_queue.send_content(
+            genai_types.Content(
+                role="user",
+                parts=[genai_types.Part(text=text)],
+            )
+        )
+
+    asyncio.create_task(inject_opening())
 
     async def send_to_client():
         nonlocal ws_closed

@@ -44,7 +44,7 @@ struct OnboardingView: View {
     @State private var sex: Sex = .male
     @State private var age: Double = 28
     @State private var heightInches: Double = 70   // 5'10" default, stored as total inches
-    @State private var weightKg: String = ""
+    @State private var weightKg: Double = 70.0
 
     private var heightCm: Double { heightInches * 2.54 }
 
@@ -228,12 +228,30 @@ struct OnboardingView: View {
                 }
             }
 
-            // Weight field
-            bodyField(title: "Weight", placeholder: "e.g. 75", unit: "kg", text: $weightKg)
+            // Weight slider
+            VStack(alignment: .leading, spacing: 10) {
+                Text("WEIGHT")
+                    .font(.caption)
+                    .foregroundColor(Color(hex: "7C5C45"))
 
-            Text("💡 We'll pull this from Apple Health automatically in the future.")
-                .font(.caption)
-                .foregroundColor(Color(hex: "7C5C45").opacity(0.8))
+                HStack(alignment: .lastTextBaseline, spacing: 6) {
+                    Text(String(format: "%.1f", weightKg))
+                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(hex: "3D2B1F"))
+                    Text("kg")
+                        .font(.title3)
+                        .foregroundColor(Color(hex: "7C5C45"))
+                }
+
+                Slider(value: $weightKg, in: 30...200, step: 0.5)
+                    .tint(Color(hex: "E76F51"))
+
+                HStack {
+                    Text("30 kg").font(.caption).foregroundColor(Color(hex: "7C5C45"))
+                    Spacer()
+                    Text("200 kg").font(.caption).foregroundColor(Color(hex: "7C5C45"))
+                }
+            }
         }
     }
 
@@ -286,34 +304,7 @@ struct OnboardingView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func bodyField(title: String, placeholder: String, unit: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(Color(hex: "7C5C45"))
-                .textCase(.uppercase)
-            HStack {
-                TextField(placeholder, text: text)
-                    .font(.title2)
-                    .keyboardType(.decimalPad)
-                Text(unit)
-                    .font(.body)
-                    .foregroundColor(Color(hex: "7C5C45"))
-            }
-            .padding()
-            .background(Color.white.opacity(0.85))
-            .cornerRadius(14)
-        }
-    }
-
-    private var ctaEnabled: Bool {
-        switch step {
-        case 3:
-            let w = Double(weightKg) ?? 0
-            return w > 0
-        default: return true
-        }
-    }
+    private var ctaEnabled: Bool { true }
 
     private func advance() {
         withAnimation(.easeInOut(duration: 0.3)) {
@@ -322,7 +313,7 @@ struct OnboardingView: View {
     }
 
     private func submitOnboarding() {
-        guard let w = Double(weightKg) else { return }
+        let w = weightKg
         let h = heightCm
 
         isSubmitting = true
