@@ -161,9 +161,20 @@ struct VisualJourneyResponse: Codable {
     }
 }
 
+private let kApiKey = "NyQ_DuiZ3iJb4-UsNjt2fxEdeqnYxbLSplUBRtIDouo"
+
 class RenaAPI {
     static let shared = RenaAPI()
     private let session = URLSession.shared
+
+    // Builds an authenticated URLRequest with Content-Type + API key already set.
+    private func request(_ urlString: String, method: String = "GET") -> URLRequest {
+        var req = URLRequest(url: URL(string: urlString)!)
+        req.httpMethod = method
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(kApiKey, forHTTPHeaderField: "X-API-Key")
+        return req
+    }
 
     func scanImage(userId: String, image: UIImage, autoLog: Bool = false) async throws -> ScanResponse {
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
@@ -171,9 +182,7 @@ class RenaAPI {
         }
         let b64 = imageData.base64EncodedString()
 
-        var req = URLRequest(url: URL(string: "\(kBaseURL)/scan")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var req = request("\(kBaseURL)/scan", method: "POST")
         let body: [String: Any] = [
             "user_id": userId,
             "image_base64": b64,
@@ -187,8 +196,8 @@ class RenaAPI {
     }
 
     func getProgress(userId: String) async throws -> ProgressResponse {
-        let url = URL(string: "\(kBaseURL)/progress/\(userId)")!
-        let (data, _) = try await session.data(from: url)
+        let req = request("\(kBaseURL)/progress/\(userId)")
+        let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(ProgressResponse.self, from: data)
     }
 
@@ -201,9 +210,7 @@ class RenaAPI {
         weightKg: Double,
         activityLevel: String
     ) async throws -> OnboardResponse {
-        var req = URLRequest(url: URL(string: "\(kBaseURL)/onboard")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var req = request("\(kBaseURL)/onboard", method: "POST")
         let body: [String: Any] = [
             "user_id": userId,
             "name": name,
@@ -219,30 +226,25 @@ class RenaAPI {
     }
 
     func getGoal(userId: String) async throws -> GoalResponse {
-        let url = URL(string: "\(kBaseURL)/goal/\(userId)")!
-        let (data, _) = try await session.data(from: url)
+        let req = request("\(kBaseURL)/goal/\(userId)")
+        let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(GoalResponse.self, from: data)
     }
 
     func devReset(userId: String) async throws {
-        var req = URLRequest(url: URL(string: "\(kBaseURL)/dev/reset/\(userId)")!)
-        req.httpMethod = "DELETE"
+        let req = request("\(kBaseURL)/dev/reset/\(userId)", method: "DELETE")
         _ = try await session.data(for: req)
     }
 
     func logWeight(userId: String, weightKg: Double) async throws -> [String: Any] {
-        var req = URLRequest(url: URL(string: "\(kBaseURL)/log/weight")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var req = request("\(kBaseURL)/log/weight", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId, "weight_kg": weightKg])
         let (data, _) = try await session.data(for: req)
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
     func getVisualJourney(userId: String) async throws -> VisualJourneyResponse {
-        var req = URLRequest(url: URL(string: "\(kBaseURL)/visual_journey")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var req = request("\(kBaseURL)/visual_journey", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId])
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(VisualJourneyResponse.self, from: data)
