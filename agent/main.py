@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, HTTPException, Header, Depends
+from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from rena.voice import handle_voice
 from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal, update_visual_journey, create_profile, reset_user
@@ -8,13 +8,6 @@ from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal,
 load_dotenv()
 
 app = FastAPI(title="Rena Agent API")
-
-_API_KEY = os.getenv("RENA_API_KEY", "")
-
-
-async def require_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
-    if not _API_KEY or x_api_key != _API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 class ScanRequest(BaseModel):
@@ -34,7 +27,7 @@ class OnboardRequest(BaseModel):
     activity_level: str  # sedentary | lightly_active | moderately_active | very_active
 
 
-@app.post("/onboard", dependencies=[Depends(require_api_key)])
+@app.post("/onboard")
 async def onboard(req: OnboardRequest):
     """Create user profile and calculate personalised calorie target."""
     if not req.user_id or req.user_id.strip() == "":
@@ -50,7 +43,7 @@ async def onboard(req: OnboardRequest):
     )
 
 
-@app.delete("/dev/reset/{user_id}", dependencies=[Depends(require_api_key)])
+@app.delete("/dev/reset/{user_id}")
 async def dev_reset(user_id: str):
     """DEV ONLY — wipe all Firestore data for a user to re-test onboarding."""
     if not user_id or user_id.strip() == "":
@@ -63,7 +56,7 @@ async def health():
     return {"status": "ok", "agent": "rena"}
 
 
-@app.post("/scan", dependencies=[Depends(require_api_key)])
+@app.post("/scan")
 async def scan_food(req: ScanRequest):
     """Identify food in a photo and optionally log it."""
     result = scan_image(req.user_id, req.image_base64, req.mime_type)
@@ -80,7 +73,7 @@ async def scan_food(req: ScanRequest):
     return result
 
 
-@app.get("/progress/{user_id}", dependencies=[Depends(require_api_key)])
+@app.get("/progress/{user_id}")
 async def progress(user_id: str):
     """Get today's progress for the iOS home screen."""
     if not user_id or user_id.strip() == "":
@@ -92,7 +85,7 @@ class VisualJourneyRequest(BaseModel):
     user_id: str
 
 
-@app.post("/visual_journey", dependencies=[Depends(require_api_key)])
+@app.post("/visual_journey")
 async def visual_journey(req: VisualJourneyRequest):
     """Generate/update the visual journey image."""
     if not req.user_id or req.user_id.strip() == "":
@@ -100,7 +93,7 @@ async def visual_journey(req: VisualJourneyRequest):
     return update_visual_journey(req.user_id)
 
 
-@app.get("/goal/{user_id}", dependencies=[Depends(require_api_key)])
+@app.get("/goal/{user_id}")
 async def goal_endpoint(user_id: str):
     """Get the user's current goal with generated image."""
     if not user_id or user_id.strip() == "":
@@ -113,7 +106,7 @@ class LogWeightRequest(BaseModel):
     weight_kg: float
 
 
-@app.post("/log/weight", dependencies=[Depends(require_api_key)])
+@app.post("/log/weight")
 async def log_weight_endpoint(req: LogWeightRequest):
     """Log today's weight directly from the app slider."""
     if not req.user_id:

@@ -161,18 +161,14 @@ struct VisualJourneyResponse: Codable {
     }
 }
 
-private let kApiKey = "NyQ_DuiZ3iJb4-UsNjt2fxEdeqnYxbLSplUBRtIDouo"
-
 class RenaAPI {
     static let shared = RenaAPI()
     private let session = URLSession.shared
 
-    // Builds an authenticated URLRequest with Content-Type + API key already set.
     private func request(_ urlString: String, method: String = "GET") -> URLRequest {
         var req = URLRequest(url: URL(string: urlString)!)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(kApiKey, forHTTPHeaderField: "X-API-Key")
         return req
     }
 
