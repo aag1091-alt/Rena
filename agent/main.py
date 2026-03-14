@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from rena.voice import handle_voice
-from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal, update_visual_journey, create_profile, reset_user
+from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal, update_visual_journey, create_profile, reset_user, correct_scan
 
 load_dotenv()
 
@@ -112,6 +112,17 @@ async def log_weight_endpoint(req: LogWeightRequest):
     if not req.user_id:
         raise HTTPException(status_code=400, detail="user_id is required")
     return log_weight(req.user_id, req.weight_kg)
+
+
+class ScanCorrectRequest(BaseModel):
+    description: str
+    correction: str
+
+
+@app.post("/scan/correct")
+async def scan_correct(req: ScanCorrectRequest):
+    """Recalculate nutrition for a food given a user correction."""
+    return correct_scan(req.description, req.correction)
 
 
 @app.websocket("/ws/{user_id}")

@@ -11,6 +11,9 @@ struct MainTabView: View {
             DataView()
                 .tabItem { Label("Data", systemImage: "chart.bar.fill") }
 
+            ScanView()
+                .tabItem { Label("Log Food", systemImage: "camera.fill") }
+
             WorkbookView()
                 .tabItem { Label("Workbook", systemImage: "note.text") }
 
