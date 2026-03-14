@@ -369,7 +369,7 @@ def get_goal(user_id: str) -> dict:
     }
 
 
-def get_progress(user_id: str) -> dict:
+def get_progress(user_id: str, for_date: str = None) -> dict:
     """
     Get the user's goal and today's progress (calories, water, workouts).
 
@@ -380,7 +380,9 @@ def get_progress(user_id: str) -> dict:
         Dict with goal info and today's logged activity.
     """
     profile = _user_ref(user_id).get().to_dict() or {}
-    today_log = _today_log_ref(user_id).get().to_dict() or {}
+    log_date = for_date or date.today().isoformat()
+    log_ref = _user_ref(user_id).collection("logs").document(log_date)
+    today_log = log_ref.get().to_dict() or {}
     goal_doc = _goal_ref(user_id).get().to_dict() or {}
 
     meals = today_log.get("meals", [])
@@ -413,6 +415,60 @@ def get_progress(user_id: str) -> dict:
         "meals_logged": meals,
         "workouts_logged": workouts,
     }
+
+
+def seed_test_data(user_id: str) -> dict:
+    """Seed 7 days of realistic test data for UI testing."""
+    from datetime import timedelta
+    import random
+
+    meals_by_day = [
+        [("Oatmeal with berries", 320, 12, 54, 6), ("Grilled chicken salad", 480, 42, 20, 14), ("Dal and rice", 620, 22, 98, 8)],
+        [("Avocado toast", 390, 10, 42, 20), ("Samosa x2", 440, 8, 52, 22), ("Paneer curry with naan", 720, 28, 80, 28)],
+        [("Greek yogurt parfait", 280, 18, 36, 6), ("Tuna wrap", 520, 38, 48, 12), ("Pasta bolognese", 680, 32, 88, 16)],
+        [("Banana smoothie", 310, 8, 62, 4), ("Caesar salad with chicken", 540, 44, 18, 28), ("Butter chicken with rice", 780, 36, 92, 24)],
+        [("Scrambled eggs on toast", 420, 22, 38, 18), ("Lentil soup", 380, 20, 54, 6), ("Grilled salmon with veggies", 560, 48, 24, 22)],
+        [("Chia pudding", 290, 10, 40, 10), ("Chicken wrap", 580, 40, 52, 16), ("Vegetable stir fry with tofu", 490, 24, 60, 14)],
+        [("Masala chai + poha", 350, 8, 58, 10), ("Rajma rice", 640, 24, 104, 10), ("Mixed vegetable soup", 260, 10, 38, 6)],
+    ]
+    workouts_by_day = [
+        [{"type": "Running", "duration_min": 30, "calories_burned": 280}],
+        [],
+        [{"type": "Yoga", "duration_min": 45, "calories_burned": 140}],
+        [{"type": "Gym — weight training", "duration_min": 50, "calories_burned": 320}],
+        [],
+        [{"type": "Cycling", "duration_min": 40, "calories_burned": 300}],
+        [],
+    ]
+    water_by_day = [6, 8, 5, 7, 8, 4, 6]
+    weight_by_day = [83.5, 83.3, 83.4, 83.1, 83.2, 82.9, 83.0]
+
+    today = date.today()
+    written = []
+    for i in range(7):
+        day = today - timedelta(days=6 - i)
+        day_str = day.isoformat()
+        meals = [
+            {
+                "name": m[0], "calories": m[1],
+                "protein_g": m[2], "carbs_g": m[3], "fat_g": m[4],
+                "logged_at": f"{day_str}T08:00:00Z",
+            }
+            for m in meals_by_day[i]
+        ]
+        workouts = [
+            {**w, "logged_at": f"{day_str}T17:00:00Z"}
+            for w in workouts_by_day[i]
+        ]
+        _user_ref(user_id).collection("logs").document(day_str).set({
+            "meals": meals,
+            "workouts": workouts,
+            "water_glasses": water_by_day[i],
+            "weight_kg": weight_by_day[i],
+        })
+        written.append(day_str)
+
+    return {"status": "seeded", "days": written}
 
 
 def _estimate_macros(meal_name: str, calories: int) -> dict:
@@ -594,18 +650,19 @@ def scan_image(user_id: str, image_base64: str, mime_type: str = "image/jpeg") -
         contents=[
             genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
             """You are a nutrition expert. Analyze this food image and respond in JSON only.
-Identify every food item visible and estimate nutritional content.
+Identify EVERY distinct food item visible separately and estimate nutritional content for each.
 Return exactly this structure:
 {
   "identified": true,
-  "description": "brief description of what you see",
-  "items": [{"name": "...", "estimated_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
+  "description": "brief overall description",
+  "items": [{"name": "item name", "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
   "total_calories": 0,
   "total_protein_g": 0,
   "total_carbs_g": 0,
   "total_fat_g": 0,
   "confidence": "high|medium|low"
 }
+If a dish has components (e.g. rice + curry + salad), list each as a separate item.
 If no food is visible return {"identified": false}."""
         ],
     )
@@ -615,8 +672,23 @@ If no food is visible return {"identified": false}."""
     # Strip markdown code fences if present
     raw = re.sub(r"^```(?:json)?\n?", "", raw)
     raw = re.sub(r"\n?```$", "", raw)
+    raw = raw.strip()
 
-    result = json.loads(raw)
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        # Gemini sometimes includes extra text — extract the first JSON object
+        print(f"[scan_image] JSON parse failed, raw response:\n{raw}")
+        match = re.search(r"\{[\s\S]*\}", raw)
+        if match:
+            try:
+                result = json.loads(match.group())
+            except json.JSONDecodeError:
+                print("[scan_image] Fallback JSON parse also failed")
+                return {"identified": False}
+        else:
+            return {"identified": False}
+
     result["user_id"] = user_id
     return result
 
@@ -709,45 +781,19 @@ The image should feel {('like the very start of something exciting' if pct < 25 
     }
 
 
-def find_restaurants(user_id: str, location: str, cuisine_preference: str = "") -> dict:
+def correct_scan(user_id: str, description: str, correction: str) -> dict:
     """
-    Find goal-aware restaurant recommendations near the user.
+    Recalculate nutrition given a user's voice correction to the original food scan.
+    Call this when the user says the food identification was wrong or the portion was different.
+    The corrected result is saved and the app will pick it up automatically.
 
     Args:
         user_id: The user's unique ID.
-        location: User's current location or neighborhood.
-        cuisine_preference: Optional cuisine type preference.
+        description: Original food description from scan (e.g. "1 samosa").
+        correction: What the user wants changed (e.g. "it was 2 samosas" or "grilled not fried").
 
     Returns:
-        Restaurant suggestions filtered by remaining calories and goal timeline.
-    """
-    progress = get_progress(user_id)
-    calories_remaining = progress["calories_remaining"]
-    goal = progress["goal"]
-    deadline = progress["deadline"]
-
-    # TODO: integrate Google Maps Places API
-    # For now return a structured prompt for Rena to reason about
-    return {
-        "location": location,
-        "calories_remaining": calories_remaining,
-        "goal": goal,
-        "deadline": deadline,
-        "cuisine_preference": cuisine_preference,
-        "note": "Use this context to suggest appropriate restaurants and dishes that fit the user's remaining calories and goal timeline.",
-    }
-
-
-def correct_scan(description: str, correction: str) -> dict:
-    """
-    Recalculate nutrition given a user correction to the original food scan.
-
-    Args:
-        description: Original food description from scan.
-        correction: User's correction (e.g. "actually it was 2 portions" or "it was grilled not fried").
-
-    Returns:
-        Updated nutrition dict with corrected calories and macros.
+        Updated nutrition with corrected calories and macros.
     """
     import json, re
     client = _get_genai_client()
@@ -765,6 +811,13 @@ def correct_scan(description: str, correction: str) -> dict:
     raw = re.sub(r"\n?```$", "", raw)
     data = json.loads(raw)
     data["identified"] = True
+
+    # Store in Firestore so iOS can poll and pick up the corrected result
+    _user_ref(user_id).collection("pending").document("scan_correction").set({
+        "result": data,
+        "created_at": firestore.SERVER_TIMESTAMP,
+    })
+
     return data
 
 

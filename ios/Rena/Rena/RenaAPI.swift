@@ -17,9 +17,45 @@ struct OnboardResponse: Codable {
     }
 }
 
+struct ScanItem: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let calories: Int
+    let proteinG: Int
+    let carbsG: Int
+    let fatG: Int
+
+    enum CodingKeys: String, CodingKey {
+        case name, calories
+        case proteinG = "protein_g"
+        case carbsG   = "carbs_g"
+        case fatG     = "fat_g"
+    }
+
+    init(name: String, calories: Int, proteinG: Int, carbsG: Int, fatG: Int) {
+        self.name = name; self.calories = calories
+        self.proteinG = proteinG; self.carbsG = carbsG; self.fatG = fatG
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        func intOrDouble(_ key: CodingKeys) -> Int {
+            if let i = try? c.decode(Int.self,    forKey: key) { return i }
+            if let d = try? c.decode(Double.self, forKey: key) { return Int(d) }
+            return 0
+        }
+        calories = intOrDouble(.calories)
+        proteinG = intOrDouble(.proteinG)
+        carbsG   = intOrDouble(.carbsG)
+        fatG     = intOrDouble(.fatG)
+    }
+}
+
 struct ScanResponse: Codable {
     let identified: Bool
     let description: String?
+    let items: [ScanItem]?
     let totalCalories: Int?
     let totalProteinG: Int?
     let totalCarbsG: Int?
@@ -28,7 +64,7 @@ struct ScanResponse: Codable {
     let logged: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case identified, description, confidence, logged
+        case identified, description, confidence, logged, items
         case totalCalories = "total_calories"
         case totalProteinG = "total_protein_g"
         case totalCarbsG = "total_carbs_g"
@@ -191,10 +227,17 @@ class RenaAPI {
         return try JSONDecoder().decode(ScanResponse.self, from: data)
     }
 
-    func getProgress(userId: String) async throws -> ProgressResponse {
-        let req = request("\(kBaseURL)/progress/\(userId)")
+    func getProgress(userId: String, date: String? = nil) async throws -> ProgressResponse {
+        var urlString = "\(kBaseURL)/progress/\(userId)"
+        if let date { urlString += "?date=\(date)" }
+        let req = request(urlString)
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(ProgressResponse.self, from: data)
+    }
+
+    func seedTestData(userId: String) async throws {
+        let req = request("\(kBaseURL)/dev/seed/\(userId)", method: "POST")
+        _ = try await session.data(for: req)
     }
 
     func onboard(
@@ -232,6 +275,15 @@ class RenaAPI {
         _ = try await session.data(for: req)
     }
 
+    func logMeal(userId: String, name: String, calories: Int, proteinG: Int = 0, carbsG: Int = 0, fatG: Int = 0) async throws {
+        var req = request("\(kBaseURL)/log/meal", method: "POST")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "user_id": userId, "name": name, "calories": calories,
+            "protein_g": proteinG, "carbs_g": carbsG, "fat_g": fatG
+        ])
+        _ = try await session.data(for: req)
+    }
+
     func logWeight(userId: String, weightKg: Double) async throws -> [String: Any] {
         var req = request("\(kBaseURL)/log/weight", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId, "weight_kg": weightKg])
@@ -239,14 +291,27 @@ class RenaAPI {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
-    func correctScan(description: String, correction: String) async throws -> ScanResponse {
+    func correctScan(userId: String, description: String, correction: String) async throws -> ScanResponse {
         var req = request("\(kBaseURL)/scan/correct", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "user_id": userId,
             "description": description,
             "correction": correction
         ])
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(ScanResponse.self, from: data)
+    }
+
+    func getPendingCorrection(userId: String) async throws -> ScanResponse? {
+        let req = request("\(kBaseURL)/pending_correction/\(userId)")
+        let (data, _) = try await session.data(for: req)
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ready = json["ready"] as? Bool, ready,
+              let resultDict = json["result"],
+              let resultData = try? JSONSerialization.data(withJSONObject: resultDict) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(ScanResponse.self, from: resultData)
     }
 
     func getVisualJourney(userId: String) async throws -> VisualJourneyResponse {

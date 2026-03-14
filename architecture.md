@@ -22,27 +22,20 @@
 │  │  Tools:                                         │ │
 │  │  • set_goal        • log_meal                   │ │
 │  │  • get_progress    • scan_image                 │ │
-│  │  • find_restaurant • update_visual_journey      │ │
+│  │  • log_workout     • update_visual_journey      │ │
 │  └──────────────┬──────────────────────────────────┘ │
 └─────────────────┼────────────────────────────────────┘
                   │
-     ┌────────────┼─────────────────┐
-     ▼            ▼                 ▼
-┌─────────┐ ┌──────────────┐ ┌──────────────────┐
-│Firestore│ │ Gemini APIs  │ │  Google Maps /   │
-│         │ │              │ │  Places API      │
-│ • users │ │ • Live API   │ └──────────────────┘
-│ • logs  │ │ • Vision     │
-│ • goals │ │ • Image Gen  │
+     ┌────────────┼──────────┐
+     ▼            ▼          ▼
+┌─────────┐ ┌──────────────┐ ┌───────────────┐
+│Firestore│ │ Gemini APIs  │ │ Cloud Storage │
+│         │ │              │ │               │
+│ • users │ │ • Live API   │ │ (vision board │
+│ • logs  │ │ • Vision     │ │  images)      │
+│ • goals │ │ • Image Gen  │ └───────────────┘
 │ • visual│ └──────────────┘
 └─────────┘
-     ▲
-     │
-┌────┴──────────┐
-│ Cloud Storage │
-│ (vision board │
-│  images)      │
-└───────────────┘
 ```
 
 ---
@@ -53,11 +46,11 @@
 Thin client — handles UI and streams data to the agent. All AI logic lives in the backend.
 
 **Screens:**
-- **Onboarding** — voice-first goal setting with Rena
-- **Home / Goal Screen** — countdown, visual journey image, daily progress ring
-- **Chat / Voice** — live voice conversation with Rena
-- **Log** — camera snap, gallery scan, barcode scan
-- **Discover** — goal-aware restaurant finder
+- **Onboarding** — form-based profile setup, then voice goal-setting with Rena
+- **Home** — goal countdown, daily progress ring, calorie/water/workout stats, voice orb
+- **Voice** — dedicated full-screen live conversation with Rena
+- **Log Food** — camera snap or gallery pick with per-item calorie adjustment
+- **Data** — historical daily logs with macro breakdown
 
 **Key iOS capabilities used:**
 - `AVFoundation` — real-time audio capture + playback for voice
@@ -80,9 +73,12 @@ Hosted on Cloud Run. The brain of the app.
 |------|-------------|---------------|
 | `set_goal` | Save user goal + deadline, generate initial vision board | Firestore, Gemini Image Gen |
 | `log_meal` | Log a meal from text description or image | Gemini Vision, Firestore |
+| `log_water` | Track daily water intake | Firestore |
+| `log_workout` | Log workout + auto-calculate calories burned (MET table) | Firestore |
+| `log_weight` | Record today's weight | Firestore |
 | `scan_image` | Identify food in a photo, return nutrition estimate | Gemini Vision |
+| `correct_scan` | Recalculate nutrition from user's voice correction | Gemini Vision, Firestore |
 | `get_progress` | Get today's calories, macros, water, goal % | Firestore |
-| `find_restaurant` | Find nearby spots filtered by remaining calories + goal timeline | Maps/Places API, Firestore |
 | `update_visual_journey` | Regenerate vision board at new progress level | Gemini Image Gen, Cloud Storage |
 
 #### API Endpoints
@@ -90,10 +86,14 @@ Hosted on Cloud Run. The brain of the app.
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | `WS` | `/ws/{user_id}` | Real-time voice conversation (Gemini Live) |
-| `POST` | `/onboard` | Set goal, create user profile |
+| `POST` | `/onboard` | Create user profile, calculate calorie target |
 | `POST` | `/scan` | Analyze food image from camera or gallery |
 | `GET` | `/progress/{user_id}` | Daily progress summary |
-| `GET` | `/restaurants/{user_id}` | Goal-aware restaurant recommendations |
+| `GET` | `/goal/{user_id}` | Goal details with generated vision board image |
+| `POST` | `/log/meal` | Log a meal manually |
+| `POST` | `/log/weight` | Log today's weight |
+| `POST` | `/visual_journey` | Generate / update visual journey image |
+| `GET` | `/pending_correction/{user_id}` | Poll for voice-corrected scan result |
 
 ---
 
@@ -141,7 +141,6 @@ users/
 | **Gemini Live API** | Real-time voice conversation (bidi-streaming) |
 | **Gemini Vision** | Food recognition from camera + gallery photos |
 | **Gemini Image Gen** | Visual journey evolution |
-| **Google Maps/Places** | Goal-aware restaurant finder |
 
 ---
 
@@ -189,7 +188,7 @@ iOS fetches and animates transition
 
 ### Day 2 — March 14
 - [ ] `scan_image` + `log_meal` tools (Gemini Vision)
-- [ ] `find_restaurant` tool (Maps API)
+- [ ] `log_workout` + `log_water` + `log_weight` tools
 - [ ] iOS app: onboarding screen + voice UI
 - [ ] iOS ↔ agent connection working end to end
 

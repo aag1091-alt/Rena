@@ -62,6 +62,15 @@ _CONTEXT_PROMPTS = {
         "Say 'Hi {name}! What would you like to do today?' "
         "Keep it short and friendly — one sentence."
     ),
+    "scan_correct": (
+        "Do NOT say 'how can I help you' or any generic greeting. "
+        "Your ONLY job right now is to fix the scan for '{name}'. "
+        "Say exactly one sentence like: 'Was the portion bigger, or was it cooked differently?' "
+        "Then wait. When they answer, immediately call correct_scan with "
+        "user_id, description='{name}', and their correction. "
+        "Once the tool returns, say the new calorie count in one sentence, e.g. "
+        "'Updated — that's 380 calories.' Then stop."
+    ),
 }
 
 

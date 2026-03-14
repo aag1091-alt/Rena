@@ -2,21 +2,110 @@ import SwiftUI
 
 struct DataView: View {
     @EnvironmentObject var appState: AppState
+    @State private var selectedDate = Date()
+    @State private var dayData: ProgressResponse? = nil
+    @State private var isLoading = false
+
+    private var isToday: Bool {
+        Calendar.current.isDateInToday(selectedDate)
+    }
+
+    private var dateLabel: String {
+        if isToday { return "Today" }
+        if Calendar.current.isDateInYesterday(selectedDate) { return "Yesterday" }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "EEE, MMM d"
+        return fmt.string(from: selectedDate)
+    }
+
+    private var dateString: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: selectedDate)
+    }
+
+    // Data to display — today uses appState, historical uses dayData
+    private var displayCaloriesConsumed: Int { dayData?.caloriesConsumed ?? (isToday ? appState.caloriesConsumed : 0) }
+    private var displayCaloriesBurned: Int   { dayData?.caloriesBurned   ?? (isToday ? appState.caloriesBurned   : 0) }
+    private var displayCaloriesTarget: Int   { dayData?.caloriesTarget   ?? (isToday ? appState.caloriesTarget   : 1800) }
+    private var displayBurnRequired: Int     { dayData?.burnRequired     ?? (isToday ? appState.burnRequired     : 0) }
+    private var displayProteinConsumed: Int  { dayData?.proteinConsumedG ?? (isToday ? appState.proteinConsumedG : 0) }
+    private var displayProteinTarget: Int    { dayData?.proteinTargetG   ?? (isToday ? appState.proteinTargetG   : 120) }
+    private var displayWater: Int            { dayData?.waterGlasses     ?? (isToday ? appState.waterGlasses     : 0) }
+    private var displayWeightKg: Double?     { dayData?.weightKg         ?? (isToday ? appState.todayWeightKg   : nil) }
+    private var displayMeals: [MealEntry]    { dayData?.mealsLogged      ?? (isToday ? appState.mealsLogged     : []) }
+    private var displayWorkouts: [WorkoutEntry] { dayData?.workoutsLogged ?? (isToday ? appState.workoutsLogged : []) }
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Quick-glance summary row (weight first)
-                    WeightCard()
-                    SummaryRow()
 
-                    // Calorie breakdown
-                    CalorieBreakdownCard()
+                    // Date navigation
+                    HStack(spacing: 16) {
+                        Button {
+                            selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate)!
+                            Task { await loadData() }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(Color(hex: "E76F51"))
+                        }
 
-                    // Collapsible logs
-                    CollapsibleFoodLog()
-                    CollapsibleWorkoutLog()
+                        Spacer()
+
+                        VStack(spacing: 2) {
+                            Text(dateLabel)
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundColor(Color(hex: "3D2B1F"))
+                            if !isToday {
+                                Text(dateString)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color(hex: "B09880"))
+                            }
+                        }
+                        .contentTransition(.numericText())
+                        .animation(.spring(duration: 0.2), value: dateLabel)
+
+                        Spacer()
+
+                        Button {
+                            selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate)!
+                            Task { await loadData() }
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(isToday ? Color(hex: "D4B8A0") : Color(hex: "E76F51"))
+                        }
+                        .disabled(isToday)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 12)
+                    .background(Color.white)
+                    .cornerRadius(16)
+                    .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+
+                    if isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                    } else {
+                        DayWeightCard(weightKg: displayWeightKg)
+                        DaySummaryRow(
+                            caloriesConsumed: displayCaloriesConsumed,
+                            caloriesBurned: displayCaloriesBurned,
+                            caloriesTarget: displayCaloriesTarget,
+                            water: displayWater
+                        )
+                        DayCalorieBreakdownCard(
+                            caloriesConsumed: displayCaloriesConsumed,
+                            caloriesBurned: displayCaloriesBurned,
+                            caloriesTarget: displayCaloriesTarget,
+                            burnRequired: displayBurnRequired
+                        )
+                        DayFoodLog(meals: displayMeals)
+                        DayWorkoutLog(workouts: displayWorkouts)
+                    }
 
                     Spacer(minLength: 40)
                 }
@@ -24,32 +113,247 @@ struct DataView: View {
                 .padding(.top, 8)
             }
             .background(Color(hex: "F7F3EE").ignoresSafeArea())
-            .navigationTitle("Today")
+            .navigationTitle("History")
             .navigationBarTitleDisplayMode(.large)
             .scrollBounceBehavior(.always)
-            .refreshable { await refreshProgress() }
-            .onAppear { Task { await refreshProgress() } }
+            .refreshable { await loadData() }
+            .onAppear { Task { await loadData() } }
         }
     }
 
-    private func refreshProgress() async {
+    private func loadData() async {
+        await MainActor.run { isLoading = true }
         do {
-            let resp = try await RenaAPI.shared.getProgress(userId: appState.userId)
+            let resp = try await RenaAPI.shared.getProgress(userId: appState.userId, date: dateString)
             await MainActor.run {
-                appState.caloriesConsumed = resp.caloriesConsumed
-                appState.caloriesBurned   = resp.caloriesBurned
-                appState.caloriesTarget   = resp.caloriesTarget
-                appState.burnRequired     = resp.burnRequired
-                appState.proteinConsumedG = resp.proteinConsumedG
-                appState.proteinTargetG   = resp.proteinTargetG
-                appState.waterGlasses     = resp.waterGlasses
-                appState.todayWeightKg    = resp.weightKg
-                appState.mealsLogged      = resp.mealsLogged ?? []
-                appState.workoutsLogged   = resp.workoutsLogged ?? []
+                dayData = resp
+                isLoading = false
+                if isToday {
+                    appState.caloriesConsumed = resp.caloriesConsumed
+                    appState.caloriesBurned   = resp.caloriesBurned
+                    appState.caloriesTarget   = resp.caloriesTarget
+                    appState.burnRequired     = resp.burnRequired
+                    appState.proteinConsumedG = resp.proteinConsumedG
+                    appState.proteinTargetG   = resp.proteinTargetG
+                    appState.waterGlasses     = resp.waterGlasses
+                    appState.todayWeightKg    = resp.weightKg
+                    appState.mealsLogged      = resp.mealsLogged ?? []
+                    appState.workoutsLogged   = resp.workoutsLogged ?? []
+                }
             }
         } catch {
-            print("[DataView] getProgress error: \(error)")
+            await MainActor.run { isLoading = false }
+            print("[DataView] loadData error: \(error)")
         }
+    }
+}
+
+// MARK: - Day-scoped subviews (take data as params, not from appState)
+
+struct DayWeightCard: View {
+    let weightKg: Double?
+    var body: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: "9B7EC8").opacity(0.10))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "scalemass")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color(hex: "9B7EC8"))
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("WEIGHT")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color(hex: "B09880"))
+                    .kerning(1.0)
+                if let w = weightKg {
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text(String(format: "%.1f", w))
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(hex: "9B7EC8"))
+                        Text("kg").font(.system(size: 13)).foregroundColor(Color(hex: "B09880"))
+                    }
+                } else {
+                    Text("Not logged").font(.system(size: 15, weight: .medium)).foregroundColor(Color(hex: "B09880"))
+                }
+            }
+            Spacer()
+        }
+        .padding(18)
+        .background(Color.white)
+        .cornerRadius(18)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+}
+
+struct DaySummaryRow: View {
+    let caloriesConsumed: Int
+    let caloriesBurned: Int
+    let caloriesTarget: Int
+    let water: Int
+
+    var netCalories: Int { caloriesConsumed - caloriesBurned }
+    var remaining: Int { max(0, caloriesTarget - netCalories) }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SummaryTile(icon: "flame.fill", iconColor: Color(hex: "E76F51"),
+                        value: "\(netCalories)", unit: "kcal", label: "Net calories",
+                        sub: "\(remaining) remaining")
+            SummaryTile(icon: "drop.fill", iconColor: Color(hex: "457B9D"),
+                        value: "\(water)", unit: "/ 8", label: "Water",
+                        sub: water >= 8 ? "Goal reached!" : "\(8 - water) more to go")
+            SummaryTile(icon: "fork.knife", iconColor: Color(hex: "E9C46A"),
+                        value: "\(caloriesConsumed)", unit: "kcal", label: "Eaten",
+                        sub: "\(caloriesBurned) burned")
+        }
+    }
+}
+
+struct DayCalorieBreakdownCard: View {
+    let caloriesConsumed: Int
+    let caloriesBurned: Int
+    let caloriesTarget: Int
+    let burnRequired: Int
+
+    var netCalories: Int { caloriesConsumed - caloriesBurned }
+    var progress: Double { min(1.0, Double(max(0, netCalories)) / Double(max(caloriesTarget, 1))) }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("CALORIES").font(.system(size: 10, weight: .semibold)).foregroundColor(Color(hex: "B09880")).kerning(1.0)
+                    Text("Daily breakdown").font(.system(size: 16, weight: .bold)).foregroundColor(Color(hex: "3D2B1F"))
+                }
+                Spacer()
+                if burnRequired > 0 {
+                    Label("Burn \(burnRequired) kcal", systemImage: "flame.fill")
+                        .font(.system(size: 11, weight: .semibold)).foregroundColor(Color(hex: "E76F51"))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Color(hex: "E76F51").opacity(0.1)).cornerRadius(20)
+                } else if caloriesConsumed > 0 {
+                    Label("On track", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 11, weight: .semibold)).foregroundColor(Color(hex: "2A9D8F"))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Color(hex: "2A9D8F").opacity(0.1)).cornerRadius(20)
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 6).fill(Color(hex: "F0E6DA")).frame(height: 10)
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(LinearGradient(colors: [Color(hex: "E76F51"), Color(hex: "F4A261")], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: geo.size.width * progress, height: 10)
+                            .animation(.spring(), value: progress)
+                    }
+                }.frame(height: 10)
+                HStack {
+                    Text("0").font(.system(size: 10)).foregroundColor(Color(hex: "B09880"))
+                    Spacer()
+                    Text("\(caloriesTarget) kcal target").font(.system(size: 10)).foregroundColor(Color(hex: "B09880"))
+                }
+            }
+            HStack(spacing: 0) {
+                CalorieStat(label: "Eaten", value: "\(caloriesConsumed)", color: Color(hex: "E76F51"), icon: "fork.knife")
+                Divider().frame(height: 40)
+                CalorieStat(label: "Exercise burned", value: "\(caloriesBurned)", color: Color(hex: "2A9D8F"), icon: "figure.run")
+                Divider().frame(height: 40)
+                CalorieStat(label: "Remaining", value: "\(max(0, caloriesTarget - netCalories))", color: Color(hex: "457B9D"), icon: "target")
+            }
+        }
+        .padding(18)
+        .background(Color.white)
+        .cornerRadius(18)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+}
+
+struct DayFoodLog: View {
+    let meals: [MealEntry]
+    @State private var expanded = false
+    var totalCalories: Int { meals.reduce(0) { $0 + $1.calories } }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: { withAnimation(.spring(response: 0.35)) { expanded.toggle() } }) {
+                HStack(spacing: 10) {
+                    Image(systemName: "fork.knife").font(.system(size: 13)).foregroundColor(Color(hex: "E76F51"))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("FOOD LOG").font(.system(size: 10, weight: .semibold)).foregroundColor(Color(hex: "B09880")).kerning(1.0)
+                        Text("Meals logged").font(.system(size: 15, weight: .bold)).foregroundColor(Color(hex: "3D2B1F"))
+                    }
+                    Spacer()
+                    if totalCalories > 0 {
+                        Text("\(totalCalories) kcal").font(.system(size: 13, weight: .bold)).foregroundColor(Color(hex: "E76F51"))
+                    }
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold)).foregroundColor(Color(hex: "B09880")).padding(.leading, 4)
+                }
+                .padding(18)
+            }
+            .buttonStyle(.plain)
+
+            if expanded {
+                if meals.isEmpty {
+                    Text("Nothing logged").font(.subheadline).foregroundColor(Color(hex: "B09880"))
+                        .frame(maxWidth: .infinity).padding(.vertical, 20)
+                } else {
+                    Divider().padding(.horizontal, 18)
+                    ForEach(meals) { meal in
+                        MealRow(meal: meal).padding(.horizontal, 18)
+                        if meal.id != meals.last?.id { Divider().padding(.horizontal, 18) }
+                    }
+                    .padding(.bottom, 8)
+                }
+            }
+        }
+        .background(Color.white).cornerRadius(18).shadow(color: .black.opacity(0.05), radius: 8, y: 2).clipped()
+    }
+}
+
+struct DayWorkoutLog: View {
+    let workouts: [WorkoutEntry]
+    @State private var expanded = false
+    var totalBurned: Int { workouts.reduce(0) { $0 + $1.caloriesBurned } }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: { withAnimation(.spring(response: 0.35)) { expanded.toggle() } }) {
+                HStack(spacing: 10) {
+                    Image(systemName: "figure.run").font(.system(size: 13)).foregroundColor(Color(hex: "2A9D8F"))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("WORKOUTS").font(.system(size: 10, weight: .semibold)).foregroundColor(Color(hex: "B09880")).kerning(1.0)
+                        Text("Exercise").font(.system(size: 15, weight: .bold)).foregroundColor(Color(hex: "3D2B1F"))
+                    }
+                    Spacer()
+                    if totalBurned > 0 {
+                        Text("\(totalBurned) kcal burned").font(.system(size: 13, weight: .bold)).foregroundColor(Color(hex: "2A9D8F"))
+                    }
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold)).foregroundColor(Color(hex: "B09880")).padding(.leading, 4)
+                }
+                .padding(18)
+            }
+            .buttonStyle(.plain)
+
+            if expanded {
+                if workouts.isEmpty {
+                    Text("No workouts logged").font(.subheadline).foregroundColor(Color(hex: "B09880"))
+                        .frame(maxWidth: .infinity).padding(.vertical, 20)
+                } else {
+                    Divider().padding(.horizontal, 18)
+                    ForEach(workouts) { workout in
+                        WorkoutRow(workout: workout).padding(.horizontal, 18)
+                        if workout.id != workouts.last?.id { Divider().padding(.horizontal, 18) }
+                    }
+                    .padding(.bottom, 8)
+                }
+            }
+        }
+        .background(Color.white).cornerRadius(18).shadow(color: .black.opacity(0.05), radius: 8, y: 2).clipped()
     }
 }
 

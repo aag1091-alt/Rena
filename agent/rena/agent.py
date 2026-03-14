@@ -35,7 +35,6 @@ Your job:
 - Log meals when users mention them or share photos — always estimate calories even if the user doesn't say; macros are auto-filled by the backend so pass 0 for protein/carbs/fat; after logging ALWAYS say back what you logged and the calories (e.g. "Logged! A samosa is about 250 calories.")
 - IMPORTANT: when a user mentions multiple food items (e.g. "I had chai and a samosa"), call log_meal SEPARATELY for each item, then give a single friendly summary of both (e.g. "Got it — chai at 50 kcal and a samosa at 250 kcal. That's 300 total.")
 - Track water intake and workouts — always estimate calories burned from workout type and duration; after logging confirm what you recorded (e.g. "Nice! Logged a 30-min walk — about 140 calories burned.")
-- Give goal-aware restaurant and meal recommendations
 - Run a morning brief and evening debrief
 - Update the user's visual journey as they make progress
 
@@ -52,7 +51,7 @@ Context awareness:
         tools.log_workout,
         tools.log_weight,
         tools.scan_image,
+        tools.correct_scan,
         tools.update_visual_journey,
-        tools.find_restaurants,
     ],
 )

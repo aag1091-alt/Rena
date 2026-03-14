@@ -51,6 +51,13 @@ async def dev_reset(user_id: str):
     return reset_user(user_id)
 
 
+@app.post("/dev/seed/{user_id}")
+async def dev_seed(user_id: str):
+    """DEV ONLY — seed 7 days of test data for UI testing."""
+    from rena.tools import seed_test_data
+    return seed_test_data(user_id)
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "agent": "rena"}
@@ -74,11 +81,11 @@ async def scan_food(req: ScanRequest):
 
 
 @app.get("/progress/{user_id}")
-async def progress(user_id: str):
-    """Get today's progress for the iOS home screen."""
+async def progress(user_id: str, date: str = None):
+    """Get progress for a given date (YYYY-MM-DD) or today if omitted."""
     if not user_id or user_id.strip() == "":
         raise HTTPException(status_code=400, detail="user_id is required")
-    return get_progress(user_id)
+    return get_progress(user_id, for_date=date)
 
 
 class VisualJourneyRequest(BaseModel):
@@ -101,6 +108,23 @@ async def goal_endpoint(user_id: str):
     return get_goal(user_id)
 
 
+class LogMealRequest(BaseModel):
+    user_id: str
+    name: str
+    calories: int
+    protein_g: int = 0
+    carbs_g: int = 0
+    fat_g: int = 0
+
+
+@app.post("/log/meal")
+async def log_meal_endpoint(req: LogMealRequest):
+    """Log a meal directly from the app (e.g. after adjusting scan results)."""
+    if not req.user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    return log_meal(req.user_id, req.name, req.calories, req.protein_g, req.carbs_g, req.fat_g)
+
+
 class LogWeightRequest(BaseModel):
     user_id: str
     weight_kg: float
@@ -115,14 +139,28 @@ async def log_weight_endpoint(req: LogWeightRequest):
 
 
 class ScanCorrectRequest(BaseModel):
+    user_id: str
     description: str
     correction: str
 
 
 @app.post("/scan/correct")
 async def scan_correct(req: ScanCorrectRequest):
-    """Recalculate nutrition for a food given a user correction."""
-    return correct_scan(req.description, req.correction)
+    """Recalculate nutrition for a food given a user correction (direct call)."""
+    return correct_scan(req.user_id, req.description, req.correction)
+
+
+@app.get("/pending_correction/{user_id}")
+async def pending_correction(user_id: str):
+    """Poll for a scan correction result written by the voice agent. Clears after reading."""
+    from rena.tools import _user_ref
+    doc_ref = _user_ref(user_id).collection("pending").document("scan_correction")
+    doc = doc_ref.get()
+    if not doc.exists:
+        return {"ready": False}
+    data = doc.to_dict()
+    doc_ref.delete()
+    return {"ready": True, "result": data.get("result", {})}
 
 
 @app.websocket("/ws/{user_id}")

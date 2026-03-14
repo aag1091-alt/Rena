@@ -9,8 +9,14 @@ struct ScanView: View {
     @State private var isScanning = false
     @State private var showCamera = false
     @State private var logState: LogState = .idle
+    // Adjustable calories per item: keyed by item name
+    @State private var adjustedCalories: [String: Int] = [:]
 
-    enum LogState { case idle, logged, error }
+    enum LogState { case idle, logging, logged }
+
+    var totalAdjustedCalories: Int {
+        adjustedCalories.values.reduce(0, +)
+    }
 
     var body: some View {
         NavigationView {
@@ -34,35 +40,68 @@ struct ScanView: View {
                     .padding(.horizontal)
 
                     if let image = selectedImage {
-                        // Photo preview
+                        // Photo preview with scanning overlay
                         Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 240)
+                            .frame(height: 220)
                             .clipped()
                             .cornerRadius(16)
+                            .overlay(alignment: .topTrailing) {
+                                if !isScanning {
+                                    Button { resetScan() } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title2)
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, Color.black.opacity(0.5))
+                                    }
+                                    .padding(10)
+                                }
+                            }
+                            .overlay {
+                                if isScanning {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(.black.opacity(0.45))
+                                    VStack(spacing: 12) {
+                                        ProgressView()
+                                            .progressViewStyle(.circular)
+                                            .tint(.white)
+                                            .scaleEffect(1.3)
+                                        Text("Analyzing your food...")
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                            }
                             .padding(.horizontal)
 
-                        if isScanning {
-                            HStack(spacing: 12) {
-                                ProgressView()
-                                Text("Rena is analyzing your food...")
+                        if let result = scanResult, !isScanning {
+                            let items = resolvedItems(from: result)
+                            if !items.isEmpty {
+                                // One card per food item
+                                ForEach(items) { item in
+                                    ScanItemCard(
+                                        item: item,
+                                        adjustedCalories: Binding(
+                                            get: { adjustedCalories[item.name] ?? item.calories },
+                                            set: { adjustedCalories[item.name] = $0 }
+                                        )
+                                    )
+                                    .padding(.horizontal)
+                                }
+
+                                // Total + log button
+                                logFooter(items: items)
+                                    .padding(.horizontal)
+
+                            } else {
+                                Text("Couldn't identify any food in this photo. Try a clearer shot.")
                                     .font(.subheadline)
                                     .foregroundColor(Color(hex: "7C5C45"))
+                                    .multilineTextAlignment(.center)
+                                    .padding()
                             }
-                            .padding(.vertical, 24)
-
-                        } else if let result = scanResult {
-                            ScanResultCard(
-                                result: result,
-                                logState: $logState,
-                                onLog: { Task { await logMeal(result) } },
-                                onCorrect: { correction in
-                                    Task { await applyCorrection(correction, original: result) }
-                                }
-                            )
-                            .padding(.horizontal)
                         }
                     } else {
                         // Empty state
@@ -84,20 +123,96 @@ struct ScanView: View {
             .background(Color(hex: "FDF6EE").ignoresSafeArea())
             .navigationTitle("Log Food")
             .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showCamera) {
+            .onDisappear { resetScan() }
+            .sheet(isPresented: $showCamera, onDismiss: {
+                guard selectedImage != nil else { return }
+                scanResult = nil
+                logState = .idle
+                Task { await scanCurrentImage() }
+            }) {
                 CameraView(image: $selectedImage)
                     .ignoresSafeArea()
-                    .onChange(of: selectedImage) { _, img in
-                        guard img != nil else { return }
-                        scanResult = nil
-                        logState = .idle
-                        Task { await scanCurrentImage() }
-                    }
             }
         }
     }
 
+    // MARK: - Log footer
+
+    @ViewBuilder
+    private func logFooter(items: [ScanItem]) -> some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Total")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(Color(hex: "7C5C45"))
+                Spacer()
+                Text("\(totalAdjustedCalories) kcal")
+                    .font(.title3.bold())
+                    .foregroundColor(Color(hex: "E76F51"))
+            }
+            .padding(.horizontal, 4)
+
+            if logState == .logged {
+                Label("All items logged!", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.bold())
+                    .foregroundColor(Color(hex: "2A9D8F"))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color(hex: "2A9D8F").opacity(0.1))
+                    .cornerRadius(14)
+            } else {
+                Button {
+                    Task { await logAllItems(items) }
+                } label: {
+                    HStack(spacing: 8) {
+                        if logState == .logging {
+                            ProgressView().tint(.white).scaleEffect(0.8)
+                        }
+                        Text(logState == .logging ? "Logging..." : "Add all to log")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color(hex: "E76F51"))
+                    .cornerRadius(14)
+                }
+                .disabled(logState == .logging)
+            }
+        }
+        .padding()
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
+    }
+
+    // MARK: - Helpers
+
+    /// Returns items from scan, falling back to a single item built from totalCalories
+    /// if Gemini didn't return an items array.
+    private func resolvedItems(from result: ScanResponse) -> [ScanItem] {
+        if let items = result.items, !items.isEmpty { return items }
+        guard result.identified == true, let cal = result.totalCalories, cal > 0 else { return [] }
+        let name = result.description ?? "Food"
+        return [ScanItem(
+            name: name,
+            calories: cal,
+            proteinG: result.totalProteinG ?? 0,
+            carbsG: result.totalCarbsG ?? 0,
+            fatG: result.totalFatG ?? 0
+        )]
+    }
+
     // MARK: - Actions
+
+    private func resetScan() {
+        selectedImage = nil
+        selectedPhoto = nil
+        scanResult = nil
+        logState = .idle
+        isScanning = false
+        adjustedCalories = [:]
+    }
 
     private func loadAndScan(_ item: PhotosPickerItem?) async {
         guard let item else { return }
@@ -107,6 +222,7 @@ struct ScanView: View {
             selectedImage = image
             scanResult = nil
             logState = .idle
+            adjustedCalories = [:]
         }
         await scanCurrentImage()
     }
@@ -118,153 +234,99 @@ struct ScanView: View {
         await MainActor.run {
             scanResult = result
             isScanning = false
+            // Seed adjusted calories from scan items
+            if let items = result?.items {
+                for item in items {
+                    adjustedCalories[item.name] = item.calories
+                }
+            }
         }
     }
 
-    private func logMeal(_ result: ScanResponse) async {
-        guard result.identified == true else { return }
-        // Re-scan with auto_log=true to log server-side
-        _ = try? await RenaAPI.shared.scanImage(userId: appState.userId, image: selectedImage!, autoLog: true)
+    private func logAllItems(_ items: [ScanItem]) async {
+        await MainActor.run { logState = .logging }
+        var totalLogged = 0
+        for item in items {
+            let cal = adjustedCalories[item.name] ?? item.calories
+            try? await RenaAPI.shared.logMeal(
+                userId: appState.userId,
+                name: item.name,
+                calories: cal,
+                proteinG: item.proteinG,
+                carbsG: item.carbsG,
+                fatG: item.fatG
+            )
+            totalLogged += cal
+        }
         await MainActor.run {
             logState = .logged
-            appState.caloriesConsumed += result.totalCalories ?? 0
-        }
-    }
-
-    private func applyCorrection(_ correction: String, original: ScanResponse) async {
-        guard let description = original.description else { return }
-        await MainActor.run { isScanning = true }
-        let updated = try? await RenaAPI.shared.correctScan(description: description, correction: correction)
-        await MainActor.run {
-            if let updated {
-                scanResult = updated
-                logState = .idle
-            }
-            isScanning = false
+            appState.caloriesConsumed += totalLogged
         }
     }
 }
 
-// MARK: - Result Card
+// MARK: - Item Card with Slider
 
-struct ScanResultCard: View {
-    let result: ScanResponse
-    @Binding var logState: ScanView.LogState
-    let onLog: () -> Void
-    let onCorrect: (String) -> Void
+struct ScanItemCard: View {
+    let item: ScanItem
+    @Binding var adjustedCalories: Int
 
-    @State private var showCorrection = false
-    @State private var correctionText = ""
-    @FocusState private var correctionFocused: Bool
+    private var sliderMin: Double { Double(max(10, item.calories / 2)) }
+    private var sliderMax: Double { Double(max(100, item.calories * 2)) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
 
-            // Header
+            // Name + calories
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(result.description ?? "Food detected")
-                        .font(.headline)
-                        .foregroundColor(Color(hex: "3D2B1F"))
-                    if let conf = result.confidence {
-                        Label(conf.capitalized + " confidence", systemImage: "sparkles")
-                            .font(.caption)
-                            .foregroundColor(Color(hex: "7C5C45"))
-                    }
-                }
+                Text(item.name)
+                    .font(.headline)
+                    .foregroundColor(Color(hex: "3D2B1F"))
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(result.totalCalories ?? 0)")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                    Text("\(adjustedCalories)")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: "E76F51"))
+                        .contentTransition(.numericText())
+                        .animation(.spring(duration: 0.2), value: adjustedCalories)
                     Text("kcal")
                         .font(.caption)
                         .foregroundColor(Color(hex: "7C5C45"))
                 }
             }
 
-            // Macros
-            HStack(spacing: 12) {
-                MacroTag(label: "Protein", value: result.totalProteinG ?? 0, color: Color(hex: "2A9D8F"))
-                MacroTag(label: "Carbs",   value: result.totalCarbsG ?? 0,  color: Color(hex: "E9C46A"))
-                MacroTag(label: "Fat",     value: result.totalFatG ?? 0,    color: Color(hex: "F4A261"))
+            // Calorie slider
+            VStack(spacing: 4) {
+                Slider(
+                    value: Binding(
+                        get: { Double(adjustedCalories) },
+                        set: { adjustedCalories = Int($0.rounded() / 10) * 10 }
+                    ),
+                    in: sliderMin...sliderMax,
+                    step: 10
+                )
+                .tint(Color(hex: "E76F51"))
+
+                HStack {
+                    Text("\(Int(sliderMin)) kcal")
+                        .font(.caption2)
+                        .foregroundColor(Color(hex: "D4B8A0"))
+                    Spacer()
+                    Text("Adjust portion")
+                        .font(.caption2)
+                        .foregroundColor(Color(hex: "D4B8A0"))
+                    Spacer()
+                    Text("\(Int(sliderMax)) kcal")
+                        .font(.caption2)
+                        .foregroundColor(Color(hex: "D4B8A0"))
+                }
             }
 
-            Divider()
-
-            // Action buttons
-            if logState == .logged {
-                Label("Logged! Added to today's meals.", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline.bold())
-                    .foregroundColor(Color(hex: "2A9D8F"))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color(hex: "2A9D8F").opacity(0.1))
-                    .cornerRadius(12)
-            } else {
-                HStack(spacing: 12) {
-                    // Correct button
-                    Button {
-                        withAnimation(.spring(response: 0.3)) {
-                            showCorrection.toggle()
-                        }
-                        if showCorrection { correctionFocused = true }
-                    } label: {
-                        Label(showCorrection ? "Cancel" : "Correct it", systemImage: showCorrection ? "xmark" : "mic.fill")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundColor(Color(hex: "E76F51"))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background(Color(hex: "E76F51").opacity(0.1))
-                            .cornerRadius(12)
-                    }
-
-                    // Log button
-                    Button(action: onLog) {
-                        Label("Add to log", systemImage: "plus.circle.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background(Color(hex: "E76F51"))
-                            .cornerRadius(12)
-                    }
-                }
-
-                // Correction input — expands inline
-                if showCorrection {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Describe what's different")
-                            .font(.caption.weight(.medium))
-                            .foregroundColor(Color(hex: "7C5C45"))
-
-                        TextField("e.g. \"2 samosas not 1\" or \"grilled not fried\"", text: $correctionText, axis: .vertical)
-                            .font(.subheadline)
-                            .padding(12)
-                            .background(Color(hex: "F7F3EE"))
-                            .cornerRadius(10)
-                            .focused($correctionFocused)
-                            .submitLabel(.done)
-
-                        Button {
-                            guard !correctionText.isEmpty else { return }
-                            let c = correctionText
-                            correctionText = ""
-                            showCorrection = false
-                            onCorrect(c)
-                        } label: {
-                            Text("Recalculate")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(correctionText.isEmpty ? Color.gray.opacity(0.4) : Color(hex: "E76F51"))
-                                .cornerRadius(12)
-                        }
-                        .disabled(correctionText.isEmpty)
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
+            // Macros
+            HStack(spacing: 10) {
+                MacroTag(label: "Protein", value: item.proteinG, color: Color(hex: "2A9D8F"))
+                MacroTag(label: "Carbs",   value: item.carbsG,   color: Color(hex: "E9C46A"))
+                MacroTag(label: "Fat",     value: item.fatG,     color: Color(hex: "F4A261"))
             }
         }
         .padding()

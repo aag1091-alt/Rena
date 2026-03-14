@@ -1,4 +1,4 @@
-# Rena — Personal Health Companion
+#   
 
 **Name meaning:** "Joyous melody" (Hebrew) / "Peaceful" (Greek) / "Queen" (Latin)
 **Tagline:** Your goal. Your timeline. Your Rena.
@@ -82,8 +82,6 @@ The core Gemini Live API feature. Voice-first, feels like talking to a friend.
   — *"One off day doesn't change where you're going"*
 
 ### 4. Goal-Aware Recommendations
-- **Restaurant finder** — filtered by your timeline and remaining calories
-  *"6 weeks out, here's what to order at this place near you"*
 - **Pre/post workout nutrition** — based on today's logged activity
 - **Weekly adaptation** — as goal date gets closer, Rena tightens or relaxes targets
   based on your actual progress
@@ -114,7 +112,6 @@ The core Gemini Live API feature. Voice-first, feels like talking to a friend.
 - **Backend/Agent:** Google Agent Development Kit (ADK)
 - **Database:** Firestore (goals, food history, progress, visual states)
 - **Hosting:** Cloud Run
-- **Location:** Google Maps + Places API
 - **Credits:** $100 Google Cloud credits (apply by Mar 13, 2026)
 
 ---
