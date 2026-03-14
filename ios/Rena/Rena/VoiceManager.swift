@@ -25,11 +25,10 @@ class VoiceManager: NSObject, ObservableObject {
     /// Connect with mic for full conversation. Context and name are passed to the
     /// server so the opening prompt is injected server-side — no client-side sendText needed.
     func connect(userId: String, context: String? = nil, name: String? = nil) {
-        // Clear any stale connection first
+        // Cancel any stale WebSocket — do NOT touch audioEngine.inputNode here
+        // as accessing it before mic permission can break the permission flow on iOS.
         webSocket?.cancel(with: .normalClosure, reason: nil)
         webSocket = nil
-        audioEngine.inputNode.removeTap(onBus: 0)
-        if audioEngine.isRunning { audioEngine.stop() }
 
         state = .connecting
         AVAudioApplication.requestRecordPermission { [weak self] granted in
@@ -38,6 +37,10 @@ class VoiceManager: NSObject, ObservableObject {
                 DispatchQueue.main.async { self.state = .error("Microphone access denied") }
                 return
             }
+            // Safe to touch audio engine now that permission is confirmed
+            self.audioEngine.inputNode.removeTap(onBus: 0)
+            if self.audioEngine.isRunning { self.audioEngine.stop() }
+
             let wsBase = kBaseURL.replacingOccurrences(of: "http", with: "ws")
             var components = URLComponents(string: "\(wsBase)/ws/\(userId)")!
             var queryItems: [URLQueryItem] = []
