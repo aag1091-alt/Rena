@@ -133,9 +133,9 @@ struct OnboardingView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(ctaEnabled ? Color(hex: "E76F51") : Color.gray.opacity(0.35))
+                    .background(Color(hex: "E76F51"))
                     .cornerRadius(16)
-                    .disabled(!ctaEnabled || isSubmitting)
+                    .disabled(isSubmitting)
                     .padding(.horizontal, 28)
                     .padding(.bottom, 48)
                 } else {
@@ -303,8 +303,6 @@ struct OnboardingView: View {
             .foregroundColor(Color(hex: "3D2B1F"))
             .fixedSize(horizontal: false, vertical: true)
     }
-
-    private var ctaEnabled: Bool { true }
 
     private func advance() {
         withAnimation(.easeInOut(duration: 0.3)) {

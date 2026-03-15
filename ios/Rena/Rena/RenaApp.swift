@@ -29,8 +29,6 @@ struct RenaApp: App {
             // Enable experimental logging features
             options.experimental.enableLogs = true
         }
-        // Remove the next line after confirming that your Sentry integration is working.
-        SentrySDK.capture(message: "This app uses Sentry! :)")
     }
     @StateObject private var appState = AppState()
     @StateObject private var voiceManager = VoiceManager()

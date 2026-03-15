@@ -186,18 +186,6 @@ struct GoalResponse: Codable {
     }
 }
 
-struct VisualJourneyResponse: Codable {
-    let status: String
-    let imageUrl: String?
-    let progressPercent: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case status
-        case imageUrl = "image_url"
-        case progressPercent = "progress_percent"
-    }
-}
-
 class RenaAPI {
     static let shared = RenaAPI()
     private let session = URLSession.shared
@@ -234,11 +222,6 @@ class RenaAPI {
         let req = request(urlString)
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(ProgressResponse.self, from: data)
-    }
-
-    func seedTestData(userId: String) async throws {
-        let req = request("\(kBaseURL)/dev/seed/\(userId)", method: "POST")
-        _ = try await session.data(for: req)
     }
 
     func onboard(
@@ -292,10 +275,4 @@ class RenaAPI {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
-    func getVisualJourney(userId: String) async throws -> VisualJourneyResponse {
-        var req = request("\(kBaseURL)/visual_journey", method: "POST")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId])
-        let (data, _) = try await session.data(for: req)
-        return try JSONDecoder().decode(VisualJourneyResponse.self, from: data)
-    }
 }

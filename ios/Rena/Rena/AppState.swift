@@ -27,8 +27,6 @@ class AppState: ObservableObject {
     @Published var todayWeightKg: Double? = nil
     @Published var mealsLogged: [MealEntry] = []
     @Published var workoutsLogged: [WorkoutEntry] = []
-    @Published var visualJourneyURL: URL? = nil
-
     init() {
         userId = UserDefaults.standard.string(forKey: "userId") ?? ""
         isSignedIn = !userId.isEmpty

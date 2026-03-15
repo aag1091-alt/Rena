@@ -1,0 +1,56 @@
+# Cloud Build config with Docker layer caching.
+#
+# Cache strategy:
+#   - requirements.txt is copied + pip-installed BEFORE the app code (see Dockerfile).
+#   - --cache-from pulls the last pushed image so the pip layer is reused when
+#     requirements.txt hasn't changed — cuts build time significantly.
+#
+# Cache busting:
+#   - Change the FROM line in Dockerfile (e.g. python:3.13-slim → python:3.13-slim-bookworm)
+#     OR add --no-cache to the docker build step below to force a full rebuild.
+
+substitutions:
+  _REGION: us-central1
+  _SERVICE: rena-agent
+  _IMAGE: ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/${_SERVICE}
+
+steps:
+  # Pull previous image for cache (ignore failure on first deploy)
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - docker pull ${_IMAGE}:latest || true
+
+  # Build with cache-from
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --cache-from
+      - ${_IMAGE}:latest
+      - --tag
+      - ${_IMAGE}:latest
+      - --tag
+      - ${_IMAGE}:$SHORT_SHA
+      - .
+
+  # Push both tags
+  - name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, ${_IMAGE}]
+
+  # Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image
+      - ${_IMAGE}:$SHORT_SHA
+      - --region
+      - ${_REGION}
+      - --allow-unauthenticated
+
+images:
+  - ${_IMAGE}:latest
+  - ${_IMAGE}:$SHORT_SHA
