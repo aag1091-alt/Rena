@@ -1005,20 +1005,16 @@ def _critique_exercise_video(video_bytes: bytes, exercise_name: str, target_musc
         return True, ""
 
 
-def _veo_prompt(exercise_name: str, target_muscles: str = "", gender: str = "female", script: str = "") -> str:
+def _veo_prompt(exercise_name: str, target_muscles: str = "", gender: str = "female") -> str:
     muscles_hint = f", engaging {target_muscles}" if target_muscles else ""
     muscles_visual = (
         f" Clearly show the {target_muscles} being activated — camera angle and lighting should highlight the muscle engagement."
         if target_muscles else ""
     )
-    script_direction = (
-        f" The trainer's movements follow this sequence: {script}"
-        if script else ""
-    )
     return (
         f"A {gender} certified personal trainer demonstrating perfect form for {exercise_name}{muscles_hint}. "
         f"Full body visible from a 45-degree angle, clear coaching perspective showing correct technique, "
-        f"posture, and muscle engagement.{muscles_visual}{script_direction} "
+        f"posture, and muscle engagement.{muscles_visual} "
         f"Clean gym background. Professional fitness coaching video."
     )
 
@@ -1061,8 +1057,8 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
         gender = random.choice(["male", "female"])
         print(f"[veo] trainer gender={gender} for '{exercise_name}'")
 
-        # 3. Build Veo prompt informed by the script
-        prompt = _veo_prompt(exercise_name, target_muscles, gender=gender, script=script)
+        # 3. Build Veo prompt
+        prompt = _veo_prompt(exercise_name, target_muscles, gender=gender)
 
         operation = client.models.generate_videos(
             model="veo-2.0-generate-001",
@@ -1138,7 +1134,7 @@ def get_exercise_video_status(job_id: str) -> dict:
             gender = random.choice(["male", "female"])
             new_prompt = _veo_prompt(
                 job["exercise_name"], job.get("target_muscles", ""),
-                gender=gender, script=job.get("script", ""),
+                gender=gender,
             )
             new_op = client.models.generate_videos(
                 model="veo-2.0-generate-001",
