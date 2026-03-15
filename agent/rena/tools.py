@@ -24,8 +24,8 @@ def _get_genai_client():
 
 
 # Gemini API client — uses GEMINI_API_KEY for all text/vision generation
-# (workout plans, coaching scripts, insights, image gen — draws from API credits, not Vertex billing)
 _gemini_api_client = None
+_gemini_imagen_client = None
 
 def _get_text_client():
     """Gemini API client using API key — cheaper for all text/vision calls."""
@@ -35,9 +35,23 @@ def _get_text_client():
         if api_key:
             _gemini_api_client = genai.Client(api_key=api_key)
         else:
-            # Fallback to Vertex AI if no API key configured
             _gemini_api_client = _get_genai_client()
     return _gemini_api_client
+
+def _get_imagen_client():
+    """Gemini API client using v1alpha — required for image generation preview models."""
+    global _gemini_imagen_client
+    if _gemini_imagen_client is None:
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            from google.genai import types as _t
+            _gemini_imagen_client = genai.Client(
+                api_key=api_key,
+                http_options=_t.HttpOptions(api_version="v1alpha"),
+            )
+        else:
+            _gemini_imagen_client = _get_genai_client()
+    return _gemini_imagen_client
 
 
 def _user_ref(user_id: str):
@@ -322,7 +336,7 @@ def get_goal(user_id: str) -> dict:
         goal_type = goal_doc.get("goal_type", "event")
         try:
             import base64
-            client = _get_text_client()
+            client = _get_imagen_client()
             from google.genai import types as genai_types
 
             # Simple, clear prompt — one central subject, no text
