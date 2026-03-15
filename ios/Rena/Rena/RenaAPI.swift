@@ -410,6 +410,15 @@ class RenaAPI {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
+    func logWater(userId: String, glasses: Int = 1) async throws -> Int {
+        var req = request("\(kBaseURL)/log/water", method: "POST")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId, "glasses": glasses])
+        let (data, _) = try await session.data(for: req)
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let total = json["water_glasses_today"] as? Int { return total }
+        return glasses
+    }
+
     // MARK: - Workout Plan
 
     func getWorkoutPlan(userId: String, date: String? = nil) async throws -> PlannedWorkout? {

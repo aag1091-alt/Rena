@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct HomeView: View {
+    @Binding var selectedTab: Int
+    @Binding var showRena: Bool
+
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var voice: VoiceManager
 
@@ -8,6 +11,8 @@ struct HomeView: View {
     @State private var isLoadingGoal = false
     @State private var insight: String = ""
     @State private var isInsightLoading = false
+    @State private var showWeightSheet = false
+    @State private var waterPulse = false
 
     var body: some View {
         NavigationView {
@@ -16,28 +21,22 @@ struct HomeView: View {
 
             VStack(spacing: 0) {
 
-                // ── Greeting ───────────────────────────────────────
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(greeting)
-                            .font(.system(size: 13))
-                            .foregroundColor(Color(hex: "B09880"))
-                        Text(appState.name.components(separatedBy: " ").first ?? appState.name)
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(hex: "3D2B1F"))
-                    }
-                    Spacer()
-                    Text(todayDateString)
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(hex: "B09880"))
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 56)
-                .padding(.bottom, 16)
+                AppHeader()
 
                 // ── Scrollable cards ───────────────────────────────
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 12) {
+
+                        // ── Quick log row ──────────────────────────
+                        QuickLogRow(
+                            onMeal:    { selectedTab = 3 },
+                            onWater:   { Task { await addWater() } },
+                            onWeight:  { showWeightSheet = true },
+                            onWorkout: { selectedTab = 2 },
+                            waterGlasses: appState.waterGlasses,
+                            waterPulse: waterPulse
+                        )
+
                         GoalCard(goal: goalData, isLoading: isLoadingGoal)
 
                         DayCalorieBreakdownCard(
@@ -47,9 +46,15 @@ struct HomeView: View {
                             burnRequired: appState.burnRequired
                         )
 
-                        DaySoFarCard(insight: insight, isLoading: isInsightLoading, isToday: true)
+                        // ── Protein + water stats bar ──────────────
+                        DailyStatsBar(
+                            proteinConsumed: appState.proteinConsumedG,
+                            proteinTarget: appState.proteinTargetG,
+                            water: appState.waterGlasses,
+                            onAddWater: { Task { await addWater() } }
+                        )
 
-                        NudgeStrip()
+                        DaySoFarCard(insight: insight, isLoading: isInsightLoading, isToday: true)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
@@ -59,7 +64,28 @@ struct HomeView: View {
         .navigationBarHidden(true)
         .onAppear { Task { await loadGoal(); await loadProgress(); await loadInsight() } }
         .onChange(of: voice.turnCount) { Task { await loadProgress(); await loadInsight() } }
+        .sheet(isPresented: $showWeightSheet) {
+            LogWeightSheet(isPresented: $showWeightSheet) { kg in
+                Task { await saveWeight(kg) }
+            }
+        }
         } // NavigationView
+    }
+
+    // MARK: - Actions
+
+    private func addWater() async {
+        let newTotal = (try? await RenaAPI.shared.logWater(userId: appState.userId)) ?? (appState.waterGlasses + 1)
+        await MainActor.run {
+            appState.waterGlasses = newTotal
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { waterPulse = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { waterPulse = false }
+        }
+    }
+
+    private func saveWeight(_ kg: Double) async {
+        _ = try? await RenaAPI.shared.logWeight(userId: appState.userId, weightKg: kg)
+        await MainActor.run { appState.todayWeightKg = kg }
     }
 
     // MARK: - Data
@@ -95,6 +121,248 @@ struct HomeView: View {
         }
     }
 
+}
+
+// MARK: - Quick Log Row
+
+struct QuickLogRow: View {
+    let onMeal: () -> Void
+    let onWater: () -> Void
+    let onWeight: () -> Void
+    let onWorkout: () -> Void
+    let waterGlasses: Int
+    let waterPulse: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            QuickLogPill(icon: "camera.viewfinder", label: "Log Meal",
+                         color: Color(hex: "E76F51"), action: onMeal)
+            QuickLogPill(icon: "drop.fill",
+                         label: "\(waterGlasses)/8",
+                         color: Color(hex: "457B9D"),
+                         action: onWater,
+                         pulse: waterPulse)
+            QuickLogPill(icon: "scalemass", label: "Weight",
+                         color: Color(hex: "9B7EC8"), action: onWeight)
+            QuickLogPill(icon: "figure.run", label: "Workout",
+                         color: Color(hex: "2A9D8F"), action: onWorkout)
+        }
+    }
+}
+
+struct QuickLogPill: View {
+    let icon: String
+    let label: String
+    let color: Color
+    let action: () -> Void
+    var pulse: Bool = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(color.opacity(0.13))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: icon)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(color)
+                }
+                .scaleEffect(pulse ? 1.18 : 1.0)
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Color(hex: "5C3D2E"))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.white)
+            .cornerRadius(14)
+            .shadow(color: .black.opacity(0.04), radius: 5, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Daily Stats Bar (protein + water)
+
+struct DailyStatsBar: View {
+    let proteinConsumed: Int
+    let proteinTarget: Int
+    let water: Int
+    let onAddWater: () -> Void
+
+    private var proteinPct: Double { min(1.0, Double(proteinConsumed) / Double(max(proteinTarget, 1))) }
+    private var waterPct: Double { min(1.0, Double(water) / 8.0) }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Protein
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 5) {
+                    Image(systemName: "p.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(hex: "2A9D8F"))
+                    Text("PROTEIN")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(Color(hex: "B09880"))
+                        .kerning(0.8)
+                    Spacer()
+                    Text("\(proteinConsumed)/\(proteinTarget)g")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(hex: "2A9D8F"))
+                }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3).fill(Color(hex: "2A9D8F").opacity(0.12)).frame(height: 5)
+                        RoundedRectangle(cornerRadius: 3).fill(Color(hex: "2A9D8F"))
+                            .frame(width: geo.size.width * proteinPct, height: 5)
+                            .animation(.spring(), value: proteinPct)
+                    }
+                }
+                .frame(height: 5)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(12)
+            .background(Color.white)
+            .cornerRadius(14)
+            .shadow(color: .black.opacity(0.04), radius: 5, y: 2)
+
+            // Water — tappable to add a glass
+            Button(action: onAddWater) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color(hex: "457B9D"))
+                        Text("WATER")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(Color(hex: "B09880"))
+                            .kerning(0.8)
+                        Spacer()
+                        Text("\(water)/8")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(hex: "457B9D"))
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(hex: "457B9D").opacity(0.7))
+                    }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3).fill(Color(hex: "457B9D").opacity(0.12)).frame(height: 5)
+                            RoundedRectangle(cornerRadius: 3).fill(Color(hex: "457B9D"))
+                                .frame(width: geo.size.width * waterPct, height: 5)
+                                .animation(.spring(), value: waterPct)
+                        }
+                    }
+                    .frame(height: 5)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(12)
+                .background(Color.white)
+                .cornerRadius(14)
+                .shadow(color: .black.opacity(0.04), radius: 5, y: 2)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - Log Weight Sheet
+
+struct LogWeightSheet: View {
+    @Binding var isPresented: Bool
+    let onSave: (Double) -> Void
+
+    @EnvironmentObject var appState: AppState
+    @State private var weightText: String = ""
+    @FocusState private var isFocused: Bool
+
+    private var parsedWeight: Double? { Double(weightText.replacingOccurrences(of: ",", with: ".")) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Handle
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color(hex: "D4B8A0"))
+                .frame(width: 36, height: 4)
+                .padding(.top, 12)
+                .padding(.bottom, 20)
+
+            Text("Log Weight")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(Color(hex: "3D2B1F"))
+
+            if let current = appState.todayWeightKg {
+                Text("Last logged: \(String(format: "%.1f", current)) kg")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(hex: "B09880"))
+                    .padding(.top, 4)
+            }
+
+            Spacer().frame(height: 32)
+
+            // Big weight input
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                TextField(String(format: "%.1f", appState.todayWeightKg ?? 70.0), text: $weightText)
+                    .font(.system(size: 56, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "3D2B1F"))
+                    .multilineTextAlignment(.center)
+                    .keyboardType(.decimalPad)
+                    .focused($isFocused)
+                    .frame(maxWidth: 180)
+                Text("kg")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(Color(hex: "B09880"))
+            }
+            .padding(.vertical, 24)
+            .padding(.horizontal, 32)
+            .background(Color(hex: "F7F3EE"))
+            .cornerRadius(20)
+            .padding(.horizontal, 32)
+
+            Spacer().frame(height: 28)
+
+            Button {
+                if let kg = parsedWeight, kg > 20, kg < 300 {
+                    onSave(kg)
+                    isPresented = false
+                }
+            } label: {
+                Text("Save Weight")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        parsedWeight != nil
+                            ? Color(hex: "9B7EC8")
+                            : Color(hex: "D4B8A0")
+                    )
+                    .cornerRadius(16)
+            }
+            .disabled(parsedWeight == nil)
+            .padding(.horizontal, 32)
+
+            Button("Cancel") { isPresented = false }
+                .font(.system(size: 14))
+                .foregroundColor(Color(hex: "B09880"))
+                .padding(.top, 14)
+                .padding(.bottom, 32)
+        }
+        .background(Color.white)
+        .presentationDetents([.height(420)])
+        .presentationDragIndicator(.hidden)
+        .onAppear { isFocused = true }
+    }
+}
+
+// MARK: - Shared app header (used on all main tabs)
+
+struct AppHeader: View {
+    @EnvironmentObject var appState: AppState
+
     private var greeting: String {
         let h = Calendar.current.component(.hour, from: Date())
         if h < 12 { return "Good morning" }
@@ -102,10 +370,30 @@ struct HomeView: View {
         return "Good evening"
     }
 
-    private var todayDateString: String {
+    private var dateString: String {
         let f = DateFormatter()
         f.dateFormat = "EEE, MMM d"
         return f.string(from: Date())
+    }
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(greeting)
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(hex: "B09880"))
+                Text(appState.name.components(separatedBy: " ").first ?? appState.name)
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "3D2B1F"))
+            }
+            Spacer()
+            Text(dateString)
+                .font(.system(size: 13))
+                .foregroundColor(Color(hex: "B09880"))
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 56)
+        .padding(.bottom, 16)
     }
 }
 
@@ -261,7 +549,7 @@ struct GoalCard: View {
     }
 }
 
-// MARK: - Calorie card
+// MARK: - Calorie card (unused but kept for reference)
 
 struct CalorieCard: View {
     @EnvironmentObject var appState: AppState
@@ -400,105 +688,5 @@ struct WideStatTile: View {
         .background(Color.white)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-    }
-}
-
-// MARK: - Nudge strip
-
-struct NudgeStrip: View {
-    @EnvironmentObject var appState: AppState
-
-    private var proteinRemaining: Int { max(0, appState.proteinTargetG - appState.proteinConsumedG) }
-    private var waterRemaining: Int { max(0, 8 - appState.waterGlasses) }
-    private var proteinPct: Double { Double(appState.proteinConsumedG) / Double(max(appState.proteinTargetG, 1)) }
-
-    private var showProteinNudge: Bool { proteinRemaining > 0 && appState.proteinTargetG > 0 }
-    private var showWaterNudge: Bool { waterRemaining > 0 }
-
-    var body: some View {
-        if showProteinNudge || showWaterNudge {
-            VStack(spacing: 8) {
-                if showProteinNudge {
-                    NudgeBanner(
-                        icon: "p.circle.fill",
-                        iconColor: Color(hex: "2A9D8F"),
-                        message: proteinNudgeText,
-                        progress: proteinPct,
-                        progressColor: Color(hex: "2A9D8F")
-                    )
-                }
-                if showWaterNudge {
-                    NudgeBanner(
-                        icon: "drop.fill",
-                        iconColor: Color(hex: "457B9D"),
-                        message: waterNudgeText,
-                        progress: Double(appState.waterGlasses) / 8.0,
-                        progressColor: Color(hex: "457B9D")
-                    )
-                }
-            }
-        }
-    }
-
-    private var proteinNudgeText: String {
-        let remaining = proteinRemaining
-        let pct = Int(proteinPct * 100)
-        if pct == 0 {
-            return "You haven't hit any protein yet — aim for \(appState.proteinTargetG)g today"
-        } else if remaining > 30 {
-            return "\(remaining)g protein to go — add chicken, eggs or legumes to your next meal"
-        } else {
-            return "Almost there! Just \(remaining)g more protein to hit your \(appState.proteinTargetG)g goal"
-        }
-    }
-
-    private var waterNudgeText: String {
-        switch waterRemaining {
-        case 7, 8: return "You haven't had any water yet today — start with a glass now"
-        case 4...6: return "\(waterRemaining) more glasses of water to reach your daily goal"
-        case 1...3: return "Nearly there! Just \(waterRemaining) more glass\(waterRemaining > 1 ? "es" : "") of water to go"
-        default:    return "Keep drinking water!"
-        }
-    }
-}
-
-struct NudgeBanner: View {
-    let icon: String
-    let iconColor: Color
-    let message: String
-    let progress: Double
-    let progressColor: Color
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundColor(iconColor)
-                .frame(width: 20)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(message)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: "3D2B1F"))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(progressColor.opacity(0.15))
-                            .frame(height: 4)
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(progressColor)
-                            .frame(width: geo.size.width * min(1, progress), height: 4)
-                            .animation(.spring(), value: progress)
-                    }
-                }
-                .frame(height: 4)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(progressColor.opacity(0.06))
-        .cornerRadius(14)
     }
 }

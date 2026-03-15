@@ -50,7 +50,11 @@ struct WorkbookView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
+            ZStack {
+                Color(hex: "F7F3EE").ignoresSafeArea()
+                VStack(spacing: 0) {
+                    AppHeader()
+                    ScrollView {
                 VStack(spacing: 14) {
 
                     // ── Date navigator ──────────────────────────────
@@ -115,7 +119,8 @@ struct WorkbookView: View {
                         isEvening: isEvening,
                         caloriesConsumed: displayConsumed,
                         caloriesTarget: displayTarget,
-                        caloriesBurned: displayBurned
+                        caloriesBurned: displayBurned,
+                        isToday: isToday
                     )
 
                     // ── Day Recap (AI) — past dates only; today's version lives on home screen ──
@@ -167,9 +172,6 @@ struct WorkbookView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             }
-            .background(Color(hex: "F7F3EE").ignoresSafeArea())
-            .navigationTitle("Workbook")
-            .navigationBarTitleDisplayMode(.large)
             .scrollBounceBehavior(.always)
             .refreshable { await loadDay() }
             .onAppear { Task { await loadDay() } }
@@ -181,6 +183,9 @@ struct WorkbookView: View {
             .sheet(item: $videoSheet) { ex in
                 ExerciseVideoSheet(exercise: ex)
             }
+                } // VStack
+            } // ZStack
+            .navigationBarHidden(true)
         }
     }
 
@@ -249,6 +254,7 @@ struct WorkbookHeader: View {
     let caloriesConsumed: Int
     let caloriesTarget: Int
     let caloriesBurned: Int
+    var isToday: Bool = true
 
     private var netCalories: Int { caloriesConsumed - caloriesBurned }
     private var remaining: Int   { max(0, caloriesTarget - netCalories) }
@@ -266,32 +272,30 @@ struct WorkbookHeader: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(isToday ? "TODAY'S CALORIES" : "DAY'S CALORIES")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Color(hex: "B09880"))
+                        .kerning(1.0)
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text("\(remaining)")
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(hex: "E76F51"))
+                        Text("kcal remaining")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: "B09880"))
+                    }
+                }
+                Spacer()
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(phaseColor.opacity(0.14))
-                        .frame(width: 40, height: 40)
+                        .frame(width: 38, height: 38)
                     Image(systemName: phaseIcon)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(phaseColor)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(greeting)
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(hex: "B09880"))
-                    Text(name)
-                        .font(.system(size: 21, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(hex: "3D2B1F"))
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("\(remaining)")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(hex: "E76F51"))
-                    Text("kcal left")
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(hex: "B09880"))
                 }
             }
 

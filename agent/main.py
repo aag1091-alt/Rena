@@ -139,6 +139,19 @@ async def log_weight_endpoint(req: LogWeightRequest):
     return log_weight(req.user_id, req.weight_kg)
 
 
+class LogWaterRequest(BaseModel):
+    user_id: str
+    glasses: int = 1
+
+
+@app.post("/log/water")
+async def log_water_endpoint(req: LogWaterRequest):
+    """Log glasses of water directly from the app."""
+    if not req.user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    from rena.tools import log_water
+    return log_water(req.user_id, req.glasses)
+
 
 @app.get("/workbook/insight/{user_id}")
 async def workbook_insight(user_id: str, date: str = None):

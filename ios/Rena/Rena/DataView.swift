@@ -38,7 +38,11 @@ struct DataView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
+            ZStack {
+                Color(hex: "F7F3EE").ignoresSafeArea()
+                VStack(spacing: 0) {
+                    AppHeader()
+                    ScrollView {
                 VStack(spacing: 14) {
 
                     // ── Date navigator ─────────────────────────────────
@@ -122,13 +126,13 @@ struct DataView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             }
-            .background(Color(hex: "F7F3EE").ignoresSafeArea())
-            .navigationTitle("History")
-            .navigationBarTitleDisplayMode(.large)
             .scrollBounceBehavior(.always)
             .refreshable { await loadData() }
             .onAppear { Task { await loadData() } }
             .onChange(of: voice.turnCount) { if isToday { Task { await loadData() } } }
+                } // VStack
+            } // ZStack
+            .navigationBarHidden(true)
         }
     }
 
@@ -378,7 +382,7 @@ struct CalorieStat: View {
 
 struct DayFoodLog: View {
     let meals: [MealEntry]
-    @State private var expanded = false
+    @State private var expanded = true
     var totalCalories: Int { meals.reduce(0) { $0 + $1.calories } }
 
     var body: some View {
@@ -452,7 +456,7 @@ struct DayFoodLog: View {
 
 struct DayWorkoutLog: View {
     let workouts: [WorkoutEntry]
-    @State private var expanded = false
+    @State private var expanded = true
     var totalBurned: Int { workouts.reduce(0) { $0 + $1.caloriesBurned } }
 
     var body: some View {

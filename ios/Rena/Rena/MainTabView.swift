@@ -5,13 +5,14 @@ struct MainTabView: View {
 
     @State private var selectedTab = 0
     @State private var showRena = false
+    @State private var devTapCount = 0
 
     var body: some View {
 ZStack(alignment: .bottom) {
 
             // ── Tab content ───────────────────────────────────────
             TabView(selection: $selectedTab) {
-                HomeView().tag(0)
+                HomeView(selectedTab: $selectedTab, showRena: $showRena).tag(0)
                 DataView().tag(1)
                 WorkbookView(showRena: $showRena).tag(2)
                 ScanView().tag(3)
@@ -34,13 +35,13 @@ ZStack(alignment: .bottom) {
 
             // ── Custom tab bar ────────────────────────────────────
             CustomTabBar(selectedTab: $selectedTab, showRena: $showRena, currentTab: selectedTab)
-                .id(selectedTab)   // force new instance on every tab change — bypasses AttributeGraph cycle
+                .id(selectedTab)
                 .zIndex(2)
         }
         .ignoresSafeArea(edges: .bottom)
     }
 
-    // MARK: - Dev tab
+    // MARK: - Dev tab (hidden — access by tapping app version 5× in Settings)
 
     private var devView: some View {
         VStack(spacing: 20) {

@@ -272,9 +272,9 @@ struct RenaOverlay: View {
 // MARK: - Custom tab bar
 
 struct CustomTabBar: View {
-    @Binding var selectedTab: Int   // used for writes
+    @Binding var selectedTab: Int
     @Binding var showRena: Bool
-    let currentTab: Int             // plain Int passed from parent — forces re-render on change
+    let currentTab: Int
 
     private var bottomInset: CGFloat {
         (UIApplication.shared.connectedScenes
@@ -283,13 +283,13 @@ struct CustomTabBar: View {
     }
 
     var body: some View {
-ZStack {
+        ZStack(alignment: .bottom) {
+            // Background pill
             Color.white
                 .frame(height: 56 + bottomInset)
                 .shadow(color: .black.opacity(0.07), radius: 16, y: -4)
 
             HStack(spacing: 0) {
-
                 // ── Home ──
                 Button {
                     selectedTab = 0; if showRena { showRena = false }
@@ -297,31 +297,38 @@ ZStack {
                     tabLabel(icon: "house.fill", text: "Home", active: currentTab == 0)
                 }.buttonStyle(.plain)
 
-                // ── Data ──
+                // ── History ──
                 Button {
                     selectedTab = 1; if showRena { showRena = false }
                 } label: {
-                    tabLabel(icon: "chart.bar.fill", text: "Data", active: currentTab == 1)
+                    tabLabel(icon: "chart.bar.fill", text: "History", active: currentTab == 1)
                 }.buttonStyle(.plain)
 
-                // ── Rena ──
+                // ── Rena (elevated center button) ──
                 Button { showRena.toggle() } label: {
                     VStack(spacing: 3) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 19, weight: showRena ? .semibold : .regular))
-                            .foregroundColor(showRena ? Color(hex: "E76F51") : Color(hex: "C4A882"))
+                        ZStack {
+                            Circle()
+                                .fill(showRena
+                                    ? Color(hex: "E76F51")
+                                    : LinearGradient(
+                                        colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 52, height: 52)
+                                .shadow(color: Color(hex: "E76F51").opacity(0.4), radius: 10, y: 4)
+                            Image(systemName: showRena ? "xmark" : "sparkles")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        .offset(y: -12)
                         Text("Rena")
-                            .font(.system(size: 10, weight: showRena ? .semibold : .regular))
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(showRena ? Color(hex: "E76F51") : Color(hex: "C4A882"))
+                            .offset(y: -8)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(showRena ? Color(hex: "E76F51").opacity(0.10) : Color.clear)
-                    )
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 2)
                     .contentShape(Rectangle())
                 }.buttonStyle(.plain)
 
@@ -338,13 +345,6 @@ ZStack {
                 } label: {
                     tabLabel(icon: "camera.fill", text: "Scan", active: currentTab == 3)
                 }.buttonStyle(.plain)
-
-                // ── Dev ──
-                Button {
-                    selectedTab = 4; if showRena { showRena = false }
-                } label: {
-                    tabLabel(icon: "wrench.fill", text: "Dev", active: currentTab == 4)
-                }.buttonStyle(.plain)
             }
             .padding(.horizontal, 8)
             .frame(height: 56)
@@ -354,7 +354,6 @@ ZStack {
         .frame(height: 56 + bottomInset)
     }
 
-    // tabLabel receives active as Bool — active is computed inline in body above
     private func tabLabel(icon: String, text: String, active: Bool) -> some View {
         VStack(spacing: 3) {
             Image(systemName: icon)

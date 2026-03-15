@@ -20,7 +20,23 @@ struct ScanView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
+            ZStack {
+                Color(hex: "FDF6EE").ignoresSafeArea()
+                VStack(spacing: 0) {
+                    // Simple task header (no greeting — this is a focused task page)
+                    HStack {
+                        Text("Log Food")
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(hex: "3D2B1F"))
+                        Spacer()
+                        Image(systemName: "camera.viewfinder")
+                            .font(.system(size: 22))
+                            .foregroundColor(Color(hex: "E76F51"))
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 56)
+                    .padding(.bottom, 8)
+                    ScrollView {
                 VStack(spacing: 20) {
 
                     // Source buttons
@@ -120,9 +136,6 @@ struct ScanView: View {
                     Spacer(minLength: 40)
                 }
             }
-            .background(Color(hex: "FDF6EE").ignoresSafeArea())
-            .navigationTitle("Log Food")
-            .navigationBarTitleDisplayMode(.large)
             .onDisappear { resetScan() }
             .sheet(isPresented: $showCamera, onDismiss: {
                 guard selectedImage != nil else { return }
@@ -133,6 +146,9 @@ struct ScanView: View {
                 CameraView(image: $selectedImage)
                     .ignoresSafeArea()
             }
+                } // VStack
+            } // ZStack
+            .navigationBarHidden(true)
         }
     }
 
