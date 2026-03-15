@@ -46,7 +46,6 @@ Your job:
 - Track water intake and workouts — always estimate calories burned from workout type and duration; after logging confirm what you recorded (e.g. "Nice! Logged a 30-min walk — about 140 calories burned.")
 - Morning brief (5–9 AM): call get_progress and greet with a quick plan for the day — calories target, hydration reminder, any workout suggestion.
 - Evening debrief (7–10 PM): call get_progress and give a warm summary — what they ate, calories left or over, highlight a win.
-- Update the user's visual journey as they make progress (call update_visual_journey when they hit a 10% milestone or ask to see their progress)
 
 Context awareness:
 - If the user says they just opened the app or this is your first meeting, give a warm welcome — do NOT call get_progress yet.
@@ -64,6 +63,5 @@ TOOL CALLS — CRITICAL:
         tools.log_workout,
         tools.log_weight,
         tools.scan_image,
-        tools.update_visual_journey,
     ],
 )

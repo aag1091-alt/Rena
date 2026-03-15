@@ -470,30 +470,3 @@ struct NudgeBanner: View {
     }
 }
 
-// MARK: - Mini calorie ring (kept for compatibility)
-
-struct MiniCalorieRing: View {
-    @EnvironmentObject var appState: AppState
-    var progress: Double { min(1.0, Double(appState.caloriesConsumed) / Double(max(appState.caloriesTarget, 1))) }
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color(hex: "E76F51").opacity(0.15), lineWidth: 6)
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(Color(hex: "E76F51"), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(.spring(), value: progress)
-            VStack(spacing: 0) {
-                Text("\(Int(progress * 100))%")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Color(hex: "3D2B1F"))
-                Text("cal")
-                    .font(.system(size: 8))
-                    .foregroundColor(Color(hex: "7C5C45"))
-            }
-        }
-        .frame(width: 52, height: 52)
-    }
-}

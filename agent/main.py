@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from rena.voice import handle_voice
-from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal, update_visual_journey, create_profile, reset_user
+from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal, create_profile, reset_user
 
 load_dotenv()
 
@@ -94,17 +94,6 @@ async def progress(user_id: str, date: str = None):
         raise HTTPException(status_code=400, detail="user_id is required")
     return get_progress(user_id, for_date=date)
 
-
-class VisualJourneyRequest(BaseModel):
-    user_id: str
-
-
-@app.post("/visual_journey")
-async def visual_journey(req: VisualJourneyRequest):
-    """Generate/update the visual journey image."""
-    if not req.user_id or req.user_id.strip() == "":
-        raise HTTPException(status_code=400, detail="user_id is required")
-    return update_visual_journey(req.user_id)
 
 
 @app.get("/goal/{user_id}")
