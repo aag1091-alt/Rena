@@ -74,6 +74,31 @@ struct ScanResponse: Codable {
         case totalCarbsG = "total_carbs_g"
         case totalFatG = "total_fat_g"
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Handle identified as Bool, Int, or String (Gemini occasionally varies)
+        if let b = try? c.decode(Bool.self, forKey: .identified) {
+            identified = b
+        } else if let i = try? c.decode(Int.self, forKey: .identified) {
+            identified = i != 0
+        } else {
+            identified = false
+        }
+        description = try? c.decode(String.self, forKey: .description)
+        items       = try? c.decode([ScanItem].self, forKey: .items)
+        confidence  = try? c.decode(String.self, forKey: .confidence)
+        logged      = try? c.decode(Bool.self, forKey: .logged)
+        func intOrDouble(_ key: CodingKeys) -> Int? {
+            if let i = try? c.decode(Int.self,    forKey: key) { return i }
+            if let d = try? c.decode(Double.self, forKey: key) { return Int(d) }
+            return nil
+        }
+        totalCalories  = intOrDouble(.totalCalories)
+        totalProteinG  = intOrDouble(.totalProteinG)
+        totalCarbsG    = intOrDouble(.totalCarbsG)
+        totalFatG      = intOrDouble(.totalFatG)
+    }
 }
 
 struct MealEntry: Identifiable {

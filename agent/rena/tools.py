@@ -691,6 +691,7 @@ If no food is visible return {"identified": false}."""
             return {"identified": False}
 
     result["user_id"] = user_id
+    print(f"[scan_image] identified={result.get('identified')} items={len(result.get('items') or [])} total_cal={result.get('total_calories')}")
     return result
 
 

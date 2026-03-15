@@ -294,23 +294,22 @@ struct ScanItemCard: View {
         VStack(alignment: .leading, spacing: 14) {
 
             // Name + calories + estimated grams
-            HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.name)
                     .font(.headline)
                     .foregroundColor(Color(hex: "3D2B1F"))
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(adjustedCalories)")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                HStack(spacing: 6) {
+                    Text("\(adjustedCalories) kcal")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: "E76F51"))
                         .contentTransition(.numericText())
                         .animation(.spring(duration: 0.2), value: adjustedCalories)
-                    Text("kcal")
-                        .font(.caption)
-                        .foregroundColor(Color(hex: "7C5C45"))
                     if let grams = estimatedGrams {
+                        Text("·")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(hex: "D4B8A0"))
                         Text("~\(grams)g")
-                            .font(.caption.weight(.medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(Color(hex: "B09880"))
                             .contentTransition(.numericText())
                             .animation(.spring(duration: 0.2), value: grams)
