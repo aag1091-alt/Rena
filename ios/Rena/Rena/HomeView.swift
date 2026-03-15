@@ -10,7 +10,6 @@ struct HomeView: View {
     @State private var progressLabel: String = ""
     @State private var daysLeft: Int = 0
     @State private var isLoadingGoal = false
-    @State private var isConnected = false
 
     var body: some View {
         NavigationView {
@@ -30,11 +29,9 @@ struct HomeView: View {
                             .foregroundColor(Color(hex: "3D2B1F"))
                     }
                     Spacer()
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(todayDateString)
-                            .font(.system(size: 13))
-                            .foregroundColor(Color(hex: "B09880"))
-                    }
+                    Text(todayDateString)
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(hex: "B09880"))
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 56)
@@ -55,151 +52,50 @@ struct HomeView: View {
                         }
                         .buttonStyle(.plain)
 
-                        CalorieCard()
+                        // ── Day so far ──────────────────────────────
+                        sectionHeader("DAY SO FAR")
 
-                        // ── Stats row ───────────────────────────────
-                        HStack(spacing: 10) {
-                            WideStatTile(
-                                icon: "drop.fill",
-                                value: "\(appState.waterGlasses) / 8",
-                                label: "Water",
-                                iconColor: Color(hex: "457B9D"),
-                                progress: Double(appState.waterGlasses) / 8.0
-                            )
-                            WideStatTile(
-                                icon: "figure.run",
-                                value: appState.caloriesBurned > 0 ? "\(appState.caloriesBurned)" : "—",
-                                label: "kcal burned",
-                                iconColor: Color(hex: "2A9D8F"),
-                                progress: nil
-                            )
-                            WideStatTile(
-                                icon: "scalemass",
-                                value: appState.todayWeightKg.map { String(format: "%.1f", $0) } ?? "—",
-                                label: "kg today",
-                                iconColor: Color(hex: "9B7EC8"),
-                                progress: nil
-                            )
-                        }
+                        DaySummaryRow(
+                            caloriesConsumed: appState.caloriesConsumed,
+                            caloriesBurned: appState.caloriesBurned,
+                            caloriesTarget: appState.caloriesTarget,
+                            water: appState.waterGlasses
+                        )
+
+                        DayCalorieBreakdownCard(
+                            caloriesConsumed: appState.caloriesConsumed,
+                            caloriesBurned: appState.caloriesBurned,
+                            caloriesTarget: appState.caloriesTarget,
+                            burnRequired: appState.burnRequired
+                        )
+
+                        DayFoodLog(meals: appState.mealsLogged)
+                        DayWorkoutLog(workouts: appState.workoutsLogged)
 
                         NudgeStrip()
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
                 }
-
-                // ── CC captions ────────────────────────────────────
-                if isConnected && !voice.transcript.isEmpty {
-                    Text(voice.transcript)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(.black.opacity(0.62))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .padding(.horizontal, 32)
-                        .padding(.bottom, 8)
-                        .transition(.opacity)
-                }
-
-                // ── Rena orb ───────────────────────────────────────
-                ZStack {
-                    // Soft fade separating orb from scroll content
-                    LinearGradient(
-                        colors: [Color(hex: "F7F3EE").opacity(0), Color(hex: "F7F3EE")],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 40)
-                    .offset(y: -40)
-                    .allowsHitTesting(false)
-
-                    VStack(spacing: 8) {
-                        Button(action: toggleVoice) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color(hex: "E76F51").opacity(isPulsing ? 0.15 : 0.08))
-                                    .frame(width: 148, height: 148)
-                                    .scaleEffect(isPulsing ? 1.08 : 1.0)
-                                    .animation(
-                                        isPulsing
-                                            ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true)
-                                            : .default,
-                                        value: isPulsing
-                                    )
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: isConnected
-                                                ? [Color(hex: "E76F51"), Color(hex: "F4A261")]
-                                                : [Color(hex: "D4B8A0"), Color(hex: "C4A882")],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 110, height: 110)
-                                    .shadow(color: Color(hex: "E76F51").opacity(isConnected ? 0.3 : 0), radius: 18)
-                                Text("✦")
-                                    .font(.system(size: 36))
-                                    .foregroundColor(.white)
-                            }
-                        }
-
-                        VStack(spacing: 2) {
-                            Text(orbLabel)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(Color(hex: "3D2B1F"))
-                                .animation(.easeInOut, value: orbLabel)
-                            if !isConnected {
-                                Text("Tell Rena what you ate, drank or how you feel")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color(hex: "B09880"))
-                                    .multilineTextAlignment(.center)
-                            }
-                        }
-                    }
-                    .padding(.bottom, 44)
-                }
             }
         }
         .navigationBarHidden(true)
         .onAppear { Task { await loadGoal(); await loadProgress() } }
-        .onDisappear { if isConnected { toggleVoice() } }
         .onChange(of: voice.turnCount) { Task { await loadProgress() } }
         } // NavigationView
     }
 
-    // MARK: - Voice
+    // MARK: - Helpers
 
-    private func toggleVoice() {
-        if isConnected {
-            voice.disconnect()
-            isConnected = false
-        } else {
-            voice.connect(userId: appState.userId, context: "home", name: appState.name)
-            isConnected = true
+    private func sectionHeader(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Color(hex: "B09880"))
+                .kerning(1.0)
+            Spacer()
         }
-    }
-
-    private var orbLabel: String {
-        switch voice.state {
-        case .connecting: return "Connecting…"
-        case .listening:  return "Listening…"
-        case .thinking:   return "Thinking…"
-        case .speaking:   return "Rena is speaking…"
-        case .error:      return "Tap to try again"
-        default:          return isConnected ? "Tap to end session" : "Talk to Rena"
-        }
-    }
-
-    private var isPulsing: Bool {
-        switch voice.state {
-        case .listening, .speaking: return true
-        default: return false
-        }
+        .padding(.top, 4)
     }
 
     // MARK: - Data
