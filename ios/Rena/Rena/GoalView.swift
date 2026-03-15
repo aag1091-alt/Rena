@@ -10,65 +10,63 @@ struct GoalView: View {
     @State private var isRefreshingImage = false
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color(hex: "F7F3EE").ignoresSafeArea()
+        ZStack {
+            Color(hex: "F7F3EE").ignoresSafeArea()
 
-                if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let goal = goalData {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 16) {
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let goal = goalData {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
 
-                            // ── Vision board image ──────────────────
-                            VisionBoardCard(
-                                imageUrl: goal.imageUrl,
-                                goalText: goal.goal,
-                                isRefreshing: isRefreshingImage,
-                                onRefresh: { Task { await refreshImage() } }
-                            )
+                        // ── Vision board image ──────────────────
+                        VisionBoardCard(
+                            imageUrl: goal.imageUrl,
+                            goalText: goal.goal,
+                            isRefreshing: isRefreshingImage,
+                            onRefresh: { Task { await refreshImage() } }
+                        )
 
-                            // ── Goal detail card ────────────────────
-                            GoalDetailCard(goal: goal)
+                        // ── Goal detail card ────────────────────
+                        GoalDetailCard(goal: goal)
 
-                            // ── Progress card ───────────────────────
-                            if goal.goalType != "event" {
-                                GoalProgressCard(goal: goal)
-                            }
-
-                            // ── Talk to Rena ─────────────────────────
-                            GoalVoiceCard(
-                                isActive: isVoiceConnected,
-                                voiceState: voice.state,
-                                onTap: toggleVoice
-                            )
-
-                            Spacer(minLength: 40)
+                        // ── Progress card ───────────────────────
+                        if goal.goalType != "event" {
+                            GoalProgressCard(goal: goal)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
+
+                        // ── Talk to Rena ─────────────────────────
+                        GoalVoiceCard(
+                            isActive: isVoiceConnected,
+                            voiceState: voice.state,
+                            onTap: toggleVoice
+                        )
+
+                        Spacer(minLength: 40)
                     }
-                } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "star.slash")
-                            .font(.system(size: 40))
-                            .foregroundColor(Color(hex: "C4A882"))
-                        Text("No goal set yet")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(Color(hex: "3D2B1F"))
-                        Text("Tell Rena what you're working toward")
-                            .font(.system(size: 14))
-                            .foregroundColor(Color(hex: "B09880"))
-                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                }
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "star.slash")
+                        .font(.system(size: 40))
+                        .foregroundColor(Color(hex: "C4A882"))
+                    Text("No goal set yet")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(Color(hex: "3D2B1F"))
+                    Text("Tell Rena what you're working toward")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "B09880"))
                 }
             }
-            .navigationTitle("My Journey")
-            .navigationBarTitleDisplayMode(.large)
-            .onAppear { Task { await loadGoal() } }
-            .onDisappear { if isVoiceConnected { toggleVoice() } }
-            .refreshable { await loadGoal() }
         }
+        .navigationTitle("My Journey")
+        .navigationBarTitleDisplayMode(.large)
+        .onAppear { Task { await loadGoal() } }
+        .onDisappear { if isVoiceConnected { toggleVoice() } }
+        .refreshable { await loadGoal() }
     }
 
     private func toggleVoice() {

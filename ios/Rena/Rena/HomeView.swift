@@ -11,9 +11,9 @@ struct HomeView: View {
     @State private var daysLeft: Int = 0
     @State private var isLoadingGoal = false
     @State private var isConnected = false
-    @State private var showJourney = false
 
     var body: some View {
+        NavigationView {
         ZStack {
             Color(hex: "F7F3EE").ignoresSafeArea()
 
@@ -43,7 +43,7 @@ struct HomeView: View {
                 // ── Scrollable cards ───────────────────────────────
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 12) {
-                        Button { showJourney = true } label: {
+                        NavigationLink(destination: GoalView()) {
                             GoalCard(
                                 goalText: goalText,
                                 goalType: goalType,
@@ -165,14 +165,11 @@ struct HomeView: View {
                 }
             }
         }
+        .navigationBarHidden(true)
         .onAppear { Task { await loadGoal(); await loadProgress() } }
         .onDisappear { if isConnected { toggleVoice() } }
         .onChange(of: voice.turnCount) { Task { await loadProgress() } }
-        .sheet(isPresented: $showJourney) {
-            GoalView()
-                .environmentObject(appState)
-                .environmentObject(voice)
-        }
+        } // NavigationView
     }
 
     // MARK: - Voice
