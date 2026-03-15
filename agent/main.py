@@ -250,13 +250,19 @@ async def log_exercise_endpoint(user_id: str, exercise_id: str, req: LogExercise
 @app.get("/exercise/video/{exercise_name}")
 async def exercise_video_endpoint(exercise_name: str, target_muscles: str = ""):
     """Return cached video URL or kick off a Veo 2 generation job."""
-    return get_exercise_video(exercise_name, target_muscles)
+    try:
+        return get_exercise_video(exercise_name, target_muscles)
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 @app.get("/exercise/video/status/{job_id}")
 async def exercise_video_status_endpoint(job_id: str):
     """Poll the status of a Veo 2 video generation job."""
-    return get_exercise_video_status(job_id)
+    try:
+        return get_exercise_video_status(job_id)
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 @app.websocket("/ws/{user_id}")

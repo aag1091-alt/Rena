@@ -282,6 +282,14 @@ struct VideoStatus: Codable {
         case videoUrl = "video_url"
         case jobId    = "job_id"
     }
+
+    init(from decoder: Decoder) throws {
+        let c   = try decoder.container(keyedBy: CodingKeys.self)
+        status  = (try? c.decode(String.self, forKey: .status)) ?? "error"
+        videoUrl = try? c.decode(String.self, forKey: .videoUrl)
+        jobId    = try? c.decode(String.self, forKey: .jobId)
+        message  = try? c.decode(String.self, forKey: .message)
+    }
 }
 
 class RenaAPI {

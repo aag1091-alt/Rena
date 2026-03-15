@@ -909,34 +909,39 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
         return {"status": "generating", "job_id": job_doc.id}
 
     # Submit new Veo 2 job
-    client       = _get_genai_client()
-    muscles_hint = f", targeting {target_muscles}" if target_muscles else ""
-    prompt       = (
-        f"A certified personal trainer demonstrating perfect form for {exercise_name}{muscles_hint}. "
-        f"Full body visible from a 45-degree angle, clear coaching perspective showing correct technique and posture. "
-        f"Clean gym background. Professional fitness coaching video."
-    )
+    try:
+        client       = _get_genai_client()
+        muscles_hint = f", targeting {target_muscles}" if target_muscles else ""
+        prompt       = (
+            f"A certified personal trainer demonstrating perfect form for {exercise_name}{muscles_hint}. "
+            f"Full body visible from a 45-degree angle, clear coaching perspective showing correct technique and posture. "
+            f"Clean gym background. Professional fitness coaching video."
+        )
 
-    operation = client.models.generate_videos(
-        model="veo-002",
-        prompt=prompt,
-        config=genai_types.GenerateVideoConfig(
-            aspect_ratio="9:16",
-            duration_seconds=8,
-            number_of_videos=1,
-        ),
-    )
+        operation = client.models.generate_videos(
+            model="veo-2.0-generate-001",
+            prompt=prompt,
+            config=genai_types.GenerateVideoConfig(
+                aspect_ratio="9:16",
+                duration_seconds=8,
+            ),
+        )
 
-    job_id = str(uuid.uuid4())
-    jobs_ref.document(job_id).set({
-        "slug":           slug,
-        "exercise_name":  exercise_name,
-        "operation_name": operation.name,
-        "status":         "generating",
-        "created_at":     firestore.SERVER_TIMESTAMP,
-    })
+        job_id = str(uuid.uuid4())
+        jobs_ref.document(job_id).set({
+            "slug":           slug,
+            "exercise_name":  exercise_name,
+            "operation_name": operation.name,
+            "status":         "generating",
+            "created_at":     firestore.SERVER_TIMESTAMP,
+        })
 
-    return {"status": "generating", "job_id": job_id}
+        print(f"[veo] started job {job_id} for '{exercise_name}' op={operation.name}")
+        return {"status": "generating", "job_id": job_id}
+
+    except Exception as e:
+        print(f"[veo] failed to start job for '{exercise_name}': {e}")
+        return {"status": "error", "message": str(e)}
 
 
 def get_exercise_video_status(job_id: str) -> dict:
@@ -961,7 +966,7 @@ def get_exercise_video_status(job_id: str) -> dict:
 
     try:
         client    = _get_genai_client()
-        operation = client.operations.get(operation=job["operation_name"])
+        operation = client.operations.get(job["operation_name"])
 
         if not operation.done:
             return {"status": "generating"}
