@@ -1012,14 +1012,15 @@ def _veo_prompt(exercise_name: str, target_muscles: str = "", gender: str = "fem
         if target_muscles else ""
     )
     script_direction = (
-        f" The trainer's movements follow this sequence: {script}"
+        f" The trainer's movement sequence: {script}"
         if script else ""
     )
     return (
         f"A {gender} certified personal trainer demonstrating perfect form for {exercise_name}{muscles_hint}. "
         f"Full body visible from a 45-degree angle, clear coaching perspective showing correct technique, "
         f"posture, and muscle engagement.{muscles_visual}{script_direction} "
-        f"Clean gym background. Professional fitness coaching video."
+        f"Clean gym background. Professional fitness coaching video. "
+        f"No text, subtitles, captions, or overlays on screen."
     )
 
 
