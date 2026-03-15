@@ -417,53 +417,69 @@ def get_progress(user_id: str, for_date: str = None) -> dict:
 
 
 def seed_test_data(user_id: str) -> dict:
-    """Seed 7 days of realistic test data for UI testing."""
+    """Seed 7 days of realistic test data tailored to the user's actual profile."""
+    import json, re
     from datetime import timedelta
-    import random
 
-    meals_by_day = [
-        [("Oatmeal with berries", 320, 12, 54, 6), ("Grilled chicken salad", 480, 42, 20, 14), ("Dal and rice", 620, 22, 98, 8)],
-        [("Avocado toast", 390, 10, 42, 20), ("Samosa x2", 440, 8, 52, 22), ("Paneer curry with naan", 720, 28, 80, 28)],
-        [("Greek yogurt parfait", 280, 18, 36, 6), ("Tuna wrap", 520, 38, 48, 12), ("Pasta bolognese", 680, 32, 88, 16)],
-        [("Banana smoothie", 310, 8, 62, 4), ("Caesar salad with chicken", 540, 44, 18, 28), ("Butter chicken with rice", 780, 36, 92, 24)],
-        [("Scrambled eggs on toast", 420, 22, 38, 18), ("Lentil soup", 380, 20, 54, 6), ("Grilled salmon with veggies", 560, 48, 24, 22)],
-        [("Chia pudding", 290, 10, 40, 10), ("Chicken wrap", 580, 40, 52, 16), ("Vegetable stir fry with tofu", 490, 24, 60, 14)],
-        [("Masala chai + poha", 350, 8, 58, 10), ("Rajma rice", 640, 24, 104, 10), ("Mixed vegetable soup", 260, 10, 38, 6)],
-    ]
-    workouts_by_day = [
-        [{"type": "Running", "duration_min": 30, "calories_burned": 280}],
-        [],
-        [{"type": "Yoga", "duration_min": 45, "calories_burned": 140}],
-        [{"type": "Gym — weight training", "duration_min": 50, "calories_burned": 320}],
-        [],
-        [{"type": "Cycling", "duration_min": 40, "calories_burned": 300}],
-        [],
-    ]
-    water_by_day = [6, 8, 5, 7, 8, 4, 6]
-    weight_by_day = [83.5, 83.3, 83.4, 83.1, 83.2, 82.9, 83.0]
+    # ── Read the user's actual profile ──────────────────────────────────────
+    profile = _user_ref(user_id).get().to_dict() or {}
+    goal_doc = _goal_ref(user_id).get().to_dict() or {}
 
+    calorie_target = int(profile.get("daily_calorie_target", 2000))
+    weight_kg      = float(profile.get("weight_kg", 75.0))
+    goal_type      = goal_doc.get("goal_type", "fitness")
+    direction      = goal_doc.get("direction", "decrease")  # "decrease" | "increase"
+    protein_target = int(weight_kg * 1.6)
+
+    # ── Ask Gemini to generate 7 realistic days of data ─────────────────────
+    prompt = f"""Generate 7 days of realistic health tracking data for someone with:
+- Daily calorie target: {calorie_target} kcal
+- Current weight: {weight_kg} kg
+- Goal: {goal_type} (weight {direction})
+- Protein target: {protein_target}g/day
+
+Rules:
+- Each day has 2-4 meals. Total daily calories should vary realistically: some days 100-200 under target, some days on target, 1-2 days slightly over.
+- Meals should be varied and realistic (mix of home cooking and common takeout/cafe items).
+- Workouts on 4-5 of the 7 days. Types should match the goal: weight loss = cardio + some strength, fitness/habit = mixed, weight gain = strength focus.
+- Water glasses between 5-8 per day.
+- Weight should show a realistic {direction} trend over the 7 days (small daily changes, not linear).
+
+Return ONLY a JSON array of 7 objects (day 0 = 6 days ago, day 6 = yesterday). No markdown.
+Each object:
+{{
+  "meals": [{{"name": str, "calories": int, "protein_g": int, "carbs_g": int, "fat_g": int}}],
+  "workouts": [{{"type": str, "duration_min": int, "calories_burned": int}}],
+  "water_glasses": int,
+  "weight_kg": float
+}}"""
+
+    client = _get_genai_client()
+    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    raw = response.text.strip()
+    raw = re.sub(r"^```(?:json)?\n?", "", raw)
+    raw = re.sub(r"\n?```$", "", raw)
+    days_data = json.loads(raw)
+
+    # ── Write to Firestore ───────────────────────────────────────────────────
     today = datetime.now(timezone.utc).date()
     written = []
-    for i in range(7):
+    for i, day_obj in enumerate(days_data[:7]):
         day = today - timedelta(days=6 - i)
         day_str = day.isoformat()
         meals = [
-            {
-                "name": m[0], "calories": m[1],
-                "protein_g": m[2], "carbs_g": m[3], "fat_g": m[4],
-                "logged_at": f"{day_str}T08:00:00Z",
-            }
-            for m in meals_by_day[i]
+            {**m, "logged_at": f"{day_str}T08:00:00Z"}
+            for m in day_obj.get("meals", [])
         ]
         workouts = [
             {**w, "logged_at": f"{day_str}T17:00:00Z"}
-            for w in workouts_by_day[i]
+            for w in day_obj.get("workouts", [])
         ]
         _user_ref(user_id).collection("logs").document(day_str).set({
-            "meals": meals,
-            "workouts": workouts,
-            "water_glasses": water_by_day[i],
-            "weight_kg": weight_by_day[i],
+            "meals":         meals,
+            "workouts":      workouts,
+            "water_glasses": day_obj.get("water_glasses", 6),
+            "weight_kg":     day_obj.get("weight_kg", weight_kg),
         })
         written.append(day_str)
 
