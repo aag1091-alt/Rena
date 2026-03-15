@@ -932,16 +932,17 @@ def log_exercise_from_plan(user_id: str, exercise_id: str, for_date: str = None,
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _generate_coaching_script(exercise_name: str, target_muscles: str = "") -> str:
-    """Generate an 8-second coaching voiceover script before video generation."""
-    muscles_focus = (
-        f"You are working your {target_muscles}. Mention them by name in the cues so the athlete knows what to feel. "
-        if target_muscles else ""
-    )
+    """Generate a real-life personal trainer coaching script for an exercise."""
+    muscles_line = f"Primary muscles: {target_muscles}. " if target_muscles else ""
     prompt = (
-        f"Write an 8-second coaching voiceover script for a fitness video demonstrating {exercise_name}. "
-        f"{muscles_focus}"
-        f"Cover: starting position, 1-2 key movement cues, one breathing tip. "
-        f"Natural, encouraging tone. Exactly 28-35 words. No intro like 'Here we go'. Just the cues."
+        f"You are an experienced personal trainer recording a short coaching voiceover for a {exercise_name} demonstration video. "
+        f"{muscles_line}"
+        f"Write exactly what you would say out loud while the athlete performs the movement — "
+        f"real coaching cues a trainer uses in a gym, not textbook descriptions. "
+        f"Include: body position setup, the key movement feel (e.g. 'drive through your heels', 'chest to bar', 'brace your core'), "
+        f"and one breath cue naturally woven in. "
+        f"Sound like a real coach — direct, confident, encouraging. 28-35 words. "
+        f"No intro phrases like 'Alright' or 'Let's go'. Start straight with the cue."
     )
     client = _get_genai_client()
     response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
@@ -990,69 +991,6 @@ def _add_coaching_audio(video_bytes: bytes, script: str) -> bytes:
 
         with open(output_path, "rb") as f:
             return f.read()
-
-
-def _critique_exercise_video(video_bytes: bytes, exercise_name: str, target_muscles: str = "") -> tuple:
-    """
-    Use Gemini Vision to check if a generated exercise video matches the intended exercise
-    and visually works the expected target muscles.
-    Returns (is_acceptable: bool, reason: str).
-    """
-    import subprocess, tempfile, os as _os
-    from google.genai import types as genai_types
-
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            video_path = _os.path.join(tmpdir, "video.mp4")
-            with open(video_path, "wb") as f:
-                f.write(video_bytes)
-
-            frame_bytes_list = []
-            for t in [1, 3, 5]:
-                frame_path = _os.path.join(tmpdir, f"frame_{t}.jpg")
-                result = subprocess.run(
-                    ["ffmpeg", "-y", "-ss", str(t), "-i", video_path, "-frames:v", "1", frame_path],
-                    capture_output=True,
-                )
-                if result.returncode == 0 and _os.path.exists(frame_path):
-                    with open(frame_path, "rb") as fp:
-                        frame_bytes_list.append(fp.read())
-
-        if not frame_bytes_list:
-            print("[critic] could not extract frames, accepting video")
-            return True, ""
-
-        muscles_clause = (
-            f"(2) the movement clearly engages the {target_muscles} — if the body position makes it "
-            f"impossible to work those muscles, fail it, "
-            if target_muscles else ""
-        )
-
-        client = _get_genai_client()
-        parts = [genai_types.Part.from_bytes(data=fb, mime_type="image/jpeg") for fb in frame_bytes_list]
-        parts.append(
-            f"These frames are from a fitness coaching video intended to show '{exercise_name}'"
-            + (f" targeting {target_muscles}" if target_muscles else "") + ". "
-            "Evaluate whether this video is acceptable. Fail it if: "
-            "(1) the person is clearly performing a completely different exercise or the movement is wrong, "
-            + muscles_clause +
-            "(3) there are severe AI glitches like fully distorted limbs or an impossible body shape. "
-            "Minor imperfections are fine — only fail on clear, obvious problems. "
-            "Reply with exactly PASS if acceptable, or FAIL: <brief one-line reason> if not."
-        )
-
-        response = client.models.generate_content(model="gemini-2.5-flash", contents=parts)
-        result_text = response.text.strip()
-        print(f"[critic] '{exercise_name}': {result_text}")
-
-        if result_text.upper().startswith("PASS"):
-            return True, ""
-        reason = result_text[5:].strip() if result_text.upper().startswith("FAIL") else result_text
-        return False, reason
-
-    except Exception as e:
-        print(f"[critic] critique failed (accepting): {e}")
-        return True, ""
 
 
 def _veo_prompt(exercise_name: str, target_muscles: str = "", gender: str = "female", script: str = "") -> str:
@@ -1178,36 +1116,6 @@ def get_exercise_video_status(job_id: str) -> dict:
 
         # Veo returns inline video_bytes (not a GCS URI)
         video_bytes = operation.response.generated_videos[0].video.video_bytes
-
-        # Critic layer — reject videos that show wrong exercise or fail to work target muscles
-        attempt = job.get("attempt", 0)
-        is_ok, reason = _critique_exercise_video(video_bytes, job["exercise_name"], job.get("target_muscles", ""))
-        if not is_ok and attempt < 3:
-            import random
-            print(f"[critic] rejected (attempt {attempt}): {reason} — submitting new Veo job")
-            # Keep same script; pick a new random gender for variety
-            gender = random.choice(["male", "female"])
-            new_prompt = _veo_prompt(
-                job["exercise_name"], job.get("target_muscles", ""),
-                gender=gender, script=job.get("script", ""),
-            )
-            new_op = client.models.generate_videos(
-                model="veo-2.0-generate-001",
-                prompt=new_prompt,
-                config={"aspect_ratio": "9:16", "duration_seconds": 8},
-            )
-            new_op_name = new_op if isinstance(new_op, str) else new_op.name
-            db.collection("exercise_video_jobs").document(job_id).update({
-                "operation_name": new_op_name,
-                "trainer_gender": gender,
-                "attempt":        attempt + 1,
-                "status":         "generating",
-                "last_rejection": reason,
-            })
-            return {"status": "generating"}
-
-        if not is_ok:
-            print(f"[critic] max attempts reached for '{job['exercise_name']}', using last video")
 
         # Mux Rena's coaching voiceover using the pre-generated script
         try:
