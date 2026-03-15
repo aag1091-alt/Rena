@@ -1,18 +1,13 @@
 # Cloud Build config with Docker layer caching.
 #
 # Cache strategy:
-#   - requirements.txt is copied + pip-installed BEFORE the app code (see Dockerfile).
+#   - requirements.txt is copied + pip-installed BEFORE app code (see Dockerfile).
 #   - --cache-from pulls the last pushed image so the pip layer is reused when
 #     requirements.txt hasn't changed — cuts build time significantly.
 #
 # Cache busting:
 #   - Change the FROM line in Dockerfile (e.g. python:3.13-slim → python:3.13-slim-bookworm)
-#     OR add --no-cache to the docker build step below to force a full rebuild.
-
-substitutions:
-  _REGION: us-central1
-  _SERVICE: rena-agent
-  _IMAGE: ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/${_SERVICE}
+#     to force a full rebuild from scratch.
 
 steps:
   # Pull previous image for cache (ignore failure on first deploy)
@@ -20,23 +15,26 @@ steps:
     entrypoint: bash
     args:
       - -c
-      - docker pull ${_IMAGE}:latest || true
+      - docker pull us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest || true
 
   # Build with cache-from
   - name: gcr.io/cloud-builders/docker
     args:
       - build
       - --cache-from
-      - ${_IMAGE}:latest
+      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
       - --tag
-      - ${_IMAGE}:latest
+      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
       - --tag
-      - ${_IMAGE}:$SHORT_SHA
+      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:$SHORT_SHA
       - .
 
   # Push both tags
   - name: gcr.io/cloud-builders/docker
-    args: [push, --all-tags, ${_IMAGE}]
+    args:
+      - push
+      - --all-tags
+      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent
 
   # Deploy to Cloud Run
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -44,13 +42,13 @@ steps:
     args:
       - run
       - deploy
-      - ${_SERVICE}
+      - rena-agent
       - --image
-      - ${_IMAGE}:$SHORT_SHA
+      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:$SHORT_SHA
       - --region
-      - ${_REGION}
+      - us-central1
       - --allow-unauthenticated
 
 images:
-  - ${_IMAGE}:latest
-  - ${_IMAGE}:$SHORT_SHA
+  - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
+  - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:$SHORT_SHA
