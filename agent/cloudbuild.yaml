@@ -34,7 +34,7 @@ steps:
       - push
       - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
 
-  # Deploy to Cloud Run
+  # Deploy to Cloud Run with env vars + secrets
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -46,6 +46,10 @@ steps:
       - --region
       - us-central1
       - --allow-unauthenticated
+      - --set-env-vars
+      - GOOGLE_CLOUD_PROJECT=rena-490107,GOOGLE_CLOUD_LOCATION=us-central1,GCS_BUCKET=rena-visual-journey
+      - --set-secrets
+      - GOOGLE_API_KEY=GOOGLE_API_KEY:latest,GEMINI_API_KEY=GOOGLE_API_KEY:latest,SENTRY_DSN=SENTRY_DSN:latest
 
 images:
   - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
