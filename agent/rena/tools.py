@@ -890,7 +890,6 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
         {"status": "generating", "job_id": "..."} if job started or already running.
     """
     import re
-    from google.genai import types as genai_types
 
     slug         = re.sub(r"[^a-z0-9]+", "_", exercise_name.lower()).strip("_")
     bucket_name  = os.getenv("GCS_BUCKET", "rena-visual-journey")
@@ -921,10 +920,7 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
         operation = client.models.generate_videos(
             model="veo-2.0-generate-001",
             prompt=prompt,
-            config=genai_types.GenerateVideoConfig(
-                aspect_ratio="9:16",
-                duration_seconds=8,
-            ),
+            config={"aspect_ratio": "9:16", "duration_seconds": 8},
         )
 
         job_id = str(uuid.uuid4())
