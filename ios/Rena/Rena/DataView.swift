@@ -113,12 +113,6 @@ struct DataView: View {
                             caloriesTarget: displayCaloriesTarget,
                             water: displayWater
                         )
-                        DayCalorieBreakdownCard(
-                            caloriesConsumed: displayCaloriesConsumed,
-                            caloriesBurned: displayCaloriesBurned,
-                            caloriesTarget: displayCaloriesTarget,
-                            burnRequired: displayBurnRequired
-                        )
                         DayFoodLog(meals: displayMeals)
                         DayWorkoutLog(workouts: displayWorkouts)
                     }
