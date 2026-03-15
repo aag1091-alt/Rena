@@ -70,11 +70,14 @@ _CONTEXT_PROMPTS = {
         "Keep it short and friendly — one sentence."
     ),
     "workout_plan": (
-        "SPEAK OUT LOUD NOW: Suggest a specific workout for today based on the user's goal. "
-        "For cardio: give duration and intensity (e.g. 30-min brisk walk or 20-min easy run). "
-        "For strength: list 4-5 exercises with sets and reps. "
-        "Keep it brief and actionable — under 30 seconds. "
-        "After describing it, ask: 'Does that work for you, or want me to adjust?'"
+        "SPEAK OUT LOUD NOW: Call generate_workout_plan with the user's user_id first to create today's plan. "
+        "Then describe it warmly in 1-2 sentences — workout name and main exercises. "
+        "Ask: 'Does that work for you, or want me to swap anything out?'"
+    ),
+    "update_workout_plan": (
+        "SPEAK OUT LOUD NOW: The user wants to update their workout plan. "
+        "Ask what they want to change. Once confirmed, call generate_workout_plan again to create a fresh plan, "
+        "then describe the updated workout. Keep it to 2-3 exchanges."
     ),
     "plan_tomorrow": (
         "SPEAK OUT LOUD NOW: Say 'Let's plan tomorrow, {name}!' "

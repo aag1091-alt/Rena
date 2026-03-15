@@ -69,5 +69,6 @@ TOOL CALLS — CRITICAL:
         tools.log_workout,
         tools.log_weight,
         tools.scan_image,
+        tools.generate_workout_plan,
     ],
 )
