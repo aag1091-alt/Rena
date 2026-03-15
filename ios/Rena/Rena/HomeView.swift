@@ -11,6 +11,7 @@ struct HomeView: View {
     @State private var daysLeft: Int = 0
     @State private var isLoadingGoal = false
     @State private var isConnected = false
+    @State private var showJourney = false
 
     var body: some View {
         ZStack {
@@ -42,14 +43,17 @@ struct HomeView: View {
                 // ── Scrollable cards ───────────────────────────────
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 12) {
-                        GoalCard(
-                            goalText: goalText,
-                            goalType: goalType,
-                            progressPercent: progressPercent,
-                            progressLabel: progressLabel,
-                            daysLeft: daysLeft,
-                            isLoading: isLoadingGoal
-                        )
+                        Button { showJourney = true } label: {
+                            GoalCard(
+                                goalText: goalText,
+                                goalType: goalType,
+                                progressPercent: progressPercent,
+                                progressLabel: progressLabel,
+                                daysLeft: daysLeft,
+                                isLoading: isLoadingGoal
+                            )
+                        }
+                        .buttonStyle(.plain)
 
                         CalorieCard()
 
@@ -164,6 +168,11 @@ struct HomeView: View {
         .onAppear { Task { await loadGoal(); await loadProgress() } }
         .onDisappear { if isConnected { toggleVoice() } }
         .onChange(of: voice.turnCount) { Task { await loadProgress() } }
+        .sheet(isPresented: $showJourney) {
+            GoalView()
+                .environmentObject(appState)
+                .environmentObject(voice)
+        }
     }
 
     // MARK: - Voice
