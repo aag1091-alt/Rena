@@ -4,16 +4,39 @@ struct WorkbookView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var voice: VoiceManager
 
+    @State private var selectedDate = Date()
+    @State private var dayData: ProgressResponse? = nil
     @State private var insight: String = ""
     @State private var activity: String = ""
-    @State private var insightLoading = false
+    @State private var isLoading = false
     @State private var activeContext: String? = nil
     @State private var isVoiceConnected = false
 
+    private var isToday: Bool { Calendar.current.isDateInToday(selectedDate) }
+
+    private var displayMeals: [MealEntry]    { dayData?.mealsLogged    ?? (isToday ? appState.mealsLogged    : []) }
+    private var displayWorkouts: [WorkoutEntry] { dayData?.workoutsLogged ?? (isToday ? appState.workoutsLogged : []) }
+    private var displayConsumed: Int  { dayData?.caloriesConsumed ?? (isToday ? appState.caloriesConsumed : 0) }
+    private var displayTarget: Int    { dayData?.caloriesTarget   ?? (isToday ? appState.caloriesTarget   : 1800) }
+    private var displayBurned: Int    { dayData?.caloriesBurned   ?? (isToday ? appState.caloriesBurned   : 0) }
+
     private var hour: Int { Calendar.current.component(.hour, from: Date()) }
-    private var isMorning: Bool  { hour >= 5  && hour < 12 }
-    private var isEvening: Bool  { hour >= 17 }
-    private var timeLabel: String {
+    private var isMorning: Bool  { isToday && hour >= 5  && hour < 12 }
+    private var isEvening: Bool  { isToday && hour >= 17 }
+
+    private var dateString: String {
+        let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd"
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        return fmt.string(from: selectedDate)
+    }
+    private var dateLabel: String {
+        if isToday { return "Today" }
+        if Calendar.current.isDateInYesterday(selectedDate) { return "Yesterday" }
+        let fmt = DateFormatter(); fmt.dateFormat = "EEE, MMM d"
+        return fmt.string(from: selectedDate)
+    }
+    private var greeting: String {
+        if !isToday { return dateLabel }
         if isMorning { return "Good morning" }
         if isEvening { return "Good evening" }
         return "Good afternoon"
@@ -24,52 +47,89 @@ struct WorkbookView: View {
             ScrollView {
                 VStack(spacing: 16) {
 
+                    // ── Date navigation ────────────────────────────
+                    HStack(spacing: 16) {
+                        Button {
+                            selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate)!
+                            Task { await loadDay() }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(Color(hex: "E76F51"))
+                        }
+                        Spacer()
+                        Text(dateLabel)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(Color(hex: "3D2B1F"))
+                            .contentTransition(.numericText())
+                            .animation(.spring(duration: 0.2), value: dateLabel)
+                        Spacer()
+                        Button {
+                            selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate)!
+                            Task { await loadDay() }
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(isToday ? Color(hex: "D4B8A0") : Color(hex: "E76F51"))
+                        }
+                        .disabled(isToday)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color.white)
+                    .cornerRadius(16)
+                    .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+
                     // ── Header ─────────────────────────────────────
                     WorkbookHeader(
-                        greeting: timeLabel,
+                        greeting: greeting,
                         name: appState.name.components(separatedBy: " ").first ?? appState.name,
                         isMorning: isMorning,
                         isEvening: isEvening,
-                        caloriesConsumed: appState.caloriesConsumed,
-                        caloriesTarget: appState.caloriesTarget,
-                        caloriesBurned: appState.caloriesBurned
+                        caloriesConsumed: displayConsumed,
+                        caloriesTarget: displayTarget,
+                        caloriesBurned: displayBurned
                     )
 
-                    // ── Day So Far (AI insight) ────────────────────
-                    DaySoFarCard(insight: insight, isLoading: insightLoading)
-
-                    // ── Workout Plan ───────────────────────────────
-                    WorkbookVoiceCard(
-                        icon: "figure.run",
-                        iconColor: Color(hex: "2A9D8F"),
-                        title: "Today's Workout",
-                        subtitle: "Let Rena suggest a workout tailored to your goal",
-                        buttonLabel: "Plan with Rena",
-                        isActive: activeContext == "workout_plan" && isVoiceConnected,
-                        voiceState: activeContext == "workout_plan" ? voice.state : .idle,
-                        onTap: { toggleVoice(context: "workout_plan") }
+                    // ── Day insight (AI) ───────────────────────────
+                    DaySoFarCard(
+                        insight: insight,
+                        isLoading: isLoading,
+                        isToday: isToday
                     )
 
-                    // ── Plan Tomorrow (evening only) ───────────────
-                    if isEvening {
+                    // ── Voice cards — today only ───────────────────
+                    if isToday {
                         WorkbookVoiceCard(
-                            icon: "moon.stars.fill",
-                            iconColor: Color(hex: "9B7EC8"),
-                            title: "Plan Tomorrow",
-                            subtitle: "Review today with Rena and set tomorrow's targets",
+                            icon: "figure.run",
+                            iconColor: Color(hex: "2A9D8F"),
+                            title: "Today's Workout",
+                            subtitle: "Let Rena suggest a workout tailored to your goal",
                             buttonLabel: "Plan with Rena",
-                            isActive: activeContext == "plan_tomorrow" && isVoiceConnected,
-                            voiceState: activeContext == "plan_tomorrow" ? voice.state : .idle,
-                            onTap: { toggleVoice(context: "plan_tomorrow") }
+                            isActive: activeContext == "workout_plan" && isVoiceConnected,
+                            voiceState: activeContext == "workout_plan" ? voice.state : .idle,
+                            onTap: { toggleVoice(context: "workout_plan") }
                         )
+                        if isEvening {
+                            WorkbookVoiceCard(
+                                icon: "moon.stars.fill",
+                                iconColor: Color(hex: "9B7EC8"),
+                                title: "Plan Tomorrow",
+                                subtitle: "Review today with Rena and set tomorrow's targets",
+                                buttonLabel: "Plan with Rena",
+                                isActive: activeContext == "plan_tomorrow" && isVoiceConnected,
+                                voiceState: activeContext == "plan_tomorrow" ? voice.state : .idle,
+                                onTap: { toggleVoice(context: "plan_tomorrow") }
+                            )
+                        }
                     }
 
-                    // ── Today's activity summary ───────────────────
+                    // ── Activity summary ───────────────────────────
                     TodayActivityCard(
                         aiSummary: activity,
-                        isLoading: insightLoading,
-                        meals: appState.mealsLogged,
-                        workouts: appState.workoutsLogged
+                        isLoading: isLoading,
+                        meals: displayMeals,
+                        workouts: displayWorkouts
                     )
 
                     Spacer(minLength: 40)
@@ -81,10 +141,10 @@ struct WorkbookView: View {
             .navigationTitle("Workbook")
             .navigationBarTitleDisplayMode(.large)
             .scrollBounceBehavior(.always)
-            .refreshable { await refresh() }
-            .onAppear { Task { await refresh() } }
+            .refreshable { await loadDay() }
+            .onAppear { Task { await loadDay() } }
             .onDisappear { if isVoiceConnected { endVoice() } }
-            .onChange(of: voice.turnCount) { Task { await refresh() } }
+            .onChange(of: voice.turnCount) { if isToday { Task { await loadDay() } } }
         }
     }
 
@@ -110,15 +170,21 @@ struct WorkbookView: View {
 
     // MARK: - Data
 
-    private func refresh() async {
-        await MainActor.run { insightLoading = true }
-        if let result = try? await RenaAPI.shared.getWorkbookInsight(userId: appState.userId) {
-            await MainActor.run {
-                if !result.insight.isEmpty  { insight  = result.insight  }
-                if !result.activity.isEmpty { activity = result.activity }
+    private func loadDay() async {
+        await MainActor.run { isLoading = true; insight = ""; activity = "" }
+        let date = isToday ? nil : dateString
+        async let progressTask = RenaAPI.shared.getProgress(userId: appState.userId, date: dateString)
+        async let insightTask  = RenaAPI.shared.getWorkbookInsight(userId: appState.userId, date: date)
+        let progress = try? await progressTask
+        let result   = try? await insightTask
+        await MainActor.run {
+            dayData  = progress
+            if let r = result {
+                insight  = r.insight
+                activity = r.activity
             }
+            isLoading = false
         }
-        await MainActor.run { insightLoading = false }
     }
 }
 
@@ -211,6 +277,7 @@ struct WorkbookHeader: View {
 struct DaySoFarCard: View {
     let insight: String
     let isLoading: Bool
+    var isToday: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -218,7 +285,7 @@ struct DaySoFarCard: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 14))
                     .foregroundColor(Color(hex: "E76F51"))
-                Text("DAY SO FAR")
+                Text(isToday ? "DAY SO FAR" : "DAY RECAP")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
@@ -234,7 +301,9 @@ struct DaySoFarCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 4)
             } else if insight.isEmpty {
-                Text("Start logging meals and workouts — Rena will give you a read on your day.")
+                Text(isToday
+                     ? "Start logging meals and workouts — Rena will give you a read on your day."
+                     : "No data logged for this day.")
                     .font(.system(size: 14))
                     .foregroundColor(Color(hex: "B09880"))
                     .fixedSize(horizontal: false, vertical: true)

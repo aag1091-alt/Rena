@@ -137,16 +137,17 @@ async def log_weight_endpoint(req: LogWeightRequest):
 
 
 @app.get("/workbook/insight/{user_id}")
-async def workbook_insight(user_id: str):
-    """Generate a brief AI interpretation of today's progress for the Workbook tab."""
-    from datetime import datetime, timezone
-    from google import genai as _genai
+async def workbook_insight(user_id: str, date: str = None):
+    """Generate AI insight + activity summary for the Workbook tab. Accepts optional date (YYYY-MM-DD)."""
+    from datetime import datetime, timezone, date as date_type
     from rena.tools import _get_genai_client
 
     if not user_id or user_id.strip() == "":
         raise HTTPException(status_code=400, detail="user_id is required")
 
-    p = get_progress(user_id)
+    p = get_progress(user_id, for_date=date)
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    is_today = (date is None) or (date == today_str)
     hour = datetime.now(timezone.utc).hour
     time_of_day = "morning" if hour < 12 else ("evening" if hour >= 17 else "afternoon")
 
@@ -161,26 +162,35 @@ async def workbook_insight(user_id: str):
 
     meals_detail = ", ".join(
         f"{m['name']} ({m.get('calories', 0)} kcal)" for m in meals
-    ) if meals else "nothing logged yet"
+    ) if meals else "nothing logged"
 
     workouts_detail = ", ".join(
         f"{w['type']} {w.get('duration_min', 0)} min ({w.get('calories_burned', 0)} kcal burned)"
         for w in workouts
-    ) if workouts else "no workouts logged"
+    ) if workouts else "no workouts"
 
-    insight_prompt = (
-        f"You are Rena, a warm health companion. Write exactly 2 short sentences "
-        f"interpreting this person's {time_of_day} so far. Be specific, encouraging, and end with one actionable tip. "
-        f"No markdown, no bullet points.\n\n"
-        f"Calories: {consumed}/{target} consumed, {burned} burned. "
-        f"Protein: {protein}g/{protein_target}g. Water: {water}/8 glasses."
-    )
+    if is_today:
+        insight_prompt = (
+            f"You are Rena, a warm health companion. Write exactly 2 short sentences "
+            f"interpreting this person's {time_of_day} so far. Be specific, encouraging, and end with one actionable tip. "
+            f"No markdown, no bullet points.\n\n"
+            f"Calories: {consumed}/{target} consumed, {burned} burned. "
+            f"Protein: {protein}g/{protein_target}g. Water: {water}/8 glasses."
+        )
+    else:
+        insight_prompt = (
+            f"You are Rena, a warm health companion. Write exactly 2 short sentences "
+            f"reflecting on this person's day on {date}. Be warm and encouraging — note what went well "
+            f"and one thing to carry forward. No markdown, no bullet points.\n\n"
+            f"Calories: {consumed}/{target} eaten, {burned} burned. "
+            f"Protein: {protein}g/{protein_target}g. Water: {water}/8 glasses."
+        )
 
     activity_prompt = (
-        f"You are Rena. Write 1-2 warm, natural sentences summarising what this person ate and how they moved today. "
-        f"Sound like a friend, not a food diary. No markdown, no lists.\n\n"
-        f"Food today: {meals_detail}.\n"
-        f"Exercise today: {workouts_detail}."
+        f"You are Rena. Write 1-2 warm, natural sentences summarising what this person ate and how they moved "
+        f"{'today' if is_today else 'on this day'}. Sound like a friend, not a food diary. No markdown, no lists.\n\n"
+        f"Food: {meals_detail}.\n"
+        f"Exercise: {workouts_detail}."
     )
 
     client = _get_genai_client()
