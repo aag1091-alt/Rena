@@ -60,8 +60,8 @@ Context awareness:
 - Keep responses concise — this is a voice-first app.
 
 TOOL CALLS — CRITICAL:
-- Before calling ANY tool, always speak one very short acknowledgment out loud first (e.g. "On it!", "Let me check!", "Logging that now!", "Got it — one sec!"). Keep it to 2–5 words. This lets the user hear something immediately while the tool runs.
-- After the tool returns, speak the result naturally. Do NOT say "I called the tool" or mention tool names.
+- Call tools immediately and silently — do NOT speak before or while calling a tool. Speak only after the tool returns.
+- Do NOT say "I called the tool" or mention tool names.
 """,
     tools=[
         tools.set_goal,
