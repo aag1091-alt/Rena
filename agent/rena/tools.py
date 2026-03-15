@@ -964,26 +964,24 @@ def get_exercise_video_status(job_id: str) -> dict:
         return {"status": "error", "message": job.get("error", "Generation failed")}
 
     try:
+        from google.genai import types as genai_types
         client    = _get_genai_client()
-        operation = client.operations.get(job["operation_name"])
+        # Reconstruct GenerateVideosOperation from stored name string
+        operation = client.operations.get(
+            genai_types.GenerateVideosOperation(name=job["operation_name"])
+        )
 
         if not operation.done:
             return {"status": "generating"}
 
-        # Copy from Veo's temp GCS bucket to our bucket
-        video      = operation.response.generated_videos[0]
-        source_uri = video.video.uri  # gs://temp-bucket/path/video.mp4
-
-        src_path   = source_uri.replace("gs://", "")
-        src_bucket_name, src_blob_path = src_path.split("/", 1)
+        # Veo returns inline video_bytes (not a GCS URI)
+        video_bytes = operation.response.generated_videos[0].video.video_bytes
 
         gcs_client  = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
-        src_bucket  = gcs_client.bucket(src_bucket_name)
-        src_blob    = src_bucket.blob(src_blob_path)
         dest_bucket = gcs_client.bucket(bucket_name)
-
-        src_bucket.copy_blob(src_blob, dest_bucket, f"exercise_videos/{slug}.mp4")
-        dest_bucket.blob(f"exercise_videos/{slug}.mp4").make_public()
+        dest_blob   = dest_bucket.blob(f"exercise_videos/{slug}.mp4")
+        dest_blob.upload_from_string(video_bytes, content_type="video/mp4")
+        dest_blob.make_public()
 
         video_url = f"https://storage.googleapis.com/{bucket_name}/exercise_videos/{slug}.mp4"
         db.collection("exercise_video_jobs").document(job_id).update({"status": "done", "video_url": video_url})
