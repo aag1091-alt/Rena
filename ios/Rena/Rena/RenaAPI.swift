@@ -196,7 +196,6 @@ struct GoalResponse: Codable {
     let progressPercent: Int
     let progressLabel: String
     let deadline: String
-    let imageUrl: String?
     let dailyCalorieTarget: Int
     let daysUntilGoal: Int
 
@@ -208,7 +207,6 @@ struct GoalResponse: Codable {
         case currentValue    = "current_value"
         case progressPercent = "progress_percent"
         case progressLabel   = "progress_label"
-        case imageUrl        = "image_url"
         case dailyCalorieTarget = "daily_calorie_target"
         case daysUntilGoal      = "days_until_goal"
     }
@@ -368,12 +366,6 @@ class RenaAPI {
 
     func getGoal(userId: String) async throws -> GoalResponse {
         let req = request("\(kBaseURL)/goal/\(userId)")
-        let (data, _) = try await session.data(for: req)
-        return try JSONDecoder().decode(GoalResponse.self, from: data)
-    }
-
-    func refreshGoalImage(userId: String) async throws -> GoalResponse {
-        let req = request("\(kBaseURL)/goal/\(userId)?refresh=true")
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(GoalResponse.self, from: data)
     }

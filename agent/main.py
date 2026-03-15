@@ -102,15 +102,10 @@ async def progress(user_id: str, date: str = None):
 
 
 @app.get("/goal/{user_id}")
-async def goal_endpoint(user_id: str, refresh: bool = False):
-    """Get the user's current goal. Pass ?refresh=true to force-regenerate the vision image."""
+async def goal_endpoint(user_id: str):
+    """Get the user's current goal and progress."""
     if not user_id or user_id.strip() == "":
         raise HTTPException(status_code=400, detail="user_id is required")
-    if refresh:
-        from rena.tools import _goal_ref
-        from google.cloud import firestore as _fs
-        _goal_ref(user_id).update({"image_url": _fs.DELETE_FIELD})
-        print(f"[goal] cleared image_url for {user_id} — will regenerate")
     return get_goal(user_id)
 
 

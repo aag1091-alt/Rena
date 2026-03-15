@@ -4,11 +4,7 @@ struct HomeView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var voice: VoiceManager
 
-    @State private var goalText: String = ""
-    @State private var goalType: String = "event"
-    @State private var progressPercent: Int = 0
-    @State private var progressLabel: String = ""
-    @State private var daysLeft: Int = 0
+    @State private var goalData: GoalResponse? = nil
     @State private var isLoadingGoal = false
 
     var body: some View {
@@ -40,17 +36,7 @@ struct HomeView: View {
                 // ── Scrollable cards ───────────────────────────────
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 12) {
-                        NavigationLink(destination: GoalView()) {
-                            GoalCard(
-                                goalText: goalText,
-                                goalType: goalType,
-                                progressPercent: progressPercent,
-                                progressLabel: progressLabel,
-                                daysLeft: daysLeft,
-                                isLoading: isLoadingGoal
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        GoalCard(goal: goalData, isLoading: isLoadingGoal)
 
                         NudgeStrip()
 
@@ -63,16 +49,6 @@ struct HomeView: View {
                             caloriesTarget: appState.caloriesTarget,
                             water: appState.waterGlasses
                         )
-
-                        DayCalorieBreakdownCard(
-                            caloriesConsumed: appState.caloriesConsumed,
-                            caloriesBurned: appState.caloriesBurned,
-                            caloriesTarget: appState.caloriesTarget,
-                            burnRequired: appState.burnRequired
-                        )
-
-                        DayFoodLog(meals: appState.mealsLogged)
-                        DayWorkoutLog(workouts: appState.workoutsLogged)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
@@ -118,17 +94,8 @@ struct HomeView: View {
 
     private func loadGoal() async {
         isLoadingGoal = true
-        guard let resp = try? await RenaAPI.shared.getGoal(userId: appState.userId) else {
-            isLoadingGoal = false; return
-        }
-        await MainActor.run {
-            goalText        = resp.goal
-            goalType        = resp.goalType
-            progressPercent = resp.progressPercent
-            progressLabel   = resp.progressLabel
-            daysLeft        = resp.daysUntilGoal
-            isLoadingGoal   = false
-        }
+        let resp = try? await RenaAPI.shared.getGoal(userId: appState.userId)
+        await MainActor.run { goalData = resp; isLoadingGoal = false }
     }
 
     private var greeting: String {
@@ -148,13 +115,15 @@ struct HomeView: View {
 // MARK: - Goal card
 
 struct GoalCard: View {
-    @EnvironmentObject var appState: AppState
-    let goalText: String
-    let goalType: String
-    let progressPercent: Int
-    let progressLabel: String
-    let daysLeft: Int
+    let goal: GoalResponse?
     let isLoading: Bool
+
+    private var goalType: String   { goal?.goalType ?? "event" }
+    private var goalText: String   { goal?.goal ?? "" }
+    private var daysLeft: Int      { goal?.daysUntilGoal ?? 0 }
+    private var pct: Int           { goal?.progressPercent ?? 0 }
+    private var label: String      { goal?.progressLabel ?? "" }
+    private var showProgress: Bool { goalType != "event" && goal != nil }
 
     private var goalIcon: String {
         switch goalType {
@@ -183,8 +152,9 @@ struct GoalCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+
+            // ── Header ──────────────────────────────────────────────
             HStack(spacing: 10) {
-                // Icon pill
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(goalColor.opacity(0.14))
@@ -209,35 +179,52 @@ struct GoalCard: View {
                 }
             }
 
+            // ── Goal text ────────────────────────────────────────────
             Text(isLoading ? "Loading…" : (goalText.isEmpty ? "Set your goal" : goalText))
                 .font(.system(size: 19, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: "3D2B1F"))
                 .fixedSize(horizontal: false, vertical: true)
                 .lineLimit(2)
 
-            if progressPercent > 0 || !progressLabel.isEmpty, goalType != "event" {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(progressLabel)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(goalColor)
-                        Spacer()
-                        Text("\(progressPercent)%")
+            // ── Progress ─────────────────────────────────────────────
+            if showProgress {
+                VStack(alignment: .leading, spacing: 10) {
+                    // Bar + percentage
+                    HStack(spacing: 8) {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(goalColor.opacity(0.12))
+                                    .frame(height: 7)
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(goalColor)
+                                    .frame(width: geo.size.width * Double(pct) / 100.0, height: 7)
+                                    .animation(.spring(), value: pct)
+                            }
+                        }
+                        .frame(height: 7)
+                        Text("\(pct)%")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(goalColor)
+                            .frame(width: 36, alignment: .trailing)
                     }
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(goalColor.opacity(0.12))
-                                .frame(height: 6)
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(goalColor)
-                                .frame(width: geo.size.width * Double(progressPercent) / 100.0, height: 6)
-                                .animation(.spring(), value: progressPercent)
+
+                    // Start / Now / Target
+                    if let g = goal, g.targetValue > 0 {
+                        HStack(spacing: 0) {
+                            statCol(label: "Started", value: fmtVal(g.startValue), unit: g.unit)
+                            Divider().frame(height: 34)
+                            statCol(label: "Now",     value: fmtVal(g.currentValue), unit: g.unit, color: goalColor)
+                            Divider().frame(height: 34)
+                            statCol(label: "Target",  value: fmtVal(g.targetValue), unit: g.unit)
                         }
                     }
-                    .frame(height: 6)
+
+                    if !label.isEmpty {
+                        Text(label)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(goalColor)
+                    }
                 }
             }
         }
@@ -251,6 +238,29 @@ struct GoalCard: View {
         )
         .cornerRadius(20)
         .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+    }
+
+    private func statCol(label: String, value: String, unit: String, color: Color? = nil) -> some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundColor(Color(hex: "B09880"))
+            HStack(alignment: .lastTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundColor(color ?? Color(hex: "3D2B1F"))
+                if !unit.isEmpty {
+                    Text(unit)
+                        .font(.system(size: 9))
+                        .foregroundColor(Color(hex: "B09880"))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func fmtVal(_ v: Double) -> String {
+        v == v.rounded() ? "\(Int(v))" : String(format: "%.1f", v)
     }
 }
 
