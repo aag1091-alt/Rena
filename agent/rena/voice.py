@@ -135,16 +135,44 @@ async def handle_voice(websocket: WebSocket, user_id: str,
         await asyncio.sleep(0.2)
         # Inject user_id + current weight so the agent can calculate absolute
         # target weights without asking the user for their current weight.
-        from rena.tools import _user_ref
+        from rena.tools import _user_ref, generate_workout_plan
         try:
             profile = _user_ref(user_id).get().to_dict() or {}
             weight_kg = profile.get("weight_kg")
             text = f"[user_id:{user_id}]" + (f"[current_weight_kg:{weight_kg}]" if weight_kg else "")
         except Exception:
             text = f"[user_id:{user_id}]"
-        if context and context in _CONTEXT_PROMPTS:
+
+        if context == "workout_plan":
+            # Pre-generate the plan here so there is no blocking tool call during the
+            # live voice session. Rena receives the finished plan in the opening message
+            # and can describe it immediately — no generate_workout_plan call needed.
+            try:
+                plan = await asyncio.to_thread(generate_workout_plan, user_id)
+                exercise_lines = "; ".join(
+                    f"{ex['name']} ({ex.get('sets', '')}×{ex.get('reps', '')} "
+                    f"or {ex.get('duration_min', '')} min, ~{ex.get('calories_burned', 0)} kcal)"
+                    for ex in plan.get("exercises", [])
+                )
+                plan_summary = (
+                    f"{plan['name']}, {plan.get('total_duration_min', 0)} min total. "
+                    f"Exercises: {exercise_lines}."
+                )
+                prompt = (
+                    f"SPEAK OUT LOUD NOW. A workout plan has already been generated and saved for {name or 'them'}. "
+                    f"Here it is: {plan_summary} "
+                    "Describe it warmly in 1-2 sentences and ask: 'Does that work for you, or want me to tweak anything?' "
+                    "Do NOT call generate_workout_plan — the plan is already saved."
+                )
+                print(f"[voice] pre-generated workout plan for {user_id}: {plan.get('name')}")
+            except Exception as e:
+                print(f"[voice] workout plan pre-gen failed, falling back to agent: {e}")
+                prompt = _CONTEXT_PROMPTS["workout_plan"].replace("{name}", name or "there")
+            text = f"{text}\n{prompt}"
+        elif context and context in _CONTEXT_PROMPTS:
             prompt = _CONTEXT_PROMPTS[context].replace("{name}", name or "there")
             text = f"{text}\n{prompt}"
+
         live_queue.send_content(
             genai_types.Content(
                 role="user",

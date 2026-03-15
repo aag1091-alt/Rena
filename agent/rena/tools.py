@@ -684,7 +684,7 @@ def log_workout(user_id: str, workout_type: str, duration_min: int, calories_bur
     }
 
 
-def get_recent_workouts(user_id: str, days: int = 14) -> dict:
+def get_recent_workouts(user_id: str, days: int = 7) -> dict:
     """
     Return the user's logged workouts from the past N days, mapped by date.
     Use this before generating a workout plan to understand the user's recent activity patterns.
