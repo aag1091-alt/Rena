@@ -5,7 +5,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from rena.voice import handle_voice
-from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal, create_profile, reset_user
+from rena.tools import (
+    scan_image, log_meal, log_weight, get_progress, get_goal, create_profile, reset_user,
+    get_workout_plan, generate_workout_plan, toggle_exercise_complete, log_exercise_from_plan,
+    get_exercise_video, get_exercise_video_status,
+)
 
 load_dotenv()
 
@@ -202,6 +206,57 @@ async def workbook_insight(user_id: str, date: str = None):
         "insight": insight_resp.text.strip(),
         "activity": activity_resp.text.strip(),
     }
+
+
+@app.get("/workout-plan/{user_id}")
+async def get_workout_plan_endpoint(user_id: str, date: str = None):
+    """Get the saved workout plan for a user on a given date (defaults to today)."""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    plan = get_workout_plan(user_id, for_date=date)
+    if plan is None:
+        return {}
+    return plan
+
+
+@app.post("/workout-plan/{user_id}")
+async def generate_workout_plan_endpoint(user_id: str):
+    """Generate and save a Gemini-powered workout plan for today."""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    return generate_workout_plan(user_id)
+
+
+@app.patch("/workout-plan/{user_id}/exercise/{exercise_id}/complete")
+async def toggle_complete_endpoint(user_id: str, exercise_id: str, date: str = None):
+    """Toggle the completed flag on a planned exercise (no workout log entry)."""
+    return toggle_exercise_complete(user_id, exercise_id, for_date=date)
+
+
+class LogExerciseRequest(BaseModel):
+    calories_override: int = None
+    date: str = None
+
+
+@app.post("/workout-plan/{user_id}/exercise/{exercise_id}/log")
+async def log_exercise_endpoint(user_id: str, exercise_id: str, req: LogExerciseRequest = None):
+    """Log a planned exercise into the workout log."""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    r = req or LogExerciseRequest()
+    return log_exercise_from_plan(user_id, exercise_id, for_date=r.date, calories_override=r.calories_override)
+
+
+@app.get("/exercise/video/{exercise_name}")
+async def exercise_video_endpoint(exercise_name: str, target_muscles: str = ""):
+    """Return cached video URL or kick off a Veo 2 generation job."""
+    return get_exercise_video(exercise_name, target_muscles)
+
+
+@app.get("/exercise/video/status/{job_id}")
+async def exercise_video_status_endpoint(job_id: str):
+    """Poll the status of a Veo 2 video generation job."""
+    return get_exercise_video_status(job_id)
 
 
 @app.websocket("/ws/{user_id}")
