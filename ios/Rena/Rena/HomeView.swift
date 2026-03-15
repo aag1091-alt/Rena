@@ -6,6 +6,8 @@ struct HomeView: View {
 
     @State private var goalData: GoalResponse? = nil
     @State private var isLoadingGoal = false
+    @State private var insight: String = ""
+    @State private var isInsightLoading = false
 
     var body: some View {
         NavigationView {
@@ -38,17 +40,9 @@ struct HomeView: View {
                     VStack(spacing: 12) {
                         GoalCard(goal: goalData, isLoading: isLoadingGoal)
 
+                        DaySoFarCard(insight: insight, isLoading: isInsightLoading, isToday: true)
+
                         NudgeStrip()
-
-                        // ── Day so far ──────────────────────────────
-                        sectionHeader("DAY SO FAR")
-
-                        DaySummaryRow(
-                            caloriesConsumed: appState.caloriesConsumed,
-                            caloriesBurned: appState.caloriesBurned,
-                            caloriesTarget: appState.caloriesTarget,
-                            water: appState.waterGlasses
-                        )
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
@@ -56,22 +50,9 @@ struct HomeView: View {
             }
         }
         .navigationBarHidden(true)
-        .onAppear { Task { await loadGoal(); await loadProgress() } }
-        .onChange(of: voice.turnCount) { Task { await loadProgress() } }
+        .onAppear { Task { await loadGoal(); await loadProgress(); await loadInsight() } }
+        .onChange(of: voice.turnCount) { Task { await loadProgress(); await loadInsight() } }
         } // NavigationView
-    }
-
-    // MARK: - Helpers
-
-    private func sectionHeader(_ title: String) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(Color(hex: "B09880"))
-                .kerning(1.0)
-            Spacer()
-        }
-        .padding(.top, 4)
     }
 
     // MARK: - Data
@@ -96,6 +77,15 @@ struct HomeView: View {
         isLoadingGoal = true
         let resp = try? await RenaAPI.shared.getGoal(userId: appState.userId)
         await MainActor.run { goalData = resp; isLoadingGoal = false }
+    }
+
+    private func loadInsight() async {
+        await MainActor.run { isInsightLoading = true }
+        let result = try? await RenaAPI.shared.getWorkbookInsight(userId: appState.userId, date: nil)
+        await MainActor.run {
+            insight = result?.insight ?? ""
+            isInsightLoading = false
+        }
     }
 
     private var greeting: String {

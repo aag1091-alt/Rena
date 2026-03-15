@@ -118,8 +118,10 @@ struct WorkbookView: View {
                         caloriesBurned: displayBurned
                     )
 
-                    // ── Day So Far / Day Recap (AI) ─────────────────
-                    DaySoFarCard(insight: insight, isLoading: isLoading, isToday: isToday)
+                    // ── Day Recap (AI) — past dates only; today's version lives on home screen ──
+                    if !isToday {
+                        DaySoFarCard(insight: insight, isLoading: isLoading, isToday: false)
+                    }
 
                     // ── Workout plan — today only ───────────────────
                     if isToday {
