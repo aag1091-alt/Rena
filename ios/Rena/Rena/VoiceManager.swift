@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import SwiftUI
 
 enum VoiceState {
     case idle
@@ -99,6 +100,7 @@ class VoiceManager: NSObject, ObservableObject {
     func disconnect() {
         disconnectWebSocket()
         state = .idle
+        transcript = ""
     }
 
     func sendText(_ text: String) {
@@ -186,10 +188,19 @@ class VoiceManager: NSObject, ObservableObject {
                     DispatchQueue.main.async { self.state = .speaking }
                 case .string(let text):
                     if let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
-                        if json["type"] as? String == "turn_complete" {
+                        let msgType = json["type"] as? String
+                        if msgType == "turn_complete" {
                             DispatchQueue.main.async {
                                 self.state = .listening
                                 self.turnCount += 1
+                                // Fade out CC captions after a short pause
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                    withAnimation(.easeOut(duration: 0.4)) { self.transcript = "" }
+                                }
+                            }
+                        } else if msgType == "transcript", let t = json["text"] as? String, !t.isEmpty {
+                            DispatchQueue.main.async {
+                                withAnimation(.easeIn(duration: 0.15)) { self.transcript = t }
                             }
                         } else if let t = json["text"] as? String {
                             DispatchQueue.main.async {

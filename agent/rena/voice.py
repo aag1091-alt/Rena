@@ -161,6 +161,13 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                             await websocket.send_text(
                                 json.dumps({"type": "text", "text": part.text})
                             )
+                if event.output_transcription and event.output_transcription.text:
+                    cc = event.output_transcription.text.strip()
+                    if cc and not ws_closed:
+                        print(f"[voice] cc: {cc[:60]!r} → {user_id}")
+                        await websocket.send_text(
+                            json.dumps({"type": "transcript", "text": cc})
+                        )
                 if event.turn_complete and not ws_closed:
                     print(f"[voice] turn_complete → {user_id}")
                     await websocket.send_text(json.dumps({"type": "turn_complete"}))

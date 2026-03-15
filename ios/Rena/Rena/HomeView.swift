@@ -72,6 +72,22 @@ struct HomeView: View {
 
                 Spacer()
 
+                // ── CC captions ────────────────────────────────────
+                if isConnected && !voice.transcript.isEmpty {
+                    Text(voice.transcript)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(.black.opacity(0.62))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal, 32)
+                        .transition(.opacity)
+                }
+
                 // ── Rena orb ───────────────────────────────────────
                 VStack(spacing: 8) {
                     Button(action: toggleVoice) {
