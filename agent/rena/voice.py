@@ -31,6 +31,10 @@ load_dotenv()
 session_service = InMemorySessionService()
 APP_NAME = "rena"
 
+# Sessions kept alive after disconnect so Gemini can resume them on reconnect.
+# Keyed by user_id → session_id.
+_active_sessions: dict[str, str] = {}
+
 RUN_CONFIG = RunConfig(
     response_modalities=[genai_types.Modality.AUDIO],
     speech_config=genai_types.SpeechConfig(
@@ -38,6 +42,7 @@ RUN_CONFIG = RunConfig(
             prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name="Aoede")
         )
     ),
+    session_resumption=genai_types.SessionResumptionConfig(transparent=True),
 )
 
 
@@ -75,10 +80,21 @@ async def handle_voice(websocket: WebSocket, user_id: str,
     await websocket.accept()
     print(f"[voice] connected: {user_id} context={context}")
 
-    session = await session_service.create_session(
-        app_name=APP_NAME,
-        user_id=user_id,
-    )
+    # Reuse existing session if available (enables transparent resumption on reconnect).
+    # New context (e.g. switching screens) always gets a fresh session.
+    existing_session_id = _active_sessions.get(user_id) if not context else None
+    if existing_session_id:
+        session = await session_service.get_session(
+            app_name=APP_NAME, user_id=user_id, session_id=existing_session_id
+        )
+        if session is None:
+            session = await session_service.create_session(app_name=APP_NAME, user_id=user_id)
+        else:
+            print(f"[voice] resuming session {session.id} for {user_id}")
+    else:
+        session = await session_service.create_session(app_name=APP_NAME, user_id=user_id)
+
+    _active_sessions[user_id] = session.id
 
     runner = Runner(
         app_name=APP_NAME,
