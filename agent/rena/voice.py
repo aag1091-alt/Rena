@@ -11,6 +11,8 @@ import json
 import traceback
 import warnings
 
+import sentry_sdk
+
 from dotenv import load_dotenv
 from fastapi import WebSocket, WebSocketDisconnect
 from google.adk.agents.live_request_queue import LiveRequestQueue
@@ -145,9 +147,11 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             # 1000 = Gemini closed cleanly because we closed live_queue after iOS disconnect
             if e.status_code != 1000:
                 traceback.print_exc()
-        except Exception:
+                sentry_sdk.capture_exception(e)
+        except Exception as e:
             if not ws_closed:
                 traceback.print_exc()
+                sentry_sdk.capture_exception(e)
         finally:
             live_queue.close()
 
@@ -184,8 +188,9 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                         )
         except WebSocketDisconnect:
             print(f"[voice] disconnected: {user_id}")
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
+            sentry_sdk.capture_exception(e)
         finally:
             ws_closed = True
             live_queue.close()

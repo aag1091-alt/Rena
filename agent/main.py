@@ -1,4 +1,5 @@
 import os
+import sentry_sdk
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
@@ -6,6 +7,12 @@ from rena.voice import handle_voice
 from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal, update_visual_journey, create_profile, reset_user, correct_scan
 
 load_dotenv()
+
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    traces_sample_rate=1.0,
+    send_default_pii=True,
+)
 
 app = FastAPI(title="Rena Agent API")
 
