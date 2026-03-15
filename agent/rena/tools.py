@@ -325,7 +325,7 @@ def get_goal(user_id: str) -> dict:
                     break
 
             if image_data:
-                bucket_name = os.getenv("GCS_BUCKET", "rena-visual-journey")
+                bucket_name = os.getenv("GCS_BUCKET", "rena-assets")
                 storage_client = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
                 bucket = storage_client.bucket(bucket_name)
 
@@ -1080,7 +1080,7 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
     import re
 
     slug         = re.sub(r"[^a-z0-9]+", "_", exercise_name.lower()).strip("_")
-    bucket_name  = os.getenv("GCS_BUCKET", "rena-visual-journey")
+    bucket_name  = os.getenv("GCS_BUCKET", "rena-assets")
     gcs_client   = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
     bucket       = gcs_client.bucket(bucket_name)
     blob_path    = f"exercise_videos/{slug}.mp4"
@@ -1141,7 +1141,7 @@ def get_exercise_video_status(job_id: str) -> dict:
 
     job         = job_doc.to_dict()
     slug        = job["slug"]
-    bucket_name = os.getenv("GCS_BUCKET", "rena-visual-journey")
+    bucket_name = os.getenv("GCS_BUCKET", "rena-assets")
 
     if job["status"] == "done":
         return {"status": "done", "video_url": f"https://storage.googleapis.com/{bucket_name}/exercise_videos/{slug}.mp4"}
