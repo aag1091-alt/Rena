@@ -782,59 +782,6 @@ The image should feel {('like the very start of something exciting' if pct < 25 
     }
 
 
-def correct_scan(user_id: str, description: str, correction: str) -> dict:
-    """
-    Recalculate nutrition given a user's voice correction to the original food scan.
-    Call this when the user says the food identification was wrong or the portion was different.
-    The corrected result is saved and the app will pick it up automatically.
-
-    Args:
-        user_id: The user's unique ID.
-        description: Original food description from scan (e.g. "1 samosa").
-        correction: What the user wants changed (e.g. "it was 2 samosas" or "grilled not fried").
-
-    Returns:
-        Updated nutrition with corrected calories and macros.
-    """
-    import json, re
-    client = _get_genai_client()
-    prompt = (
-        f'Original food identified: "{description}"\n'
-        f'User correction: "{correction}"\n\n'
-        "Recalculate the nutritional values applying the correction. "
-        "Return JSON only, no explanation:\n"
-        '{"description": "corrected name", "total_calories": 0, '
-        '"total_protein_g": 0, "total_carbs_g": 0, "total_fat_g": 0, "confidence": "high"}'
-    )
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    raw = response.text.strip()
-    raw = re.sub(r"^```(?:json)?\n?", "", raw)
-    raw = re.sub(r"\n?```$", "", raw)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        # Try extracting embedded JSON object
-        match = re.search(r"\{[\s\S]*\}", raw)
-        if match:
-            try:
-                data = json.loads(match.group())
-            except json.JSONDecodeError:
-                print(f"[correct_scan] JSON parse failed, raw:\n{raw}")
-                return {"identified": False, "description": description, "total_calories": 0}
-        else:
-            print(f"[correct_scan] JSON parse failed, raw:\n{raw}")
-            return {"identified": False, "description": description, "total_calories": 0}
-    data["identified"] = True
-
-    # Store in Firestore so iOS can poll and pick up the corrected result
-    _user_ref(user_id).collection("pending").document("scan_correction").set({
-        "result": data,
-        "created_at": firestore.SERVER_TIMESTAMP,
-    })
-
-    return data
-
-
 def log_weight(user_id: str, weight_kg: float) -> dict:
     """
     Log the user's weight for today. If called multiple times today, only the latest is kept.

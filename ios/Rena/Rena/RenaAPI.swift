@@ -254,11 +254,6 @@ class RenaAPI {
         return try JSONDecoder().decode(GoalResponse.self, from: data)
     }
 
-    func devReset(userId: String) async throws {
-        let req = request("\(kBaseURL)/dev/reset/\(userId)", method: "DELETE")
-        _ = try await session.data(for: req)
-    }
-
     func logMeal(userId: String, name: String, calories: Int, proteinG: Int = 0, carbsG: Int = 0, fatG: Int = 0) async throws {
         var req = request("\(kBaseURL)/log/meal", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
