@@ -332,18 +332,18 @@ struct CustomTabBar: View {
                     .contentShape(Rectangle())
                 }.buttonStyle(.plain)
 
-                // ── Workbook ──
-                Button {
-                    selectedTab = 2; if showRena { showRena = false }
-                } label: {
-                    tabLabel(icon: "camera.fill", text: "Workbook", active: currentTab == 2)
-                }.buttonStyle(.plain)
-
                 // ── Scan ──
                 Button {
                     selectedTab = 3; if showRena { showRena = false }
                 } label: {
-                    tabLabel(icon: "note.text", text: "Scan", active: currentTab == 3)
+                    tabLabel(icon: "camera.fill", text: "Scan", active: currentTab == 3)
+                }.buttonStyle(.plain)
+
+                // ── Workbook ──
+                Button {
+                    selectedTab = 2; if showRena { showRena = false }
+                } label: {
+                    tabLabel(icon: "note.text", text: "Workbook", active: currentTab == 2)
                 }.buttonStyle(.plain)
             }
             .padding(.horizontal, 8)
