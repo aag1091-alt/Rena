@@ -142,15 +142,8 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                     break
                 if event.content and event.content.parts:
                     for part in event.content.parts:
-                        # Skip internal thinking/preamble text — Gemini 2.5 Flash streams
-                        # markdown-formatted reasoning before tool calls; sending it to iOS
-                        # causes the client to receive junk text and may drop the connection
-                        # before the actual tool call fires.
-                        if getattr(part, "thought", False) or (
-                            part.text and not part.inline_data and
-                            part.text.startswith("**")
-                        ):
-                            print(f"[voice] skipping thought part: {str(part.text or '')[:60]!r}")
+                        # Skip thought parts (thinking_budget=0 prevents most, but guard anyway)
+                        if getattr(part, "thought", False):
                             continue
                         if part.inline_data:
                             print(f"[voice] sending audio: {len(part.inline_data.data)} bytes → {user_id}")
