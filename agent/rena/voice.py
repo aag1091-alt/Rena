@@ -52,11 +52,13 @@ _CONTEXT_PROMPTS = {
         "Keep it under 20 seconds and do not ask any questions beyond signing in."
     ),
     "goal": (
-        "Say 'Hi {name}!' then immediately ask ONE question: "
-        "'What are you working toward — losing weight, building fitness, training for an event, or something else?' "
-        "When they answer, ask for a target date if they haven't given one. "
-        "Then call set_goal right away. If it's a weight goal, say 'I already have your starting weight' — never ask for it. "
-        "Keep the whole conversation to 2–3 exchanges maximum."
+        "Say 'Hi {name}!' then ask: 'What are you working toward — losing weight, building fitness, training for an event, or something else?' "
+        "When they answer: "
+        "- If it's a weight goal and they haven't said how much, ask 'How much do you want to lose, or what weight are you aiming for?' "
+        "- Then ask for their target date if they haven't given one. "
+        "- If they mention their current weight at any point, say 'I already have your starting weight' — do not ask for it. "
+        "Once you have goal + target amount (for weight goals) + deadline, call set_goal immediately. "
+        "Keep it to 3 exchanges maximum."
     ),
     "home": (
         "Say 'Hi {name}! What would you like to do today?' "
