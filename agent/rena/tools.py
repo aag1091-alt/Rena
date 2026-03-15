@@ -944,8 +944,26 @@ def _generate_coaching_script(exercise_name: str, target_muscles: str = "") -> s
         f"Sound like a real coach — direct, confident, encouraging. 28-35 words. "
         f"No intro phrases like 'Alright' or 'Let's go'. Start straight with the cue."
     )
+    from google.genai import types as genai_types
+
+    # Disable safety filters — fitness coaching uses legitimate anatomical terms
+    # (glutes, chest, groin stretch, etc.) that can trip content filters.
+    safety_off = [
+        genai_types.SafetySetting(category=c, threshold="OFF")
+        for c in [
+            "HARM_CATEGORY_HARASSMENT",
+            "HARM_CATEGORY_HATE_SPEECH",
+            "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            "HARM_CATEGORY_DANGEROUS_CONTENT",
+        ]
+    ]
+
     client = _get_genai_client()
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(safety_settings=safety_off),
+    )
     script = response.text.strip()
     print(f"[script] '{exercise_name}': {script}")
     return script
