@@ -185,8 +185,8 @@ async def workbook_insight(user_id: str):
 
     client = _get_genai_client()
     insight_resp, activity_resp = await asyncio.gather(
-        asyncio.to_thread(client.models.generate_content, model="gemini-2.0-flash", contents=insight_prompt),
-        asyncio.to_thread(client.models.generate_content, model="gemini-2.0-flash", contents=activity_prompt),
+        asyncio.to_thread(client.models.generate_content, model="gemini-2.5-flash", contents=insight_prompt),
+        asyncio.to_thread(client.models.generate_content, model="gemini-2.5-flash", contents=activity_prompt),
     )
     return {
         "insight": insight_resp.text.strip(),
