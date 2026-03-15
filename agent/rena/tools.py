@@ -8,9 +8,11 @@ from google.cloud import firestore, storage
 
 db = firestore.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
 
+# Vertex AI client — used ONLY for Veo 2 video generation (requires Vertex AI)
 _genai_client = None
 
 def _get_genai_client():
+    """Vertex AI client — Veo 2 only."""
     global _genai_client
     if _genai_client is None:
         _genai_client = genai.Client(
@@ -19,6 +21,23 @@ def _get_genai_client():
             location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
         )
     return _genai_client
+
+
+# Gemini API client — uses GEMINI_API_KEY for all text/vision generation
+# (workout plans, coaching scripts, insights, image gen — draws from API credits, not Vertex billing)
+_gemini_api_client = None
+
+def _get_text_client():
+    """Gemini API client using API key — cheaper for all text/vision calls."""
+    global _gemini_api_client
+    if _gemini_api_client is None:
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            _gemini_api_client = genai.Client(api_key=api_key)
+        else:
+            # Fallback to Vertex AI if no API key configured
+            _gemini_api_client = _get_genai_client()
+    return _gemini_api_client
 
 
 def _user_ref(user_id: str):
@@ -301,7 +320,7 @@ def get_goal(user_id: str) -> dict:
     if not goal_doc.get("image_url"):
         goal_text = goal_doc.get("goal", "")
         try:
-            client = _get_genai_client()
+            client = _get_text_client()
             from google.genai import types as genai_types
 
             prompt = (
@@ -455,7 +474,7 @@ Each object:
   "weight_kg": float
 }}"""
 
-    client = _get_genai_client()
+    client = _get_text_client()
     response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
     raw = response.text.strip()
     raw = re.sub(r"^```(?:json)?\n?", "", raw)
@@ -491,7 +510,7 @@ def _estimate_macros(meal_name: str, calories: int) -> dict:
     """Use Gemini to estimate protein/carbs/fat for a food when not provided."""
     import json, re
     try:
-        client = _get_genai_client()
+        client = _get_text_client()
         prompt = (
             f'Estimate macronutrients for: "{meal_name}" (~{calories} kcal).\n'
             'Return JSON only, no explanation: {"protein_g": 0, "carbs_g": 0, "fat_g": 0}\n'
@@ -708,7 +727,7 @@ def scan_image(user_id: str, image_base64: str, mime_type: str = "image/jpeg") -
     Returns:
         Identified food items with calorie and macro estimates.
     """
-    client = _get_genai_client()
+    client = _get_text_client()
     image_bytes = base64.b64decode(image_base64)
 
     from google.genai import types as genai_types
@@ -875,7 +894,7 @@ Return ONLY valid JSON, no markdown, no explanation:
   ]
 }}"""
 
-    client   = _get_genai_client()
+    client   = _get_text_client()
     response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
     raw      = response.text.strip()
     raw      = re.sub(r"^```(?:json)?\n?", "", raw)
@@ -958,7 +977,7 @@ def _generate_coaching_script(exercise_name: str, target_muscles: str = "") -> s
         ]
     ]
 
-    client = _get_genai_client()
+    client = _get_text_client()
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
