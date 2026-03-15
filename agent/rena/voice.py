@@ -8,6 +8,7 @@ Flow:
 
 import asyncio
 import json
+import time
 import traceback
 import warnings
 from datetime import datetime, timezone
@@ -35,6 +36,11 @@ APP_NAME = "rena"
 # Sessions kept alive after disconnect so Gemini can resume them on reconnect.
 # Keyed by user_id → session_id.
 _active_sessions: dict[str, str] = {}
+
+# Rich context cache — avoids blocking session start with Firestore reads.
+# Keyed by user_id → (context_text, timestamp).
+_context_cache: dict[str, tuple[str, float]] = {}
+_CONTEXT_CACHE_TTL = 600  # 10 minutes
 
 RUN_CONFIG = RunConfig(
     response_modalities=[genai_types.Modality.AUDIO],
@@ -151,6 +157,28 @@ async def _build_rich_context_text(user_id: str, name: str) -> str:
         return ""
 
 
+async def _get_context_for_user(user_id: str, name: str) -> str:
+    """Return rich context from cache if fresh; otherwise fetch and cache it."""
+    cached = _context_cache.get(user_id)
+    if cached:
+        text, ts = cached
+        if time.time() - ts < _CONTEXT_CACHE_TTL:
+            return text
+    text = await _build_rich_context_text(user_id, name)
+    _context_cache[user_id] = (text, time.time())
+    return text
+
+
+async def _refresh_context_cache(user_id: str, name: str):
+    """Rebuild the context cache in the background after a session ends."""
+    try:
+        text = await _build_rich_context_text(user_id, name)
+        _context_cache[user_id] = (text, time.time())
+        print(f"[voice] context cache refreshed for {user_id}")
+    except Exception as e:
+        print(f"[voice] context cache refresh failed: {e}")
+
+
 async def _save_session_note_async(user_id: str, context: str, name: str):
     """Generate a brief summary of the session and save it to Firestore."""
     from rena.tools import get_progress, save_session_note, _get_text_client
@@ -235,7 +263,7 @@ async def handle_voice(websocket: WebSocket, user_id: str,
         # Prepend rich context for all non-onboarding sessions so Rena always
         # knows today's state, recent activity, and past conversation notes.
         if context not in ("intro", "goal", None):
-            rich = await _build_rich_context_text(user_id, name or "there")
+            rich = await _get_context_for_user(user_id, name or "there")
             if rich:
                 text = f"{text}\n{rich}"
 
@@ -367,9 +395,11 @@ async def handle_voice(websocket: WebSocket, user_id: str,
         finally:
             ws_closed = True
             live_queue.close()
-            # Save a session note after every real interaction (not onboarding)
+            # Save a session note and refresh the context cache after every real
+            # interaction (not onboarding) — both run in the background.
             if context not in ("intro", "goal", None):
                 asyncio.create_task(_save_session_note_async(user_id, context, name or "there"))
+                asyncio.create_task(_refresh_context_cache(user_id, name or "there"))
 
     send_task = asyncio.create_task(send_to_client())
     recv_task = asyncio.create_task(recv_from_client())
