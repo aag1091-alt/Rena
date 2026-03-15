@@ -655,13 +655,14 @@ Return exactly this structure:
 {
   "identified": true,
   "description": "brief overall description",
-  "items": [{"name": "item name", "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
+  "items": [{"name": "item name", "weight_g": 0, "calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0}],
   "total_calories": 0,
   "total_protein_g": 0,
   "total_carbs_g": 0,
   "total_fat_g": 0,
   "confidence": "high|medium|low"
 }
+weight_g is the estimated weight in grams of that item as visible in the photo.
 If a dish has components (e.g. rice + curry + salad), list each as a separate item.
 If no food is visible return {"identified": false}."""
         ],

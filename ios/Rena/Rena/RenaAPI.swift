@@ -21,6 +21,7 @@ struct OnboardResponse: Codable {
 struct ScanItem: Codable, Identifiable {
     var id: String { name }
     let name: String
+    let weightG: Int?
     let calories: Int
     let proteinG: Int
     let carbsG: Int
@@ -28,13 +29,14 @@ struct ScanItem: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case name, calories
+        case weightG  = "weight_g"
         case proteinG = "protein_g"
         case carbsG   = "carbs_g"
         case fatG     = "fat_g"
     }
 
-    init(name: String, calories: Int, proteinG: Int, carbsG: Int, fatG: Int) {
-        self.name = name; self.calories = calories
+    init(name: String, weightG: Int? = nil, calories: Int, proteinG: Int, carbsG: Int, fatG: Int) {
+        self.name = name; self.weightG = weightG; self.calories = calories
         self.proteinG = proteinG; self.carbsG = carbsG; self.fatG = fatG
     }
 
@@ -46,6 +48,7 @@ struct ScanItem: Codable, Identifiable {
             if let d = try? c.decode(Double.self, forKey: key) { return Int(d) }
             return 0
         }
+        weightG  = intOrDouble(.weightG)
         calories = intOrDouble(.calories)
         proteinG = intOrDouble(.proteinG)
         carbsG   = intOrDouble(.carbsG)

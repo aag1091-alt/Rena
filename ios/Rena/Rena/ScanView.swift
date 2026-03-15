@@ -274,13 +274,20 @@ struct ScanItemCard: View {
     private var sliderMin: Double { 50 }
     private var sliderMax: Double { Double(max(500, item.calories * 3)) }
 
-    /// Estimated grams based on macro totals (protein+carbs+fat ≈ dry weight),
-    /// scaled proportionally to the adjusted calorie amount.
+    /// Estimated grams scaled proportionally to the adjusted calories.
+    /// Uses weight_g from the scan if available, otherwise falls back to macro totals.
     private var estimatedGrams: Int? {
-        let totalMacroG = item.proteinG + item.carbsG + item.fatG
-        guard totalMacroG > 0, item.calories > 0 else { return nil }
+        let baseG: Int
+        if let w = item.weightG, w > 0 {
+            baseG = w
+        } else {
+            let macroG = item.proteinG + item.carbsG + item.fatG
+            guard macroG > 0 else { return nil }
+            baseG = macroG
+        }
+        guard item.calories > 0 else { return nil }
         let ratio = Double(adjustedCalories) / Double(item.calories)
-        return max(1, Int(Double(totalMacroG) * ratio))
+        return max(1, Int(Double(baseG) * ratio))
     }
 
     var body: some View {
