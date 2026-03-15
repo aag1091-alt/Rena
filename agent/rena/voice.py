@@ -99,7 +99,15 @@ async def handle_voice(websocket: WebSocket, user_id: str,
     # agent has a single trigger → single response with no double-greeting.
     async def inject_opening():
         await asyncio.sleep(0.2)
-        text = f"[user_id:{user_id}]"
+        # Inject user_id + current weight so the agent can calculate absolute
+        # target weights without asking the user for their current weight.
+        from rena.tools import _user_ref
+        try:
+            profile = _user_ref(user_id).get().to_dict() or {}
+            weight_kg = profile.get("weight_kg")
+            text = f"[user_id:{user_id}]" + (f"[current_weight_kg:{weight_kg}]" if weight_kg else "")
+        except Exception:
+            text = f"[user_id:{user_id}]"
         if context and context in _CONTEXT_PROMPTS:
             prompt = _CONTEXT_PROMPTS[context].replace("{name}", name or "there")
             text = f"{text}\n{prompt}"
