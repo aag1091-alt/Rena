@@ -53,7 +53,7 @@ _CONTEXT_PROMPTS = {
     ),
     "goal": (
         "You already know their current weight from [current_weight_kg:X] in this message — use it to calculate target_value directly. "
-        "Say 'Hi {name}!' then ask: 'What are you working toward — losing weight, building fitness, training for an event, or something else?' "
+        "SPEAK OUT LOUD NOW: Say 'Hi {name}!' then ask: 'What are you working toward — losing weight, building fitness, training for an event, or something else?' "
         "When they answer: "
         "- Weight goal: if they give an amount or target (e.g. 'lose 5kg', 'get to 75kg'), compute target_value from their current weight and ask only for the deadline. "
         "  If they say just 'lose weight' with no amount, ask 'What weight are you aiming for?' then ask for the deadline. "
@@ -62,7 +62,7 @@ _CONTEXT_PROMPTS = {
         "Call set_goal as soon as you have everything. Keep it to 2–3 exchanges."
     ),
     "home": (
-        "Say 'Hi {name}! What would you like to do today?' "
+        "SPEAK OUT LOUD NOW: Say 'Hi {name}! What would you like to do today?' "
         "Keep it short and friendly — one sentence."
     ),
 }
@@ -131,7 +131,10 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                         # markdown-formatted reasoning before tool calls; sending it to iOS
                         # causes the client to receive junk text and may drop the connection
                         # before the actual tool call fires.
-                        if getattr(part, "thought", False):
+                        if getattr(part, "thought", False) or (
+                            part.text and not part.inline_data and
+                            part.text.startswith("**")
+                        ):
                             print(f"[voice] skipping thought part: {str(part.text or '')[:60]!r}")
                             continue
                         if part.inline_data:
