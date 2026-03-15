@@ -52,6 +52,8 @@ struct HomeView: View {
                         }
                         .buttonStyle(.plain)
 
+                        NudgeStrip()
+
                         // ── Day so far ──────────────────────────────
                         sectionHeader("DAY SO FAR")
 
@@ -71,8 +73,6 @@ struct HomeView: View {
 
                         DayFoodLog(meals: appState.mealsLogged)
                         DayWorkoutLog(workouts: appState.workoutsLogged)
-
-                        NudgeStrip()
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
