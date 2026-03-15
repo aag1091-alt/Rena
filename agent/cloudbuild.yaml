@@ -25,16 +25,13 @@ steps:
       - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
       - --tag
       - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
-      - --tag
-      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:$SHORT_SHA
       - .
 
-  # Push both tags
+  # Push
   - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - --all-tags
-      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent
+      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
 
   # Deploy to Cloud Run
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -44,11 +41,10 @@ steps:
       - deploy
       - rena-agent
       - --image
-      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:$SHORT_SHA
+      - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
       - --region
       - us-central1
       - --allow-unauthenticated
 
 images:
   - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest
-  - us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:$SHORT_SHA
