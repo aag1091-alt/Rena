@@ -17,8 +17,9 @@ steps:
       - -c
       - docker pull us-central1-docker.pkg.dev/rena-490107/cloud-run-source-deploy/rena-agent:latest || true
 
-  # Build with cache-from
+  # Build with cache-from (context is agent/ subdirectory)
   - name: gcr.io/cloud-builders/docker
+    dir: agent
     args:
       - build
       - --cache-from
