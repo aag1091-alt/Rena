@@ -269,6 +269,18 @@ struct PlannedWorkout: Codable {
         case id, name, date, exercises
         case totalDurationMin = "total_duration_min"
     }
+
+    // Firestore sometimes returns Int fields as Double (e.g. 45.0)
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id        = try c.decode(String.self, forKey: .id)
+        name      = try c.decode(String.self, forKey: .name)
+        date      = try c.decode(String.self, forKey: .date)
+        exercises = try c.decode([PlannedExercise].self, forKey: .exercises)
+        if let i = try? c.decode(Int.self,    forKey: .totalDurationMin) { totalDurationMin = i }
+        else if let d = try? c.decode(Double.self, forKey: .totalDurationMin) { totalDurationMin = Int(d) }
+        else { totalDurationMin = 0 }
+    }
 }
 
 struct VideoStatus: Codable {
@@ -408,7 +420,7 @@ class RenaAPI {
         let req = request(urlString)
         let (data, _) = try await session.data(for: req)
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], json.isEmpty { return nil }
-        return try? JSONDecoder().decode(PlannedWorkout.self, from: data)
+        return try JSONDecoder().decode(PlannedWorkout.self, from: data)
     }
 
     func generateWorkoutPlan(userId: String) async throws -> PlannedWorkout {

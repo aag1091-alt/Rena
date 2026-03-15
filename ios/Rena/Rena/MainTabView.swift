@@ -17,6 +17,9 @@ struct MainTabView: View {
             WorkbookView()
                 .tabItem { Label("Workbook", systemImage: "note.text") }
 
+            GoalView()
+                .tabItem { Label("Journey", systemImage: "star.fill") }
+
             // DEV — remove before App Store submission
             VStack(spacing: 20) {
                 Text("Dev Tools").font(.headline)
