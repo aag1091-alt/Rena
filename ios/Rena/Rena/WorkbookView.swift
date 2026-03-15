@@ -5,6 +5,7 @@ struct WorkbookView: View {
     @EnvironmentObject var voice: VoiceManager
 
     @State private var insight: String = ""
+    @State private var activity: String = ""
     @State private var insightLoading = false
     @State private var activeContext: String? = nil
     @State private var isVoiceConnected = false
@@ -65,6 +66,8 @@ struct WorkbookView: View {
 
                     // ── Today's activity summary ───────────────────
                     TodayActivityCard(
+                        aiSummary: activity,
+                        isLoading: insightLoading,
                         meals: appState.mealsLogged,
                         workouts: appState.workoutsLogged
                     )
@@ -108,9 +111,12 @@ struct WorkbookView: View {
     // MARK: - Data
 
     private func refresh() async {
-        insightLoading = true
-        if let text = try? await RenaAPI.shared.getWorkbookInsight(userId: appState.userId), !text.isEmpty {
-            await MainActor.run { insight = text }
+        await MainActor.run { insightLoading = true }
+        if let result = try? await RenaAPI.shared.getWorkbookInsight(userId: appState.userId) {
+            await MainActor.run {
+                if !result.insight.isEmpty  { insight  = result.insight  }
+                if !result.activity.isEmpty { activity = result.activity }
+            }
         }
         await MainActor.run { insightLoading = false }
     }
@@ -257,86 +263,59 @@ struct DaySoFarCard: View {
 // MARK: - Today's activity (food + workout as friendly text)
 
 struct TodayActivityCard: View {
+    let aiSummary: String
+    let isLoading: Bool
     let meals: [MealEntry]
     let workouts: [WorkoutEntry]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "fork.knife")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(hex: "E76F51"))
-                    Text("FOOD")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color(hex: "B09880"))
-                        .kerning(1.0)
-                }
-                Text(mealSummary)
-                    .font(.system(size: 14))
-                    .foregroundColor(Color(hex: "3D2B1F"))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(2)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "list.bullet.rectangle")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(hex: "E76F51"))
+                Text("TODAY'S ACTIVITY")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color(hex: "B09880"))
+                    .kerning(1.0)
             }
 
-            Divider()
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "figure.run")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(hex: "2A9D8F"))
-                    Text("EXERCISE")
-                        .font(.system(size: 10, weight: .semibold))
+            if isLoading {
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.8)
+                    Text("Summarising your day…")
+                        .font(.system(size: 14))
                         .foregroundColor(Color(hex: "B09880"))
-                        .kerning(1.0)
                 }
-                Text(workoutSummary)
-                    .font(.system(size: 14))
+            } else if !aiSummary.isEmpty {
+                Text(aiSummary)
+                    .font(.system(size: 15))
                     .foregroundColor(Color(hex: "3D2B1F"))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(3)
+            } else {
+                Text(fallback)
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(hex: "B09880"))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineSpacing(2)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .background(Color.white)
         .cornerRadius(18)
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
     }
 
-    private var mealSummary: String {
-        guard !meals.isEmpty else {
-            return "Nothing logged yet — tell Rena what you've eaten and she'll track it."
+    private var fallback: String {
+        if meals.isEmpty && workouts.isEmpty {
+            return "Nothing logged yet — tell Rena what you've eaten or how you moved today."
         }
-        let total = meals.reduce(0) { $0 + $1.calories }
-        switch meals.count {
-        case 1:
-            return "You had \(meals[0].name.lowercased()) (\(meals[0].calories) kcal)."
-        case 2:
-            return "You had \(meals[0].name.lowercased()) and \(meals[1].name.lowercased()). \(total) kcal total."
-        case 3:
-            return "You had \(meals[0].name.lowercased()), \(meals[1].name.lowercased()), and \(meals[2].name.lowercased()). \(total) kcal total."
-        default:
-            let first = meals.prefix(2).map { $0.name.lowercased() }.joined(separator: ", ")
-            let extras = meals.count - 2
-            return "You had \(first) and \(extras) more thing\(extras > 1 ? "s" : ""). \(total) kcal total."
+        if workouts.isEmpty {
+            return "You've logged \(meals.count) meal\(meals.count > 1 ? "s" : "") today. No workouts yet."
         }
-    }
-
-    private var workoutSummary: String {
-        guard !workouts.isEmpty else {
-            return "No workouts logged yet. Ask Rena to suggest one for today."
-        }
-        let totalBurned = workouts.reduce(0) { $0 + $1.caloriesBurned }
-        switch workouts.count {
-        case 1:
-            let w = workouts[0]
-            return "You did \(w.workoutType.lowercased()) for \(w.durationMin) min and burned \(w.caloriesBurned) kcal. Nice work."
-        case 2:
-            return "You did \(workouts[0].workoutType.lowercased()) and \(workouts[1].workoutType.lowercased()), burning \(totalBurned) kcal total. Great day."
-        default:
-            return "You logged \(workouts.count) workouts today and burned \(totalBurned) kcal total. Solid effort."
-        }
+        return "You've logged \(meals.count) meal\(meals.count > 1 ? "s" : "") and \(workouts.count) workout\(workouts.count > 1 ? "s" : "") today."
     }
 }
 

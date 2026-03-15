@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sentry_sdk
 from dotenv import load_dotenv
@@ -149,8 +150,8 @@ async def workbook_insight(user_id: str):
     hour = datetime.now(timezone.utc).hour
     time_of_day = "morning" if hour < 12 else ("evening" if hour >= 17 else "afternoon")
 
-    meals_count = len(p.get("meals_logged") or [])
-    workouts_count = len(p.get("workouts_logged") or [])
+    meals = p.get("meals_logged") or []
+    workouts = p.get("workouts_logged") or []
     consumed = p.get("calories_consumed", 0)
     target = p.get("calories_target", 2000)
     burned = p.get("calories_burned", 0)
@@ -158,18 +159,39 @@ async def workbook_insight(user_id: str):
     protein_target = p.get("protein_target_g", 120)
     water = p.get("water_glasses", 0)
 
-    prompt = (
+    meals_detail = ", ".join(
+        f"{m['name']} ({m.get('calories', 0)} kcal)" for m in meals
+    ) if meals else "nothing logged yet"
+
+    workouts_detail = ", ".join(
+        f"{w['type']} {w.get('duration_min', 0)} min ({w.get('calories_burned', 0)} kcal burned)"
+        for w in workouts
+    ) if workouts else "no workouts logged"
+
+    insight_prompt = (
         f"You are Rena, a warm health companion. Write exactly 2 short sentences "
         f"interpreting this person's {time_of_day} so far. Be specific, encouraging, and end with one actionable tip. "
         f"No markdown, no bullet points.\n\n"
-        f"Calories: {consumed}/{target} consumed, {burned} burned from exercise. "
-        f"Protein: {protein}g/{protein_target}g. Water: {water}/8 glasses. "
-        f"Meals logged: {meals_count}. Workouts logged: {workouts_count}."
+        f"Calories: {consumed}/{target} consumed, {burned} burned. "
+        f"Protein: {protein}g/{protein_target}g. Water: {water}/8 glasses."
+    )
+
+    activity_prompt = (
+        f"You are Rena. Write 1-2 warm, natural sentences summarising what this person ate and how they moved today. "
+        f"Sound like a friend, not a food diary. No markdown, no lists.\n\n"
+        f"Food today: {meals_detail}.\n"
+        f"Exercise today: {workouts_detail}."
     )
 
     client = _get_genai_client()
-    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
-    return {"insight": response.text.strip()}
+    insight_resp, activity_resp = await asyncio.gather(
+        asyncio.to_thread(client.models.generate_content, model="gemini-2.0-flash", contents=insight_prompt),
+        asyncio.to_thread(client.models.generate_content, model="gemini-2.0-flash", contents=activity_prompt),
+    )
+    return {
+        "insight": insight_resp.text.strip(),
+        "activity": activity_resp.text.strip(),
+    }
 
 
 @app.websocket("/ws/{user_id}")
