@@ -28,6 +28,7 @@ class VoiceManager: NSObject, ObservableObject {
     private let audioPlayer = AVAudioPlayerNode()
     private var playerFormat: AVAudioFormat?
     private var micTapInstalled = false
+    private var thinkingWorkItem: DispatchWorkItem?
 
     override init() {
         super.init()
@@ -98,6 +99,8 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Disconnect (WebSocket only — engine stays alive)
 
     func disconnect() {
+        thinkingWorkItem?.cancel()
+        thinkingWorkItem = nil
         disconnectWebSocket()
         state = .idle
         transcript = ""
@@ -171,6 +174,18 @@ class VoiceManager: NSObject, ObservableObject {
             micChunkCount += 1
             if micChunkCount % 50 == 1 { print("[audio] mic chunk \(micChunkCount) ws=\(self.webSocket != nil)") }
             self.webSocket?.send(.data(data)) { _ in }
+
+            // After 500 ms of silence from the server, assume Gemini is processing → show thinking
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.thinkingWorkItem?.cancel()
+                let item = DispatchWorkItem { [weak self] in
+                    guard let self else { return }
+                    if case .listening = self.state { self.state = .thinking }
+                }
+                self.thinkingWorkItem = item
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
+            }
         }
         print("[audio] mic tap installed")
     }
@@ -185,12 +200,18 @@ class VoiceManager: NSObject, ObservableObject {
                 switch msg {
                 case .data(let audioData):
                     self.playAudio(audioData)
-                    DispatchQueue.main.async { self.state = .speaking }
+                    DispatchQueue.main.async {
+                        self.thinkingWorkItem?.cancel()
+                        self.thinkingWorkItem = nil
+                        self.state = .speaking
+                    }
                 case .string(let text):
                     if let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
                         let msgType = json["type"] as? String
                         if msgType == "turn_complete" {
                             DispatchQueue.main.async {
+                                self.thinkingWorkItem?.cancel()
+                                self.thinkingWorkItem = nil
                                 self.state = .listening
                                 self.turnCount += 1
                                 // Fade out CC captions after a short pause

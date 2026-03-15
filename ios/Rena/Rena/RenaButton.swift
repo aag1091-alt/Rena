@@ -42,6 +42,31 @@ private func voiceContext(for tab: Int) -> String {
 }
 
 
+// MARK: - Thinking animation
+
+struct ThinkingDotsView: View {
+    @State private var animate = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 6, height: 6)
+                    .offset(y: animate ? -5 : 5)
+                    .animation(
+                        .easeInOut(duration: 0.38)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(i) * 0.13),
+                        value: animate
+                    )
+            }
+        }
+        .onAppear { animate = true }
+        .onDisappear { animate = false }
+    }
+}
+
 // MARK: - Hint chip
 
 struct RenaHintChip: View {
@@ -135,10 +160,14 @@ struct RenaOverlay: View {
                                         ? Color.white.opacity(0.25)
                                         : Color(hex: "E76F51").opacity(0.13))
                                     .frame(width: 40, height: 40)
-                                Image(systemName: "waveform")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(isVoiceActive ? .white : Color(hex: "E76F51"))
-                                    .symbolEffect(.variableColor.iterative, isActive: isVoiceActive)
+                                if case .thinking = voice.state {
+                                    ThinkingDotsView()
+                                } else {
+                                    Image(systemName: "waveform")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(isVoiceActive ? .white : Color(hex: "E76F51"))
+                                        .symbolEffect(.variableColor.iterative, isActive: isVoiceActive)
+                                }
                             }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(isVoiceActive ? voiceStateLabel : "Talk to Rena")
