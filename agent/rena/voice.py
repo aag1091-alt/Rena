@@ -10,6 +10,7 @@ import asyncio
 import json
 import traceback
 import warnings
+from datetime import datetime, timezone
 
 import sentry_sdk
 
@@ -97,6 +98,96 @@ _CONTEXT_PROMPTS = {
 }
 
 
+async def _build_rich_context_text(user_id: str, name: str) -> str:
+    """
+    Fetch user state and recent session notes, return a compact text block
+    to prepend to every session opening so Rena always knows who she's talking to.
+    """
+    from rena.tools import get_rich_context
+    try:
+        ctx = await asyncio.to_thread(get_rich_context, user_id)
+        p = ctx["progress"]
+        lines = [f"[RENA MEMORY — {name.upper()}]"]
+
+        # Goal
+        goal = p.get("goal", "Not set")
+        deadline = p.get("deadline", "Not set")
+        if goal and goal != "Not set":
+            lines.append(f"Goal: {goal} by {deadline}.")
+
+        # Today's snapshot
+        lines.append(
+            f"Today so far: {p['calories_consumed']}/{p['calories_target']} kcal eaten, "
+            f"{p['calories_burned']} kcal burned, "
+            f"{p['water_glasses']}/8 glasses water, "
+            f"protein {p['protein_consumed_g']}g/{p['protein_target_g']}g."
+        )
+        if p.get("meals_logged"):
+            names = [m["name"] for m in p["meals_logged"]]
+            lines.append(f"Meals today: {', '.join(names)}.")
+        if p.get("workouts_logged"):
+            wk = [f"{w['type']} {w.get('duration_min',0)}min" for w in p["workouts_logged"]]
+            lines.append(f"Workouts today: {', '.join(wk)}.")
+
+        # Weight trend
+        if ctx["weight_trend"]:
+            latest = ctx["weight_trend"][0]
+            lines.append(f"Latest weight: {latest['weight_kg']} kg ({latest['date']}).")
+
+        # Workout history
+        if ctx["workout_summary"]:
+            lines.append(ctx["workout_summary"])
+
+        # Session memory
+        notes = ctx.get("session_notes", [])
+        if notes:
+            lines.append("Recent sessions:")
+            for n in notes:
+                lines.append(f"  • {n['note']}")
+
+        return "\n".join(lines)
+    except Exception as e:
+        print(f"[voice] rich context failed: {e}")
+        return ""
+
+
+async def _save_session_note_async(user_id: str, context: str, name: str):
+    """Generate a brief summary of the session and save it to Firestore."""
+    from rena.tools import get_progress, save_session_note, _get_text_client
+    try:
+        progress = await asyncio.to_thread(get_progress, user_id)
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        context_labels = {
+            "home":                "general chat / logging food or water",
+            "workout_plan":        "planning a new workout",
+            "update_workout_plan": "updating their workout plan",
+            "plan_tomorrow":       "planning tomorrow's nutrition and activity",
+        }
+        label = context_labels.get(context, context)
+
+        meals = progress.get("meals_logged", [])
+        workouts = progress.get("workouts_logged", [])
+        prompt = (
+            "Write one sentence (max 20 words) as a memory note for a health AI. "
+            f"The user just finished a voice session about: {label}. "
+            f"Data after session: {progress['calories_consumed']}/{progress['calories_target']} kcal, "
+            f"{len(meals)} meals logged ({', '.join(m['name'] for m in meals) or 'none'}), "
+            f"{len(workouts)} workouts logged. "
+            "Be factual, past tense, start with 'User'. "
+            "Example: 'User planned a 45-min strength session and asked to avoid leg exercises.'"
+        )
+        client = _get_text_client()
+        resp = await asyncio.to_thread(
+            client.models.generate_content, model="gemini-2.0-flash", contents=prompt
+        )
+        note = f"[{today}] {resp.text.strip()}"
+        await asyncio.to_thread(save_session_note, user_id, context, note)
+        print(f"[voice] session note saved: {note[:80]}")
+    except Exception as e:
+        print(f"[voice] session note save failed: {e}")
+
+
 async def handle_voice(websocket: WebSocket, user_id: str,
                        context: str | None = None, name: str | None = None):
     from .agent import root_agent
@@ -133,8 +224,6 @@ async def handle_voice(websocket: WebSocket, user_id: str,
     # agent has a single trigger → single response with no double-greeting.
     async def inject_opening():
         await asyncio.sleep(0.2)
-        # Inject user_id + current weight so the agent can calculate absolute
-        # target weights without asking the user for their current weight.
         from rena.tools import _user_ref, generate_workout_plan
         try:
             profile = _user_ref(user_id).get().to_dict() or {}
@@ -142,6 +231,13 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             text = f"[user_id:{user_id}]" + (f"[current_weight_kg:{weight_kg}]" if weight_kg else "")
         except Exception:
             text = f"[user_id:{user_id}]"
+
+        # Prepend rich context for all non-onboarding sessions so Rena always
+        # knows today's state, recent activity, and past conversation notes.
+        if context not in ("intro", "goal", None):
+            rich = await _build_rich_context_text(user_id, name or "there")
+            if rich:
+                text = f"{text}\n{rich}"
 
         if context == "workout_plan":
             # Pre-generate the plan here so there is no blocking tool call during the
@@ -271,6 +367,9 @@ async def handle_voice(websocket: WebSocket, user_id: str,
         finally:
             ws_closed = True
             live_queue.close()
+            # Save a session note after every real interaction (not onboarding)
+            if context not in ("intro", "goal", None):
+                asyncio.create_task(_save_session_note_async(user_id, context, name or "there"))
 
     send_task = asyncio.create_task(send_to_client())
     recv_task = asyncio.create_task(recv_from_client())

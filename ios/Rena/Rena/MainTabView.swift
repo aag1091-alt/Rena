@@ -7,14 +7,15 @@ struct MainTabView: View {
     @State private var showRena = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+ZStack(alignment: .bottom) {
 
             // ── Tab content ───────────────────────────────────────
             TabView(selection: $selectedTab) {
                 HomeView().tag(0)
                 DataView().tag(1)
-                WorkbookView().tag(2)
-                devView.tag(3)
+                WorkbookView(showRena: $showRena).tag(2)
+                ScanView().tag(3)
+                devView.tag(4)
             }
             .accentColor(Color(hex: "E76F51"))
             // Hide the default tab bar — we draw our own below
@@ -32,7 +33,8 @@ struct MainTabView: View {
             }
 
             // ── Custom tab bar ────────────────────────────────────
-            CustomTabBar(selectedTab: $selectedTab, showRena: $showRena)
+            CustomTabBar(selectedTab: $selectedTab, showRena: $showRena, currentTab: selectedTab)
+                .id(selectedTab)   // force new instance on every tab change — bypasses AttributeGraph cycle
                 .zIndex(2)
         }
         .ignoresSafeArea(edges: .bottom)

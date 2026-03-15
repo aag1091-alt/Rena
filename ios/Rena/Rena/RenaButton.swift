@@ -36,42 +36,11 @@ func renaHints(for tab: Int) -> [RenaHint] {
 
 private func voiceContext(for tab: Int) -> String {
     switch tab {
-    case 2: return "workout_plan"
+    case 2: return "update_workout_plan"
     default: return "home"
     }
 }
 
-// MARK: - Sun rays
-
-struct SunRays: View {
-    let isVisible: Bool
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<8, id: \.self) { i in
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(hex: "F4A261").opacity(0.85),
-                                Color(hex: "E76F51").opacity(0),
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: isVisible ? 36 : 0, height: 3)
-                    .offset(x: isVisible ? 46 : 0)
-                    .rotationEffect(.degrees(Double(i) * 45))
-                    .animation(
-                        .spring(response: 0.38, dampingFraction: 0.58)
-                            .delay(Double(i) * 0.022),
-                        value: isVisible
-                    )
-            }
-        }
-    }
-}
 
 // MARK: - Hint chip
 
@@ -113,10 +82,10 @@ struct RenaOverlay: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Dimmed backdrop
+            // Dimmed backdrop — non-interactive so scroll gestures reach content below
             Color.black.opacity(0.38)
                 .ignoresSafeArea()
-                .onTapGesture { dismiss() }
+                .allowsHitTesting(false)
 
             VStack(spacing: 0) {
                 // ── Hint + voice card ────────────────────────────
@@ -222,8 +191,20 @@ struct RenaOverlay: View {
         }
         .onAppear {
             withAnimation { cardVisible = true }
+            // Auto-start voice as soon as overlay opens
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                let name = appState.name.components(separatedBy: " ").first ?? appState.name
+                voice.connect(userId: appState.userId, context: voiceContext(for: selectedTab), name: name)
+                isVoiceActive = true
+            }
         }
         .onChange(of: selectedTab) { _ in dismiss() }
+        .onChange(of: isShowing) { showing in
+            if !showing && isVoiceActive {
+                voice.disconnect()
+                isVoiceActive = false
+            }
+        }
         .onDisappear {
             if isVoiceActive { voice.disconnect(); isVoiceActive = false }
         }
@@ -262,8 +243,9 @@ struct RenaOverlay: View {
 // MARK: - Custom tab bar
 
 struct CustomTabBar: View {
-    @Binding var selectedTab: Int
+    @Binding var selectedTab: Int   // used for writes
     @Binding var showRena: Bool
+    let currentTab: Int             // plain Int passed from parent — forces re-render on change
 
     private var bottomInset: CGFloat {
         (UIApplication.shared.connectedScenes
@@ -272,97 +254,95 @@ struct CustomTabBar: View {
     }
 
     var body: some View {
-        ZStack {
-            // Background pill
+ZStack {
             Color.white
                 .frame(height: 56 + bottomInset)
                 .shadow(color: .black.opacity(0.07), radius: 16, y: -4)
 
-            // Tabs on each side of the center gap
             HStack(spacing: 0) {
-                tabItem(icon: "house.fill",     label: "Home",     tag: 0)
-                tabItem(icon: "chart.bar.fill", label: "Data",     tag: 1)
 
-                // Gap for Rena button
-                Spacer().frame(width: 80)
+                // ── Home ──
+                Button {
+                    selectedTab = 0; if showRena { showRena = false }
+                } label: {
+                    tabLabel(icon: "house.fill", text: "Home", active: currentTab == 0)
+                }.buttonStyle(.plain)
 
-                tabItem(icon: "note.text",   label: "Workbook", tag: 2)
-                tabItem(icon: "wrench.fill", label: "Dev",      tag: 3)
+                // ── Data ──
+                Button {
+                    selectedTab = 1; if showRena { showRena = false }
+                } label: {
+                    tabLabel(icon: "chart.bar.fill", text: "Data", active: currentTab == 1)
+                }.buttonStyle(.plain)
+
+                // ── Rena ──
+                Button { showRena.toggle() } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 19, weight: showRena ? .semibold : .regular))
+                            .foregroundColor(showRena ? Color(hex: "E76F51") : Color(hex: "C4A882"))
+                        Text("Rena")
+                            .font(.system(size: 10, weight: showRena ? .semibold : .regular))
+                            .foregroundColor(showRena ? Color(hex: "E76F51") : Color(hex: "C4A882"))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(showRena ? Color(hex: "E76F51").opacity(0.10) : Color.clear)
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 2)
+                    .contentShape(Rectangle())
+                }.buttonStyle(.plain)
+
+                // ── Workbook ──
+                Button {
+                    selectedTab = 2; if showRena { showRena = false }
+                } label: {
+                    tabLabel(icon: "note.text", text: "Workbook", active: currentTab == 2)
+                }.buttonStyle(.plain)
+
+                // ── Scan ──
+                Button {
+                    selectedTab = 3; if showRena { showRena = false }
+                } label: {
+                    tabLabel(icon: "camera.fill", text: "Scan", active: currentTab == 3)
+                }.buttonStyle(.plain)
+
+                // ── Dev ──
+                Button {
+                    selectedTab = 4; if showRena { showRena = false }
+                } label: {
+                    tabLabel(icon: "wrench.fill", text: "Dev", active: currentTab == 4)
+                }.buttonStyle(.plain)
             }
             .padding(.horizontal, 8)
             .frame(height: 56)
             .padding(.bottom, bottomInset)
-
-            // ── Rena button (centered, elevated) ──────────────
-            VStack(spacing: 0) {
-                ZStack {
-                    // Sun rays behind button
-                    SunRays(isVisible: showRena)
-
-                    // Button itself
-                    Button {
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.62)) {
-                            showRena.toggle()
-                        }
-                    } label: {
-                        ZStack {
-                            // Outer glow ring
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 66, height: 66)
-                                .shadow(
-                                    color: Color(hex: "E76F51").opacity(showRena ? 0.5 : 0.22),
-                                    radius: showRena ? 22 : 10
-                                )
-                            // Gradient fill
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 54, height: 54)
-                            // Icon
-                            Image(systemName: showRena ? "xmark" : "sparkles")
-                                .font(.system(size: showRena ? 17 : 21, weight: .semibold))
-                                .foregroundColor(.white)
-                                .rotationEffect(.degrees(showRena ? 90 : 0))
-                                .animation(.spring(response: 0.38, dampingFraction: 0.6), value: showRena)
-                        }
-                    }
-                    .scaleEffect(showRena ? 1.07 : 1.0)
-                    .animation(.spring(response: 0.38, dampingFraction: 0.62), value: showRena)
-                }
-            }
-            .offset(y: -(56 / 2 + 10 + bottomInset / 2))
         }
         .frame(maxWidth: .infinity)
         .frame(height: 56 + bottomInset)
     }
 
-    @ViewBuilder
-    private func tabItem(icon: String, label: String, tag: Int) -> some View {
-        let active = selectedTab == tag
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedTab = tag
-                if showRena { showRena = false }
-            }
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(.system(size: 19, weight: active ? .semibold : .regular))
-                    .foregroundColor(active ? Color(hex: "E76F51") : Color(hex: "C4A882"))
-                Text(label)
-                    .font(.system(size: 10, weight: active ? .semibold : .regular))
-                    .foregroundColor(active ? Color(hex: "E76F51") : Color(hex: "C4A882"))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
+    // tabLabel receives active as Bool — active is computed inline in body above
+    private func tabLabel(icon: String, text: String, active: Bool) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 19, weight: active ? .semibold : .regular))
+                .foregroundColor(active ? Color(hex: "E76F51") : Color(hex: "C4A882"))
+            Text(text)
+                .font(.system(size: 10, weight: active ? .semibold : .regular))
+                .foregroundColor(active ? Color(hex: "E76F51") : Color(hex: "C4A882"))
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(active ? Color(hex: "E76F51").opacity(0.10) : Color.clear)
+        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }

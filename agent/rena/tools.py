@@ -1213,6 +1213,67 @@ def get_exercise_video_status(job_id: str) -> dict:
         return {"status": "error", "message": str(e)}
 
 
+# ── Session memory ────────────────────────────────────────────────────────────
+
+def save_session_note(user_id: str, context: str, note: str) -> dict:
+    """Save a brief summary of what happened in a voice session."""
+    _user_ref(user_id).collection("session_notes").add({
+        "context": context,
+        "note": note,
+        "created_at": firestore.SERVER_TIMESTAMP,
+    })
+    return {"status": "saved"}
+
+
+def get_session_notes(user_id: str, limit: int = 4) -> list:
+    """Return the most recent session notes, newest first."""
+    docs = (
+        _user_ref(user_id).collection("session_notes")
+        .order_by("created_at", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+        .stream()
+    )
+    return [
+        {"note": d.to_dict().get("note", ""), "context": d.to_dict().get("context", "")}
+        for d in docs
+    ]
+
+
+def get_rich_context(user_id: str) -> dict:
+    """
+    Assemble a snapshot of the user's current state for context injection.
+    Returns today's progress, recent workout summary, goal, and session notes.
+    """
+    from datetime import timedelta
+    today = datetime.now(timezone.utc).date()
+
+    # Today's progress
+    progress = get_progress(user_id)
+
+    # Weight trend: last 7 days
+    weight_entries = []
+    for i in range(7):
+        d = (today - timedelta(days=i)).isoformat()
+        doc = _user_ref(user_id).collection("logs").document(d).get()
+        if doc.exists:
+            w = (doc.to_dict() or {}).get("weight_kg")
+            if w:
+                weight_entries.append({"date": d, "weight_kg": w})
+
+    # Recent workouts summary
+    recent = get_recent_workouts(user_id, days=7)
+
+    # Session notes
+    notes = get_session_notes(user_id, limit=4)
+
+    return {
+        "progress": progress,
+        "weight_trend": weight_entries,
+        "workout_summary": recent.get("summary", ""),
+        "session_notes": notes,
+    }
+
+
 def reset_user(user_id: str) -> dict:
     """
     DEV ONLY — delete all Firestore data for a user so onboarding can be re-tested.
@@ -1228,7 +1289,7 @@ def reset_user(user_id: str) -> dict:
             delete_collection(col_ref, batch_size)
 
     user_ref = _user_ref(user_id)
-    for sub in ["logs", "progress", "visual_journey", "workout_plans"]:
+    for sub in ["logs", "progress", "visual_journey", "workout_plans", "session_notes"]:
         delete_collection(user_ref.collection(sub))
     user_ref.delete()
 

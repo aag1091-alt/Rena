@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct WorkbookView: View {
+    @Binding var showRena: Bool
+
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var voice: VoiceManager
 
@@ -126,9 +128,8 @@ struct WorkbookView: View {
                             isGenerating: isGeneratingPlan,
                             voiceState: voice.state,
                             isPlanningActive: activeContext == "workout_plan" && isVoiceConnected,
-                            isUpdatingActive: activeContext == "update_workout_plan" && isVoiceConnected,
                             onPlanWithRena:   { toggleVoice(context: "workout_plan") },
-                            onUpdateWithRena: { toggleVoice(context: "update_workout_plan") },
+                            onOpenRena:       { showRena = true },
                             onRegenerate:     { Task { await generatePlan() } },
                             onToggleComplete: { ex in Task { await toggleComplete(ex) } },
                             onPlay:           { ex in videoSheet = ex },
@@ -509,9 +510,8 @@ struct WorkoutPlanSection: View {
     let isGenerating: Bool
     let voiceState: VoiceState
     let isPlanningActive: Bool
-    let isUpdatingActive: Bool
     let onPlanWithRena: () -> Void
-    let onUpdateWithRena: () -> Void
+    let onOpenRena: () -> Void
     let onRegenerate: () -> Void
     let onToggleComplete: (PlannedExercise) -> Void
     let onPlay: (PlannedExercise) -> Void
@@ -537,7 +537,7 @@ struct WorkoutPlanSection: View {
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
                 Spacer()
-                if plan != nil && !isPlanningActive && !isUpdatingActive {
+                if plan != nil && !isPlanningActive {
                     Button(action: onRegenerate) {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 13))
@@ -637,11 +637,6 @@ struct WorkoutPlanSection: View {
 
     private var updateSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("UPDATE WITH RENA")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(Color(hex: "B09880"))
-                .kerning(1.0)
-
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(suggestions, id: \.self) { s in
@@ -652,25 +647,21 @@ struct WorkoutPlanSection: View {
                             .padding(.vertical, 5)
                             .background(Color(hex: "9B7EC8").opacity(0.10))
                             .cornerRadius(12)
-                            .onTapGesture { onUpdateWithRena() }
+                            .onTapGesture { onOpenRena() }
                     }
                 }
             }
 
-            if isUpdatingActive {
-                voiceActiveView(label: voiceLabel, color: Color(hex: "9B7EC8"), onEnd: onUpdateWithRena)
-            } else {
-                Button(action: onUpdateWithRena) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "waveform").font(.system(size: 13))
-                        Text("Update with Rena").font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(Color(hex: "9B7EC8"))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color(hex: "9B7EC8").opacity(0.10))
-                    .cornerRadius(12)
+            Button(action: onOpenRena) {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform").font(.system(size: 13))
+                    Text("Update with Rena").font(.system(size: 14, weight: .semibold))
                 }
+                .foregroundColor(Color(hex: "9B7EC8"))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color(hex: "9B7EC8").opacity(0.10))
+                .cornerRadius(12)
             }
         }
     }
@@ -701,7 +692,7 @@ struct WorkoutPlanSection: View {
         case .thinking:   return "Thinking…"
         case .speaking:   return "Rena is speaking…"
         case .error(let m): return "Error: \(m)"
-        default: return isPlanningActive ? "Planning your workout…" : "Updating your plan…"
+        default: return "Planning your workout…"
         }
     }
 }
