@@ -47,7 +47,7 @@ steps:
       - us-central1
       - --allow-unauthenticated
       - --set-env-vars
-      - GOOGLE_CLOUD_PROJECT=rena-490107,GOOGLE_CLOUD_LOCATION=us-central1,GCS_BUCKET=rena-visual-journey
+      - GOOGLE_CLOUD_PROJECT=rena-490107,GOOGLE_CLOUD_LOCATION=us-central1
       - --set-secrets
       - GOOGLE_API_KEY=GOOGLE_API_KEY:latest,GEMINI_API_KEY=GOOGLE_API_KEY:latest,SENTRY_DSN=SENTRY_DSN:latest
 
