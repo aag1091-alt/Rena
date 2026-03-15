@@ -18,15 +18,15 @@ struct WorkbookView: View {
 
     private var isToday: Bool { Calendar.current.isDateInToday(selectedDate) }
 
-    private var displayMeals: [MealEntry]    { dayData?.mealsLogged    ?? (isToday ? appState.mealsLogged    : []) }
+    private var displayMeals: [MealEntry]       { dayData?.mealsLogged    ?? (isToday ? appState.mealsLogged    : []) }
     private var displayWorkouts: [WorkoutEntry] { dayData?.workoutsLogged ?? (isToday ? appState.workoutsLogged : []) }
     private var displayConsumed: Int  { dayData?.caloriesConsumed ?? (isToday ? appState.caloriesConsumed : 0) }
     private var displayTarget: Int    { dayData?.caloriesTarget   ?? (isToday ? appState.caloriesTarget   : 1800) }
     private var displayBurned: Int    { dayData?.caloriesBurned   ?? (isToday ? appState.caloriesBurned   : 0) }
 
     private var hour: Int { Calendar.current.component(.hour, from: Date()) }
-    private var isMorning: Bool  { isToday && hour >= 5  && hour < 12 }
-    private var isEvening: Bool  { isToday && hour >= 17 }
+    private var isMorning: Bool { isToday && hour >= 5  && hour < 12 }
+    private var isEvening: Bool { isToday && hour >= 17 }
 
     private var dateString: String {
         let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd"
@@ -49,42 +49,63 @@ struct WorkbookView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: 14) {
 
-                    // ── Date navigation ────────────────────────────
-                    HStack(spacing: 16) {
+                    // ── Date navigator ──────────────────────────────
+                    HStack(spacing: 0) {
                         Button {
                             selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate)!
                             Task { await loadDay() }
                         } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color(hex: "E76F51"))
+                            ZStack {
+                                Circle()
+                                    .fill(Color(hex: "E76F51").opacity(0.10))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(Color(hex: "E76F51"))
+                            }
                         }
+
                         Spacer()
-                        Text(dateLabel)
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundColor(Color(hex: "3D2B1F"))
-                            .contentTransition(.numericText())
-                            .animation(.spring(duration: 0.2), value: dateLabel)
+
+                        HStack(spacing: 6) {
+                            if isToday {
+                                Circle()
+                                    .fill(Color(hex: "E76F51"))
+                                    .frame(width: 6, height: 6)
+                            }
+                            Text(dateLabel)
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundColor(Color(hex: "3D2B1F"))
+                                .contentTransition(.numericText())
+                                .animation(.spring(duration: 0.2), value: dateLabel)
+                        }
+
                         Spacer()
+
                         Button {
                             selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate)!
                             Task { await loadDay() }
                         } label: {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(isToday ? Color(hex: "D4B8A0") : Color(hex: "E76F51"))
+                            ZStack {
+                                Circle()
+                                    .fill(isToday ? Color(hex: "B09880").opacity(0.08) : Color(hex: "E76F51").opacity(0.10))
+                                    .frame(width: 36, height: 36)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(isToday ? Color(hex: "C4A882") : Color(hex: "E76F51"))
+                            }
                         }
                         .disabled(isToday)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(Color.white)
-                    .cornerRadius(16)
+                    .cornerRadius(18)
                     .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
 
-                    // ── Header ─────────────────────────────────────
+                    // ── Header card ─────────────────────────────────
                     WorkbookHeader(
                         greeting: greeting,
                         name: appState.name.components(separatedBy: " ").first ?? appState.name,
@@ -95,14 +116,10 @@ struct WorkbookView: View {
                         caloriesBurned: displayBurned
                     )
 
-                    // ── Day insight (AI) ───────────────────────────
-                    DaySoFarCard(
-                        insight: insight,
-                        isLoading: isLoading,
-                        isToday: isToday
-                    )
+                    // ── Day So Far / Day Recap (AI) ─────────────────
+                    DaySoFarCard(insight: insight, isLoading: isLoading, isToday: isToday)
 
-                    // ── Workout plan (unified) — today only ────────
+                    // ── Workout plan — today only ───────────────────
                     if isToday {
                         WorkoutPlanSection(
                             plan: workoutPlan,
@@ -110,16 +127,16 @@ struct WorkbookView: View {
                             voiceState: voice.state,
                             isPlanningActive: activeContext == "workout_plan" && isVoiceConnected,
                             isUpdatingActive: activeContext == "update_workout_plan" && isVoiceConnected,
-                            onPlanWithRena: { toggleVoice(context: "workout_plan") },
+                            onPlanWithRena:   { toggleVoice(context: "workout_plan") },
                             onUpdateWithRena: { toggleVoice(context: "update_workout_plan") },
-                            onRegenerate: { Task { await generatePlan() } },
+                            onRegenerate:     { Task { await generatePlan() } },
                             onToggleComplete: { ex in Task { await toggleComplete(ex) } },
-                            onPlay: { ex in videoSheet = ex },
-                            onLog: { ex in logSheet = ex }
+                            onPlay:           { ex in videoSheet = ex },
+                            onLog:            { ex in logSheet = ex }
                         )
                     }
 
-                    // ── Plan Tomorrow — evening only ───────────────
+                    // ── Plan Tomorrow — evening only ────────────────
                     if isToday && isEvening {
                         WorkbookVoiceCard(
                             icon: "moon.stars.fill",
@@ -133,12 +150,13 @@ struct WorkbookView: View {
                         )
                     }
 
-                    // ── Activity summary ───────────────────────────
+                    // ── Activity summary ────────────────────────────
                     TodayActivityCard(
                         aiSummary: activity,
                         isLoading: isLoading,
                         meals: displayMeals,
-                        workouts: displayWorkouts
+                        workouts: displayWorkouts,
+                        isToday: isToday
                     )
 
                     Spacer(minLength: 40)
@@ -183,7 +201,7 @@ struct WorkbookView: View {
         activeContext = nil
     }
 
-    // MARK: - Workout Plan
+    // MARK: - Workout plan
 
     private func generatePlan() async {
         await MainActor.run { isGeneratingPlan = true }
@@ -212,10 +230,7 @@ struct WorkbookView: View {
         await MainActor.run {
             dayData     = progress
             workoutPlan = plan
-            if let r = result {
-                insight  = r.insight
-                activity = r.activity
-            }
+            if let r = result { insight = r.insight; activity = r.activity }
             isLoading = false
         }
     }
@@ -248,23 +263,28 @@ struct WorkbookHeader: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: phaseIcon)
-                    .font(.system(size: 18))
-                    .foregroundColor(phaseColor)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(phaseColor.opacity(0.14))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: phaseIcon)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(phaseColor)
+                }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(greeting)
-                        .font(.system(size: 13))
+                        .font(.system(size: 12))
                         .foregroundColor(Color(hex: "B09880"))
                     Text(name)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(.system(size: 21, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: "3D2B1F"))
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("\(remaining)")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: "E76F51"))
                     Text("kcal left")
                         .font(.system(size: 10))
@@ -274,28 +294,26 @@ struct WorkbookHeader: View {
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 5).fill(Color(hex: "F0E6DA")).frame(height: 8)
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(LinearGradient(colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
-                                             startPoint: .leading, endPoint: .trailing))
+                        .fill(Color(hex: "F0E6DA"))
+                        .frame(height: 8)
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(LinearGradient(
+                            colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
+                            startPoint: .leading, endPoint: .trailing
+                        ))
                         .frame(width: geo.size.width * progress, height: 8)
                         .animation(.spring(), value: progress)
                 }
             }
             .frame(height: 8)
 
-            HStack {
-                Label("\(caloriesConsumed) eaten", systemImage: "fork.knife")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color(hex: "E76F51"))
+            HStack(spacing: 0) {
+                caloriePill(icon: "fork.knife",  value: "\(caloriesConsumed)", label: "eaten",  color: Color(hex: "E76F51"))
                 Spacer()
-                Label("\(caloriesBurned) burned", systemImage: "figure.run")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color(hex: "2A9D8F"))
+                caloriePill(icon: "figure.run",  value: "\(caloriesBurned)",  label: "burned", color: Color(hex: "2A9D8F"))
                 Spacer()
-                Label("\(caloriesTarget) target", systemImage: "target")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Color(hex: "B09880"))
+                caloriePill(icon: "target",      value: "\(caloriesTarget)",  label: "target", color: Color(hex: "B09880"))
             }
         }
         .padding(18)
@@ -303,9 +321,25 @@ struct WorkbookHeader: View {
         .cornerRadius(18)
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
     }
+
+    @ViewBuilder
+    private func caloriePill(icon: String, value: String, label: String, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(color)
+            Text("\(value) \(label)")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(hex: "5C3D2E"))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.08))
+        .cornerRadius(20)
+    }
 }
 
-// MARK: - Day So Far (AI insight)
+// MARK: - Day So Far / Day Recap (AI insight)
 
 struct DaySoFarCard: View {
     let insight: String
@@ -315,9 +349,14 @@ struct DaySoFarCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 14))
-                    .foregroundColor(Color(hex: "E76F51"))
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color(hex: "E76F51").opacity(0.12))
+                        .frame(width: 26, height: 26)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(hex: "E76F51"))
+                }
                 Text(isToday ? "DAY SO FAR" : "DAY RECAP")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: "B09880"))
@@ -345,7 +384,7 @@ struct DaySoFarCard: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(Color(hex: "3D2B1F"))
                     .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(3)
+                    .lineSpacing(4)
                     .transition(.opacity)
             }
         }
@@ -362,21 +401,27 @@ struct DaySoFarCard: View {
     }
 }
 
-// MARK: - Today's activity (food + workout as friendly text)
+// MARK: - Activity summary (food + workout as friendly text)
 
 struct TodayActivityCard: View {
     let aiSummary: String
     let isLoading: Bool
     let meals: [MealEntry]
     let workouts: [WorkoutEntry]
+    var isToday: Bool = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "list.bullet.rectangle")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(hex: "E76F51"))
-                Text("TODAY'S ACTIVITY")
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color(hex: "457B9D").opacity(0.12))
+                        .frame(width: 26, height: 26)
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Color(hex: "457B9D"))
+                }
+                Text(isToday ? "TODAY'S ACTIVITY" : "DAY'S ACTIVITY")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
@@ -394,7 +439,7 @@ struct TodayActivityCard: View {
                     .font(.system(size: 15))
                     .foregroundColor(Color(hex: "3D2B1F"))
                     .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(3)
+                    .lineSpacing(4)
             } else {
                 Text(fallback)
                     .font(.system(size: 14))
@@ -402,12 +447,48 @@ struct TodayActivityCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .lineSpacing(2)
             }
+
+            // Quick meal/workout count chips
+            if !meals.isEmpty || !workouts.isEmpty {
+                HStack(spacing: 8) {
+                    if !meals.isEmpty {
+                        activityChip(
+                            icon: "fork.knife",
+                            label: "\(meals.count) meal\(meals.count == 1 ? "" : "s")",
+                            color: Color(hex: "E76F51")
+                        )
+                    }
+                    if !workouts.isEmpty {
+                        activityChip(
+                            icon: "figure.run",
+                            label: "\(workouts.count) workout\(workouts.count == 1 ? "" : "s")",
+                            color: Color(hex: "2A9D8F")
+                        )
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .background(Color.white)
         .cornerRadius(18)
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+
+    @ViewBuilder
+    private func activityChip(icon: String, label: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(color)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(color)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.08))
+        .cornerRadius(20)
     }
 
     private var fallback: String {
@@ -442,10 +523,15 @@ struct WorkoutPlanSection: View {
         VStack(alignment: .leading, spacing: 14) {
 
             // Header
-            HStack(spacing: 8) {
-                Image(systemName: "dumbbell.fill")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(hex: "2A9D8F"))
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(hex: "2A9D8F").opacity(0.12))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "dumbbell.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(hex: "2A9D8F"))
+                }
                 Text("TODAY'S WORKOUT")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: "B09880"))
@@ -470,31 +556,31 @@ struct WorkoutPlanSection: View {
                 .padding(.vertical, 4)
 
             } else if isPlanningActive {
-                voiceActiveView(
-                    label: voiceLabel,
-                    color: Color(hex: "2A9D8F"),
-                    onEnd: onPlanWithRena
-                )
+                voiceActiveView(label: voiceLabel, color: Color(hex: "2A9D8F"), onEnd: onPlanWithRena)
 
             } else if let plan {
-                // Plan header
-                HStack(spacing: 12) {
+                // Plan meta
+                HStack(spacing: 8) {
                     Label(plan.name, systemImage: "figure.strengthtraining.traditional")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(Color(hex: "3D2B1F"))
                     Spacer()
                     Text("\(plan.totalDurationMin) min")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(Color(hex: "B09880"))
-                    Text("·").foregroundColor(Color(hex: "D4B8A0"))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color(hex: "F0E6DA"))
+                        .cornerRadius(10)
                     Text("\(plan.totalCalories) kcal")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(Color(hex: "B09880"))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color(hex: "F0E6DA"))
+                        .cornerRadius(10)
                 }
 
                 Divider().background(Color(hex: "F0E6DA"))
 
-                // Exercise rows
                 VStack(spacing: 0) {
                     ForEach(plan.exercises) { exercise in
                         ExerciseRow(
@@ -504,14 +590,13 @@ struct WorkoutPlanSection: View {
                             onLog: { onLog(exercise) }
                         )
                         if exercise.id != plan.exercises.last?.id {
-                            Divider().background(Color(hex: "F5EEE8")).padding(.leading, 36)
+                            Divider().background(Color(hex: "F5EEE8")).padding(.leading, 40)
                         }
                     }
                 }
 
                 Divider().background(Color(hex: "F0E6DA"))
 
-                // Update with Rena
                 updateSection
 
             } else {
@@ -529,8 +614,13 @@ struct WorkoutPlanSection: View {
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color(hex: "2A9D8F"))
+                        .padding(.vertical, 13)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hex: "2A9D8F"), Color(hex: "3ABCAD")],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
                         .cornerRadius(12)
                     }
                 }
@@ -560,7 +650,7 @@ struct WorkoutPlanSection: View {
                             .foregroundColor(Color(hex: "9B7EC8"))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Color(hex: "9B7EC8").opacity(0.1))
+                            .background(Color(hex: "9B7EC8").opacity(0.10))
                             .cornerRadius(12)
                             .onTapGesture { onUpdateWithRena() }
                     }
@@ -568,11 +658,7 @@ struct WorkoutPlanSection: View {
             }
 
             if isUpdatingActive {
-                voiceActiveView(
-                    label: voiceLabel,
-                    color: Color(hex: "9B7EC8"),
-                    onEnd: onUpdateWithRena
-                )
+                voiceActiveView(label: voiceLabel, color: Color(hex: "9B7EC8"), onEnd: onUpdateWithRena)
             } else {
                 Button(action: onUpdateWithRena) {
                     HStack(spacing: 8) {
@@ -582,7 +668,7 @@ struct WorkoutPlanSection: View {
                     .foregroundColor(Color(hex: "9B7EC8"))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(Color(hex: "9B7EC8").opacity(0.1))
+                    .background(Color(hex: "9B7EC8").opacity(0.10))
                     .cornerRadius(12)
                 }
             }
@@ -602,7 +688,7 @@ struct WorkoutPlanSection: View {
             .foregroundColor(color)
             .padding(.vertical, 12)
             .padding(.horizontal, 14)
-            .background(color.opacity(0.1))
+            .background(color.opacity(0.10))
             .cornerRadius(12)
         }
         .buttonStyle(.plain)
@@ -620,6 +706,8 @@ struct WorkoutPlanSection: View {
     }
 }
 
+// MARK: - Exercise row
+
 struct ExerciseRow: View {
     let exercise: PlannedExercise
     let onToggleComplete: () -> Void
@@ -627,37 +715,35 @@ struct ExerciseRow: View {
     let onLog: () -> Void
 
     private var volumeLabel: String {
-        if exercise.type == "cardio", let d = exercise.durationMin {
-            return "\(d) min"
-        } else if let s = exercise.sets, let r = exercise.reps {
-            return "\(s) × \(r)"
-        }
+        if exercise.type == "cardio", let d = exercise.durationMin { return "\(d) min" }
+        if let s = exercise.sets, let r = exercise.reps { return "\(s) × \(r)" }
         return ""
     }
 
     var body: some View {
         HStack(spacing: 10) {
-            // Checkbox
             Button(action: onToggleComplete) {
                 Image(systemName: exercise.completed ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
+                    .font(.system(size: 22))
                     .foregroundColor(exercise.completed ? Color(hex: "2A9D8F") : Color(hex: "D4B8A0"))
             }
             .buttonStyle(.plain)
 
-            // Name + volume
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.name)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(exercise.completed ? Color(hex: "B09880") : Color(hex: "3D2B1F"))
                     .strikethrough(exercise.completed)
                 HStack(spacing: 6) {
-                    Text(volumeLabel)
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(hex: "B09880"))
+                    if !volumeLabel.isEmpty {
+                        Text(volumeLabel)
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(hex: "B09880"))
+                    }
                     if let muscles = exercise.targetMuscles, !muscles.isEmpty {
-                        Text("·")
-                            .foregroundColor(Color(hex: "D4B8A0"))
+                        if !volumeLabel.isEmpty {
+                            Text("·").foregroundColor(Color(hex: "D4B8A0")).font(.system(size: 11))
+                        }
                         Text(muscles.split(separator: ",").prefix(2).joined(separator: ", "))
                             .font(.system(size: 11))
                             .foregroundColor(Color(hex: "C0A898"))
@@ -668,20 +754,17 @@ struct ExerciseRow: View {
 
             Spacer()
 
-            // Calories
             Text("\(exercise.caloriesBurned) kcal")
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundColor(Color(hex: "B09880"))
 
-            // Play button
             Button(action: onPlay) {
                 Image(systemName: "play.circle.fill")
-                    .font(.system(size: 26))
+                    .font(.system(size: 28))
                     .foregroundColor(Color(hex: "2A9D8F"))
             }
             .buttonStyle(.plain)
 
-            // Log button
             Button(action: onLog) {
                 Text("Log")
                     .font(.system(size: 12, weight: .semibold))
@@ -698,7 +781,7 @@ struct ExerciseRow: View {
     }
 }
 
-// MARK: - Voice action card (workout plan / plan tomorrow)
+// MARK: - Voice action card (Plan Tomorrow)
 
 struct WorkbookVoiceCard: View {
     let icon: String
@@ -712,24 +795,24 @@ struct WorkbookVoiceCard: View {
 
     private var stateLabel: String {
         switch voiceState {
-        case .connecting:          return "Connecting…"
-        case .listening:           return "Listening…"
-        case .thinking:            return "Thinking…"
-        case .speaking:            return "Rena is speaking…"
-        case .error(let m):        return "Error: \(m)"
-        default:                   return isActive ? "Tap to end" : buttonLabel
+        case .connecting:   return "Connecting…"
+        case .listening:    return "Listening…"
+        case .thinking:     return "Thinking…"
+        case .speaking:     return "Rena is speaking…"
+        case .error(let m): return "Error: \(m)"
+        default:            return isActive ? "Tap to end" : buttonLabel
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(iconColor.opacity(0.12))
                         .frame(width: 40, height: 40)
                     Image(systemName: icon)
-                        .font(.system(size: 17))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(iconColor)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -746,20 +829,16 @@ struct WorkbookVoiceCard: View {
             Button(action: onTap) {
                 HStack(spacing: 8) {
                     if isActive {
-                        Circle()
-                            .fill(iconColor)
-                            .frame(width: 8, height: 8)
+                        Circle().fill(iconColor).frame(width: 8, height: 8)
                     } else {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 13))
+                        Image(systemName: "waveform").font(.system(size: 13))
                     }
-                    Text(stateLabel)
-                        .font(.system(size: 14, weight: .semibold))
+                    Text(stateLabel).font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundColor(isActive ? .white : iconColor)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(isActive ? iconColor : iconColor.opacity(0.1))
+                .background(isActive ? iconColor : iconColor.opacity(0.10))
                 .cornerRadius(12)
                 .animation(.easeInOut(duration: 0.2), value: isActive)
             }

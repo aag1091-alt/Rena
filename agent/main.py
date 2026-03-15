@@ -142,16 +142,35 @@ async def log_weight_endpoint(req: LogWeightRequest):
 
 @app.get("/workbook/insight/{user_id}")
 async def workbook_insight(user_id: str, date: str = None):
-    """Generate AI insight + activity summary for the Workbook tab. Accepts optional date (YYYY-MM-DD)."""
-    from datetime import datetime, timezone, date as date_type
-    from rena.tools import _get_genai_client
+    """Generate AI insight + activity summary for the Workbook tab. Accepts optional date (YYYY-MM-DD).
+    Caches in Firestore: today refreshes after 1 hour, past days are saved once and never regenerated."""
+    from datetime import datetime, timezone
+    from rena.tools import _get_text_client, db
 
     if not user_id or user_id.strip() == "":
         raise HTTPException(status_code=400, detail="user_id is required")
 
-    p = get_progress(user_id, for_date=date)
     today_str = datetime.now(timezone.utc).date().isoformat()
-    is_today = (date is None) or (date == today_str)
+    target_date = date or today_str
+    is_today = (target_date == today_str)
+
+    # ── Check cache ──────────────────────────────────────────────────────────
+    cache_ref = db.collection("workbook_insights").document(user_id).collection("days").document(target_date)
+    cached = cache_ref.get().to_dict()
+
+    if cached:
+        if not is_today:
+            # Past day: return once-saved cache forever
+            return {"insight": cached["insight"], "activity": cached["activity"]}
+        # Today: return cache if fresher than 1 hour
+        generated_at = cached.get("generated_at")
+        if generated_at:
+            age_seconds = (datetime.now(timezone.utc) - generated_at).total_seconds()
+            if age_seconds < 3600:
+                return {"insight": cached["insight"], "activity": cached["activity"]}
+
+    # ── Generate ─────────────────────────────────────────────────────────────
+    p = get_progress(user_id, for_date=date)
     hour = datetime.now(timezone.utc).hour
     time_of_day = "morning" if hour < 12 else ("evening" if hour >= 17 else "afternoon")
 
@@ -184,7 +203,7 @@ async def workbook_insight(user_id: str, date: str = None):
     else:
         insight_prompt = (
             f"You are Rena, a warm health companion. Write exactly 2 short sentences "
-            f"reflecting on this person's day on {date}. Be warm and encouraging — note what went well "
+            f"reflecting on this person's day on {target_date}. Be warm and encouraging — note what went well "
             f"and one thing to carry forward. No markdown, no bullet points.\n\n"
             f"Calories: {consumed}/{target} eaten, {burned} burned. "
             f"Protein: {protein}g/{protein_target}g. Water: {water}/8 glasses."
@@ -197,15 +216,23 @@ async def workbook_insight(user_id: str, date: str = None):
         f"Exercise: {workouts_detail}."
     )
 
-    client = _get_genai_client()
+    client = _get_text_client()
     insight_resp, activity_resp = await asyncio.gather(
         asyncio.to_thread(client.models.generate_content, model="gemini-2.5-flash", contents=insight_prompt),
         asyncio.to_thread(client.models.generate_content, model="gemini-2.5-flash", contents=activity_prompt),
     )
-    return {
-        "insight": insight_resp.text.strip(),
-        "activity": activity_resp.text.strip(),
-    }
+
+    insight_text  = insight_resp.text.strip()
+    activity_text = activity_resp.text.strip()
+
+    # ── Save to cache ────────────────────────────────────────────────────────
+    cache_ref.set({
+        "insight":      insight_text,
+        "activity":     activity_text,
+        "generated_at": datetime.now(timezone.utc),
+    })
+
+    return {"insight": insight_text, "activity": activity_text}
 
 
 @app.get("/workout-plan/{user_id}")
