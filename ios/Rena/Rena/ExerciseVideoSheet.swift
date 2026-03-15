@@ -1,5 +1,6 @@
 import SwiftUI
 import AVKit
+import AVFoundation
 
 struct ExerciseVideoSheet: View {
     let exercise: PlannedExercise
@@ -122,6 +123,9 @@ struct ExerciseVideoSheet: View {
     }
 
     private func fetchVideo() {
+        // Allow audio even when ringer/silent switch is on
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
         Task {
             do {
                 let result = try await RenaAPI.shared.getExerciseVideo(
