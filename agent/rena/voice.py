@@ -50,13 +50,11 @@ _CONTEXT_PROMPTS = {
         "Keep it under 20 seconds and do not ask any questions beyond signing in."
     ),
     "goal": (
-        "Say 'Hi {name}! Let's set your health goal.' "
-        "Then immediately tell them what kinds of goals they can set: "
-        "losing weight, building fitness, training for an event like a race or wedding, "
-        "or building a habit like working out more. "
-        "Ask which one resonates or what they have in mind. "
-        "Once they tell you, ask for a target date, then call set_goal. "
-        "Do NOT ask how they are doing. Jump straight to goal-setting after the greeting."
+        "Say 'Hi {name}!' then immediately ask ONE question: "
+        "'What are you working toward — losing weight, building fitness, training for an event, or something else?' "
+        "When they answer, ask for a target date if they haven't given one. "
+        "Then call set_goal right away. If it's a weight goal, say 'I already have your starting weight' — never ask for it. "
+        "Keep the whole conversation to 2–3 exchanges maximum."
     ),
     "home": (
         "Say 'Hi {name}! What would you like to do today?' "
@@ -125,13 +123,23 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                     break
                 if event.content and event.content.parts:
                     for part in event.content.parts:
+                        # Skip internal thinking/preamble text — Gemini 2.5 Flash streams
+                        # markdown-formatted reasoning before tool calls; sending it to iOS
+                        # causes the client to receive junk text and may drop the connection
+                        # before the actual tool call fires.
+                        if getattr(part, "thought", False):
+                            print(f"[voice] skipping thought part: {str(part.text or '')[:60]!r}")
+                            continue
                         if part.inline_data:
+                            print(f"[voice] sending audio: {len(part.inline_data.data)} bytes → {user_id}")
                             await websocket.send_bytes(part.inline_data.data)
                         elif part.text:
+                            print(f"[voice] sending text: {part.text[:80]!r} → {user_id}")
                             await websocket.send_text(
                                 json.dumps({"type": "text", "text": part.text})
                             )
                 if event.turn_complete and not ws_closed:
+                    print(f"[voice] turn_complete → {user_id}")
                     await websocket.send_text(json.dumps({"type": "turn_complete"}))
         except genai_errors.APIError as e:
             # 1000 = Gemini closed cleanly because we closed live_queue after iOS disconnect
@@ -156,6 +164,7 @@ async def handle_voice(websocket: WebSocket, user_id: str,
 
                 if "bytes" in message:
                     # Raw PCM audio from iOS — use send_realtime for audio chunks
+                    print(f"[voice] recv audio: {len(message['bytes'])} bytes ← {user_id}")
                     live_queue.send_realtime(
                         genai_types.Blob(
                             data=message["bytes"],
