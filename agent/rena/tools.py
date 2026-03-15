@@ -319,43 +319,63 @@ def get_goal(user_id: str) -> dict:
     # Lazily generate image if missing
     if not goal_doc.get("image_url"):
         goal_text = goal_doc.get("goal", "")
+        goal_type = goal_doc.get("goal_type", "event")
         try:
+            import base64
             client = _get_text_client()
             from google.genai import types as genai_types
 
+            # Simple, clear prompt — one central subject, no text
+            type_hint = {
+                "weight_loss": "a person looking and feeling fit and confident",
+                "weight_gain": "a strong, athletic person with visible muscle definition",
+                "fitness":     "an athletic person in motion, full of energy",
+                "habit":       "a person in a healthy daily routine, calm and consistent",
+            }.get(goal_type, "a person achieving their health goal")
+
             prompt = (
-                f'Create a fun, vibrant, bold sticker-style illustration for this health goal: "{goal_text}"\n'
-                "Style: colorful, playful, exciting, motivational. Like a phone wallpaper or app icon.\n"
-                "Square composition. No text or words. High energy colors."
+                f'Minimalist illustration: {type_hint}. '
+                f'Inspired by this goal: "{goal_text}". '
+                "Warm, inspiring color palette. Clean composition. No text, no words, no numbers. "
+                "Square format. Soft background. Uplifting mood."
             )
 
             response = client.models.generate_content(
-                model="gemini-2.5-flash-image",
+                model="gemini-2.5-flash-preview-05-20",
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(
                     response_modalities=["IMAGE", "TEXT"]
                 ),
             )
 
-            image_data = None
+            image_bytes = None
+            mime_type = "image/png"
             for part in response.candidates[0].content.parts:
                 if part.inline_data:
-                    image_data = part.inline_data.data
+                    raw = part.inline_data.data
+                    mime_type = part.inline_data.mime_type or "image/png"
+                    # inline_data.data can be bytes or base64 string
+                    if isinstance(raw, (bytes, bytearray)):
+                        image_bytes = bytes(raw)
+                    else:
+                        image_bytes = base64.b64decode(raw)
                     break
 
-            if image_data:
+            if image_bytes:
+                ext = "jpg" if "jpeg" in mime_type else "png"
                 bucket_name = os.getenv("GCS_BUCKET", "rena-assets")
                 storage_client = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
-                bucket = storage_client.bucket(bucket_name)
-
-                blob = bucket.blob(f"goals/{user_id}/goal_icon.jpg")
-                blob.upload_from_string(image_data, content_type="image/jpeg")
-                image_url = f"https://storage.googleapis.com/{bucket_name}/goals/{user_id}/goal_icon.jpg"
-
+                blob = storage_client.bucket(bucket_name).blob(f"goals/{user_id}/vision.{ext}")
+                blob.upload_from_string(image_bytes, content_type=mime_type)
+                blob.make_public()
+                image_url = f"https://storage.googleapis.com/{bucket_name}/goals/{user_id}/vision.{ext}"
                 _goal_ref(user_id).set({"image_url": image_url}, merge=True)
                 goal_doc["image_url"] = image_url
-        except Exception:
-            pass  # image generation is best-effort
+                print(f"[goal] generated vision image for {user_id}: {image_url}")
+            else:
+                print(f"[goal] image generation returned no image data for '{goal_text}'")
+        except Exception as e:
+            print(f"[goal] image generation failed: {e}")
 
     # Recompute days_until_goal live
     try:
