@@ -931,9 +931,13 @@ def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: 
     tts_voice_name = "en-US-Neural2-D" if gender == "male" else "en-US-Neural2-F"
 
     # 2. Generate coaching script (~8s spoken = ~30 words)
-    muscles_hint = f" targeting {target_muscles}" if target_muscles else ""
+    muscles_focus = (
+        f"You are working your {target_muscles}. Mention them by name in the cues so the athlete knows what to feel. "
+        if target_muscles else ""
+    )
     prompt = (
-        f"Write an 8-second coaching voiceover script for a fitness video demonstrating {exercise_name}{muscles_hint}. "
+        f"Write an 8-second coaching voiceover script for a fitness video demonstrating {exercise_name}. "
+        f"{muscles_focus}"
         f"Cover: starting position, 1-2 key movement cues, one breathing tip. "
         f"Natural, encouraging tone. Exactly 28-35 words. No intro like 'Here we go'. Just the cues."
     )
@@ -987,11 +991,11 @@ def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: 
             return f.read()
 
 
-def _critique_exercise_video(video_bytes: bytes, exercise_name: str) -> tuple:
+def _critique_exercise_video(video_bytes: bytes, exercise_name: str, target_muscles: str = "") -> tuple:
     """
-    Use Gemini Vision to check if a generated exercise video is acceptable.
+    Use Gemini Vision to check if a generated exercise video matches the intended exercise
+    and visually works the expected target muscles.
     Returns (is_acceptable: bool, reason: str).
-    Checks: exactly one person visible, person is performing the exercise, no obvious glitches.
     """
     import subprocess, tempfile, os as _os
     from google.genai import types as genai_types
@@ -1017,13 +1021,22 @@ def _critique_exercise_video(video_bytes: bytes, exercise_name: str) -> tuple:
             print("[critic] could not extract frames, accepting video")
             return True, ""
 
+        muscles_clause = (
+            f"(2) the movement clearly engages the {target_muscles} — if the body position makes it "
+            f"impossible to work those muscles, fail it, "
+            if target_muscles else ""
+        )
+
         client = _get_genai_client()
         parts = [genai_types.Part.from_bytes(data=fb, mime_type="image/jpeg") for fb in frame_bytes_list]
         parts.append(
-            f"These frames are from a fitness coaching video for '{exercise_name}'. "
-            "Is the video acceptable? Fail it if: (1) more than one person is visible at any point, "
-            "(2) the person is clearly not performing the stated exercise, "
-            "(3) there are obvious AI glitches like body parts merging or distorted limbs. "
+            f"These frames are from a fitness coaching video intended to show '{exercise_name}'"
+            + (f" targeting {target_muscles}" if target_muscles else "") + ". "
+            "Evaluate whether this video is acceptable. Fail it if: "
+            "(1) the person is clearly performing a completely different exercise or the movement is wrong, "
+            + muscles_clause +
+            "(3) there are severe AI glitches like fully distorted limbs or an impossible body shape. "
+            "Minor imperfections are fine — only fail on clear, obvious problems. "
             "Reply with exactly PASS if acceptable, or FAIL: <brief one-line reason> if not."
         )
 
@@ -1042,12 +1055,16 @@ def _critique_exercise_video(video_bytes: bytes, exercise_name: str) -> tuple:
 
 
 def _veo_prompt(exercise_name: str, target_muscles: str = "") -> str:
-    muscles_hint = f", targeting {target_muscles}" if target_muscles else ""
+    muscles_hint = f", engaging {target_muscles}" if target_muscles else ""
+    muscles_visual = (
+        f" Clearly show the {target_muscles} being activated — camera angle and lighting should make "
+        f"the muscle engagement visible."
+        if target_muscles else ""
+    )
     return (
-        f"A single certified personal trainer, alone in frame with no other people visible, "
-        f"demonstrating perfect form for {exercise_name}{muscles_hint}. "
-        f"Only one person on screen at all times. Full body visible from a 45-degree angle, "
-        f"clear coaching perspective showing correct technique and posture. "
+        f"A certified personal trainer demonstrating perfect form for {exercise_name}{muscles_hint}. "
+        f"Full body visible from a 45-degree angle, clear coaching perspective showing correct technique, "
+        f"posture, and muscle engagement.{muscles_visual} "
         f"Clean gym background. Professional fitness coaching video."
     )
 
@@ -1145,9 +1162,9 @@ def get_exercise_video_status(job_id: str) -> dict:
         # Veo returns inline video_bytes (not a GCS URI)
         video_bytes = operation.response.generated_videos[0].video.video_bytes
 
-        # Critic layer — reject bad videos (multiple people, wrong exercise, glitches)
+        # Critic layer — reject videos that show wrong exercise or fail to work target muscles
         attempt = job.get("attempt", 0)
-        is_ok, reason = _critique_exercise_video(video_bytes, job["exercise_name"])
+        is_ok, reason = _critique_exercise_video(video_bytes, job["exercise_name"], job.get("target_muscles", ""))
         if not is_ok and attempt < 3:
             print(f"[critic] rejected (attempt {attempt}): {reason} — submitting new Veo job")
             new_prompt = _veo_prompt(job["exercise_name"], job.get("target_muscles", ""))
