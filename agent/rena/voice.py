@@ -52,13 +52,14 @@ _CONTEXT_PROMPTS = {
         "Keep it under 20 seconds and do not ask any questions beyond signing in."
     ),
     "goal": (
+        "You already know their current weight from [current_weight_kg:X] in this message — use it to calculate target_value directly. "
         "Say 'Hi {name}!' then ask: 'What are you working toward — losing weight, building fitness, training for an event, or something else?' "
         "When they answer: "
-        "- If it's a weight goal and they haven't said how much, ask 'How much do you want to lose, or what weight are you aiming for?' "
-        "- Then ask for their target date if they haven't given one. "
-        "- If they mention their current weight at any point, say 'I already have your starting weight' — do not ask for it. "
-        "Once you have goal + target amount (for weight goals) + deadline, call set_goal immediately. "
-        "Keep it to 3 exchanges maximum."
+        "- Weight goal: if they give an amount or target (e.g. 'lose 5kg', 'get to 75kg'), compute target_value from their current weight and ask only for the deadline. "
+        "  If they say just 'lose weight' with no amount, ask 'What weight are you aiming for?' then ask for the deadline. "
+        "  Never ask for their current weight — you already have it. "
+        "- Other goals: ask for deadline if not given. "
+        "Call set_goal as soon as you have everything. Keep it to 2–3 exchanges."
     ),
     "home": (
         "Say 'Hi {name}! What would you like to do today?' "
