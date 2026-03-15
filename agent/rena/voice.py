@@ -42,7 +42,6 @@ RUN_CONFIG = RunConfig(
             prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name="Aoede")
         )
     ),
-    session_resumption=genai_types.SessionResumptionConfig(transparent=True),
 )
 
 
