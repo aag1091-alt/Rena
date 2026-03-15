@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from rena.voice import handle_voice
-from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal, update_visual_journey, create_profile, reset_user, correct_scan
+from rena.tools import scan_image, log_meal, log_weight, get_progress, get_goal, update_visual_journey, create_profile, reset_user
 
 load_dotenv()
 
@@ -145,34 +145,9 @@ async def log_weight_endpoint(req: LogWeightRequest):
     return log_weight(req.user_id, req.weight_kg)
 
 
-class ScanCorrectRequest(BaseModel):
-    user_id: str
-    description: str
-    correction: str
-
-
-@app.post("/scan/correct")
-async def scan_correct(req: ScanCorrectRequest):
-    """Recalculate nutrition for a food given a user correction (direct call)."""
-    return correct_scan(req.user_id, req.description, req.correction)
-
-
-@app.get("/pending_correction/{user_id}")
-async def pending_correction(user_id: str):
-    """Poll for a scan correction result written by the voice agent. Clears after reading."""
-    from rena.tools import _user_ref
-    doc_ref = _user_ref(user_id).collection("pending").document("scan_correction")
-    doc = doc_ref.get()
-    if not doc.exists:
-        return {"ready": False}
-    data = doc.to_dict()
-    doc_ref.delete()
-    return {"ready": True, "result": data.get("result", {})}
-
 
 @app.websocket("/ws/{user_id}")
 async def voice_endpoint(websocket: WebSocket, user_id: str,
-                         context: str | None = None, name: str | None = None,
-                         food: str | None = None):
+                         context: str | None = None, name: str | None = None):
     """Real-time voice conversation with Rena via Gemini Live API."""
-    await handle_voice(websocket, user_id, context=context, name=name, food=food)
+    await handle_voice(websocket, user_id, context=context, name=name)

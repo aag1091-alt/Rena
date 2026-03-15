@@ -292,29 +292,6 @@ class RenaAPI {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
-    func correctScan(userId: String, description: String, correction: String) async throws -> ScanResponse {
-        var req = request("\(kBaseURL)/scan/correct", method: "POST")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "user_id": userId,
-            "description": description,
-            "correction": correction
-        ])
-        let (data, _) = try await session.data(for: req)
-        return try JSONDecoder().decode(ScanResponse.self, from: data)
-    }
-
-    func getPendingCorrection(userId: String) async throws -> ScanResponse? {
-        let req = request("\(kBaseURL)/pending_correction/\(userId)")
-        let (data, _) = try await session.data(for: req)
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let ready = json["ready"] as? Bool, ready,
-              let resultDict = json["result"],
-              let resultData = try? JSONSerialization.data(withJSONObject: resultDict) else {
-            return nil
-        }
-        return try? JSONDecoder().decode(ScanResponse.self, from: resultData)
-    }
-
     func getVisualJourney(userId: String) async throws -> VisualJourneyResponse {
         var req = request("\(kBaseURL)/visual_journey", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId])

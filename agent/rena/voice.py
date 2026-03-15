@@ -62,21 +62,11 @@ _CONTEXT_PROMPTS = {
         "Say 'Hi {name}! What would you like to do today?' "
         "Keep it short and friendly — one sentence."
     ),
-    "scan_correct": (
-        "Do NOT say 'how can I help you' or any generic greeting. "
-        "Your ONLY job right now is to fix the scan for '{food}'. "
-        "Say exactly one sentence like: 'Was the portion bigger, or was it cooked differently?' "
-        "Then wait. When they answer, immediately call correct_scan with "
-        "user_id, description='{food}', and their correction. "
-        "Once the tool returns, say the new calorie count in one sentence, e.g. "
-        "'Updated — that's 380 calories.' Then stop."
-    ),
 }
 
 
 async def handle_voice(websocket: WebSocket, user_id: str,
-                       context: str | None = None, name: str | None = None,
-                       food: str | None = None):
+                       context: str | None = None, name: str | None = None):
     from .agent import root_agent
 
     await websocket.accept()
@@ -110,9 +100,7 @@ async def handle_voice(websocket: WebSocket, user_id: str,
         except Exception:
             text = f"[user_id:{user_id}]"
         if context and context in _CONTEXT_PROMPTS:
-            prompt = _CONTEXT_PROMPTS[context]
-            prompt = prompt.replace("{name}", name or "there")
-            prompt = prompt.replace("{food}", food or "the item")
+            prompt = _CONTEXT_PROMPTS[context].replace("{name}", name or "there")
             text = f"{text}\n{prompt}"
         live_queue.send_content(
             genai_types.Content(
