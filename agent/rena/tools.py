@@ -1,5 +1,6 @@
 import base64
 import os
+import uuid
 from datetime import date, datetime, timezone
 
 from google import genai
@@ -728,6 +729,268 @@ def log_weight(user_id: str, weight_kg: float) -> dict:
     return {"status": "logged", "weight_kg": weight_kg}
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# WORKOUT PLAN
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _workout_plan_ref(user_id: str, date_str: str):
+    return _user_ref(user_id).collection("workout_plans").document(date_str)
+
+
+def get_workout_plan(user_id: str, for_date: str = None) -> dict | None:
+    """Return the saved workout plan for a given date, or None if not set."""
+    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    doc = _workout_plan_ref(user_id, date_str).get()
+    return doc.to_dict() if doc.exists else None
+
+
+def save_workout_plan(user_id: str, plan: dict) -> dict:
+    """Persist a workout plan dict to Firestore, keyed by date."""
+    date_str = plan.get("date") or datetime.now(timezone.utc).date().isoformat()
+    plan["date"] = date_str
+    if not plan.get("id"):
+        plan["id"] = str(uuid.uuid4())
+    _workout_plan_ref(user_id, date_str).set(plan)
+    return plan
+
+
+def generate_workout_plan(user_id: str) -> dict:
+    """
+    Generate and save a personalised workout plan for today using Gemini.
+    Reads the user's goal, body weight, and remaining calories from Firestore.
+    Returns the saved plan dict.
+
+    Args:
+        user_id: The user's unique ID.
+
+    Returns:
+        The generated workout plan with exercises, sets/reps or duration, and calories per exercise.
+    """
+    import json, re
+
+    profile  = _user_ref(user_id).get().to_dict() or {}
+    goal_doc = _goal_ref(user_id).get().to_dict() or {}
+    today    = datetime.now(timezone.utc).date().isoformat()
+    log      = _user_ref(user_id).collection("logs").document(today).get().to_dict() or {}
+
+    calorie_target     = goal_doc.get("daily_calorie_target", profile.get("daily_calorie_target", 2000))
+    weight_kg          = float(profile.get("weight_kg", 75.0))
+    goal_type          = goal_doc.get("goal_type", "fitness")
+    direction          = goal_doc.get("direction", "")
+    goal_text          = goal_doc.get("goal", "general fitness")
+    calories_consumed  = sum(m.get("calories", 0) for m in log.get("meals", []))
+    calories_remaining = max(0, calorie_target - calories_consumed)
+
+    prompt = f"""Generate a workout plan for today for someone with:
+- Goal: {goal_text} ({goal_type}, direction: {direction})
+- Body weight: {weight_kg} kg
+- Calories remaining today: {calories_remaining} kcal
+
+Rules:
+- 3-6 exercises total.
+- Strength exercises: include sets, reps. Set duration_min to null.
+- Cardio exercises: include duration_min. Set sets, reps, weight_kg to null.
+- calories_burned: estimate per exercise using MET * {weight_kg}kg * (duration/60). For strength use time under tension estimate.
+- target_muscles: comma-separated primary muscles (e.g. "chest, triceps, anterior deltoid").
+- Total workout 30-60 minutes.
+- Match goal: weight_loss = cardio + light strength; weight_gain = strength focus; fitness = mixed.
+
+Return ONLY valid JSON, no markdown, no explanation:
+{{
+  "name": "Upper Body Strength",
+  "total_duration_min": 45,
+  "exercises": [
+    {{
+      "id": "UUID_PLACEHOLDER",
+      "name": "Bench Press",
+      "type": "strength",
+      "sets": 3,
+      "reps": 10,
+      "weight_kg": 0,
+      "duration_min": null,
+      "calories_burned": 45,
+      "target_muscles": "chest, triceps, anterior deltoid"
+    }},
+    {{
+      "id": "UUID_PLACEHOLDER",
+      "name": "Cycling",
+      "type": "cardio",
+      "sets": null,
+      "reps": null,
+      "weight_kg": null,
+      "duration_min": 20,
+      "calories_burned": 150,
+      "target_muscles": "quadriceps, glutes, cardiovascular"
+    }}
+  ]
+}}"""
+
+    client   = _get_genai_client()
+    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    raw      = response.text.strip()
+    raw      = re.sub(r"^```(?:json)?\n?", "", raw)
+    raw      = re.sub(r"\n?```$", "", raw)
+    plan_data = json.loads(raw)
+
+    for ex in plan_data.get("exercises", []):
+        if not ex.get("id") or "PLACEHOLDER" in ex.get("id", ""):
+            ex["id"] = str(uuid.uuid4())
+
+    plan_data["date"] = today
+    plan_data["id"]   = str(uuid.uuid4())
+
+    return save_workout_plan(user_id, plan_data)
+
+
+def toggle_exercise_complete(user_id: str, exercise_id: str, for_date: str = None) -> dict:
+    """Toggle the completed flag on a planned exercise (does not log the workout)."""
+    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    ref      = _workout_plan_ref(user_id, date_str)
+    plan     = ref.get().to_dict()
+    if not plan:
+        return {"status": "error", "message": "Plan not found"}
+    exercises = plan.get("exercises", [])
+    for ex in exercises:
+        if ex.get("id") == exercise_id:
+            ex["completed"] = not ex.get("completed", False)
+            break
+    ref.update({"exercises": exercises})
+    return {"status": "ok", "exercises": exercises}
+
+
+def log_exercise_from_plan(user_id: str, exercise_id: str, for_date: str = None, calories_override: int = None) -> dict:
+    """Log a completed exercise from the workout plan into the workout log."""
+    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    plan     = get_workout_plan(user_id, date_str)
+    if not plan:
+        return {"status": "error", "message": "Plan not found"}
+    exercise = next((e for e in plan.get("exercises", []) if e.get("id") == exercise_id), None)
+    if not exercise:
+        return {"status": "error", "message": "Exercise not found"}
+
+    calories = calories_override if calories_override is not None else exercise.get("calories_burned", 0)
+    duration = exercise.get("duration_min") or 0
+    if not duration and exercise.get("sets"):
+        # Rough estimate: 3 min per set for strength
+        duration = max(10, exercise.get("sets", 3) * 3)
+
+    return log_workout(user_id, exercise["name"], duration or 30, calories)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# EXERCISE VIDEO (Veo 2)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
+    """
+    Return a cached video URL for an exercise, or start a Veo 2 generation job.
+
+    Returns:
+        {"status": "ready", "video_url": "..."} if cached.
+        {"status": "generating", "job_id": "..."} if job started or already running.
+    """
+    import re
+    from google.genai import types as genai_types
+
+    slug         = re.sub(r"[^a-z0-9]+", "_", exercise_name.lower()).strip("_")
+    bucket_name  = os.getenv("GCS_BUCKET", "rena-visual-journey")
+    gcs_client   = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
+    bucket       = gcs_client.bucket(bucket_name)
+    blob_path    = f"exercise_videos/{slug}.mp4"
+    blob         = bucket.blob(blob_path)
+
+    if blob.exists():
+        blob.make_public()
+        return {"status": "ready", "video_url": f"https://storage.googleapis.com/{bucket_name}/{blob_path}"}
+
+    # Return existing pending job for the same exercise
+    jobs_ref = db.collection("exercise_video_jobs")
+    for job_doc in jobs_ref.where("slug", "==", slug).where("status", "==", "generating").limit(1).stream():
+        return {"status": "generating", "job_id": job_doc.id}
+
+    # Submit new Veo 2 job
+    client       = _get_genai_client()
+    muscles_hint = f", targeting {target_muscles}" if target_muscles else ""
+    prompt       = (
+        f"A certified personal trainer demonstrating perfect form for {exercise_name}{muscles_hint}. "
+        f"Full body visible from a 45-degree angle, clear coaching perspective showing correct technique and posture. "
+        f"Clean gym background. Professional fitness coaching video."
+    )
+
+    operation = client.models.generate_videos(
+        model="veo-002",
+        prompt=prompt,
+        config=genai_types.GenerateVideoConfig(
+            aspect_ratio="9:16",
+            duration_seconds=8,
+            number_of_videos=1,
+        ),
+    )
+
+    job_id = str(uuid.uuid4())
+    jobs_ref.document(job_id).set({
+        "slug":           slug,
+        "exercise_name":  exercise_name,
+        "operation_name": operation.name,
+        "status":         "generating",
+        "created_at":     firestore.SERVER_TIMESTAMP,
+    })
+
+    return {"status": "generating", "job_id": job_id}
+
+
+def get_exercise_video_status(job_id: str) -> dict:
+    """
+    Poll the status of a Veo 2 video generation job.
+
+    Returns:
+        {"status": "generating"} | {"status": "done", "video_url": "..."} | {"status": "error", ...}
+    """
+    job_doc = db.collection("exercise_video_jobs").document(job_id).get()
+    if not job_doc.exists:
+        return {"status": "error", "message": "Job not found"}
+
+    job         = job_doc.to_dict()
+    slug        = job["slug"]
+    bucket_name = os.getenv("GCS_BUCKET", "rena-visual-journey")
+
+    if job["status"] == "done":
+        return {"status": "done", "video_url": f"https://storage.googleapis.com/{bucket_name}/exercise_videos/{slug}.mp4"}
+    if job["status"] == "error":
+        return {"status": "error", "message": job.get("error", "Generation failed")}
+
+    try:
+        client    = _get_genai_client()
+        operation = client.operations.get(operation=job["operation_name"])
+
+        if not operation.done:
+            return {"status": "generating"}
+
+        # Copy from Veo's temp GCS bucket to our bucket
+        video      = operation.response.generated_videos[0]
+        source_uri = video.video.uri  # gs://temp-bucket/path/video.mp4
+
+        src_path   = source_uri.replace("gs://", "")
+        src_bucket_name, src_blob_path = src_path.split("/", 1)
+
+        gcs_client  = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
+        src_bucket  = gcs_client.bucket(src_bucket_name)
+        src_blob    = src_bucket.blob(src_blob_path)
+        dest_bucket = gcs_client.bucket(bucket_name)
+
+        src_bucket.copy_blob(src_blob, dest_bucket, f"exercise_videos/{slug}.mp4")
+        dest_bucket.blob(f"exercise_videos/{slug}.mp4").make_public()
+
+        video_url = f"https://storage.googleapis.com/{bucket_name}/exercise_videos/{slug}.mp4"
+        db.collection("exercise_video_jobs").document(job_id).update({"status": "done", "video_url": video_url})
+
+        return {"status": "done", "video_url": video_url}
+
+    except Exception as e:
+        db.collection("exercise_video_jobs").document(job_id).update({"status": "error", "error": str(e)})
+        return {"status": "error", "message": str(e)}
+
+
 def reset_user(user_id: str) -> dict:
     """
     DEV ONLY — delete all Firestore data for a user so onboarding can be re-tested.
@@ -743,7 +1006,7 @@ def reset_user(user_id: str) -> dict:
             delete_collection(col_ref, batch_size)
 
     user_ref = _user_ref(user_id)
-    for sub in ["logs", "progress", "visual_journey"]:
+    for sub in ["logs", "progress", "visual_journey", "workout_plans"]:
         delete_collection(user_ref.collection(sub))
     user_ref.delete()
 
