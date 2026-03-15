@@ -214,6 +214,76 @@ struct GoalResponse: Codable {
     }
 }
 
+// MARK: - Workout Plan Models
+
+struct PlannedExercise: Codable, Identifiable {
+    let id: String
+    let name: String
+    let type: String          // "strength" | "cardio"
+    let sets: Int?
+    let reps: Int?
+    let weightKg: Double?
+    let durationMin: Int?
+    let caloriesBurned: Int
+    let targetMuscles: String?
+    var completed: Bool
+    var videoUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, type, sets, reps, completed
+        case weightKg      = "weight_kg"
+        case durationMin   = "duration_min"
+        case caloriesBurned = "calories_burned"
+        case targetMuscles = "target_muscles"
+        case videoUrl      = "video_url"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id             = try c.decode(String.self, forKey: .id)
+        name           = try c.decode(String.self, forKey: .name)
+        type           = try c.decode(String.self, forKey: .type)
+        sets           = try? c.decode(Int.self, forKey: .sets)
+        reps           = try? c.decode(Int.self, forKey: .reps)
+        weightKg       = try? c.decode(Double.self, forKey: .weightKg)
+        durationMin    = try? c.decode(Int.self, forKey: .durationMin)
+        targetMuscles  = try? c.decode(String.self, forKey: .targetMuscles)
+        videoUrl       = try? c.decode(String.self, forKey: .videoUrl)
+        completed      = (try? c.decode(Bool.self, forKey: .completed)) ?? false
+        if let i = try? c.decode(Int.self, forKey: .caloriesBurned) { caloriesBurned = i }
+        else if let d = try? c.decode(Double.self, forKey: .caloriesBurned) { caloriesBurned = Int(d) }
+        else { caloriesBurned = 0 }
+    }
+}
+
+struct PlannedWorkout: Codable {
+    let id: String
+    let name: String
+    let date: String
+    let totalDurationMin: Int
+    let exercises: [PlannedExercise]
+
+    var totalCalories: Int { exercises.reduce(0) { $0 + $1.caloriesBurned } }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, date, exercises
+        case totalDurationMin = "total_duration_min"
+    }
+}
+
+struct VideoStatus: Codable {
+    let status: String      // "ready" | "generating" | "done" | "error"
+    let videoUrl: String?
+    let jobId: String?
+    let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case status, message
+        case videoUrl = "video_url"
+        case jobId    = "job_id"
+    }
+}
+
 class RenaAPI {
     static let shared = RenaAPI()
     private let session = URLSession.shared
@@ -301,6 +371,11 @@ class RenaAPI {
         _ = try await session.data(for: req)
     }
 
+    func devSeed(userId: String) async throws {
+        let req = request("\(kBaseURL)/dev/seed/\(userId)", method: "POST")
+        _ = try await session.data(for: req)
+    }
+
     func logMeal(userId: String, name: String, calories: Int, proteinG: Int = 0, carbsG: Int = 0, fatG: Int = 0) async throws {
         var req = request("\(kBaseURL)/log/meal", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
@@ -315,6 +390,58 @@ class RenaAPI {
         req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId, "weight_kg": weightKg])
         let (data, _) = try await session.data(for: req)
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    // MARK: - Workout Plan
+
+    func getWorkoutPlan(userId: String, date: String? = nil) async throws -> PlannedWorkout? {
+        var urlString = "\(kBaseURL)/workout-plan/\(userId)"
+        if let date { urlString += "?date=\(date)" }
+        let req = request(urlString)
+        let (data, _) = try await session.data(for: req)
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], json.isEmpty { return nil }
+        return try? JSONDecoder().decode(PlannedWorkout.self, from: data)
+    }
+
+    func generateWorkoutPlan(userId: String) async throws -> PlannedWorkout {
+        let req = request("\(kBaseURL)/workout-plan/\(userId)", method: "POST")
+        let (data, _) = try await session.data(for: req)
+        return try JSONDecoder().decode(PlannedWorkout.self, from: data)
+    }
+
+    func toggleExerciseComplete(userId: String, exerciseId: String, date: String? = nil) async throws {
+        var urlString = "\(kBaseURL)/workout-plan/\(userId)/exercise/\(exerciseId)/complete"
+        if let date { urlString += "?date=\(date)" }
+        var req = request(urlString, method: "PATCH")
+        req.httpBody = Data()
+        _ = try await session.data(for: req)
+    }
+
+    func logExercise(userId: String, exerciseId: String, calories: Int? = nil, date: String? = nil) async throws {
+        var req = request("\(kBaseURL)/workout-plan/\(userId)/exercise/\(exerciseId)/log", method: "POST")
+        var body: [String: Any] = [:]
+        if let cal = calories { body["calories_override"] = cal }
+        if let d = date { body["date"] = d }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await session.data(for: req)
+    }
+
+    func getExerciseVideo(exerciseName: String, targetMuscles: String = "") async throws -> VideoStatus {
+        let encoded = exerciseName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? exerciseName
+        var urlString = "\(kBaseURL)/exercise/video/\(encoded)"
+        if !targetMuscles.isEmpty {
+            let m = targetMuscles.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? targetMuscles
+            urlString += "?target_muscles=\(m)"
+        }
+        let req = request(urlString)
+        let (data, _) = try await session.data(for: req)
+        return try JSONDecoder().decode(VideoStatus.self, from: data)
+    }
+
+    func pollExerciseVideoStatus(jobId: String) async throws -> VideoStatus {
+        let req = request("\(kBaseURL)/exercise/video/status/\(jobId)")
+        let (data, _) = try await session.data(for: req)
+        return try JSONDecoder().decode(VideoStatus.self, from: data)
     }
 
 }
