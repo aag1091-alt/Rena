@@ -7,6 +7,7 @@ struct GoalView: View {
     @State private var goalData: GoalResponse? = nil
     @State private var isLoading = true
     @State private var isVoiceConnected = false
+    @State private var isRefreshingImage = false
 
     var body: some View {
         NavigationView {
@@ -21,7 +22,12 @@ struct GoalView: View {
                         VStack(spacing: 16) {
 
                             // ── Vision board image ──────────────────
-                            VisionBoardCard(imageUrl: goal.imageUrl, goalText: goal.goal)
+                            VisionBoardCard(
+                                imageUrl: goal.imageUrl,
+                                goalText: goal.goal,
+                                isRefreshing: isRefreshingImage,
+                                onRefresh: { Task { await refreshImage() } }
+                            )
 
                             // ── Goal detail card ────────────────────
                             GoalDetailCard(goal: goal)
@@ -81,6 +87,15 @@ struct GoalView: View {
         let data = try? await RenaAPI.shared.getGoal(userId: appState.userId)
         await MainActor.run { goalData = data; isLoading = false }
     }
+
+    private func refreshImage() async {
+        await MainActor.run { isRefreshingImage = true }
+        let data = try? await RenaAPI.shared.refreshGoalImage(userId: appState.userId)
+        await MainActor.run {
+            if let data { goalData = data }
+            isRefreshingImage = false
+        }
+    }
 }
 
 // MARK: - Vision board hero
@@ -88,6 +103,8 @@ struct GoalView: View {
 struct VisionBoardCard: View {
     let imageUrl: String?
     let goalText: String
+    var isRefreshing: Bool = false
+    var onRefresh: (() -> Void)? = nil
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -116,26 +133,48 @@ struct VisionBoardCard: View {
             .frame(height: 300)
             .clipped()
 
-            // Gradient overlay + goal text
+            // Gradient overlay
             LinearGradient(
-                colors: [Color.clear, Color.black.opacity(0.55)],
+                colors: [Color.clear, Color.black.opacity(0.6)],
                 startPoint: .center,
                 endPoint: .bottom
             )
-            .frame(height: 160)
+            .frame(height: 180)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("YOUR VISION")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
-                    .kerning(1.2)
-                Text(goalText)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .shadow(radius: 4)
+            // Bottom: goal text + refresh button
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("YOUR VISION")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                        .kerning(1.2)
+                    Text(goalText)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                        .shadow(radius: 4)
+                }
+                Spacer()
+                if let onRefresh {
+                    Button(action: onRefresh) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.black.opacity(0.35))
+                                .frame(width: 36, height: 36)
+                            if isRefreshing {
+                                ProgressView()
+                                    .tint(.white)
+                                    .scaleEffect(0.75)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                    }
+                    .disabled(isRefreshing)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(20)
         }
         .cornerRadius(22)

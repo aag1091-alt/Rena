@@ -372,6 +372,12 @@ class RenaAPI {
         return try JSONDecoder().decode(GoalResponse.self, from: data)
     }
 
+    func refreshGoalImage(userId: String) async throws -> GoalResponse {
+        let req = request("\(kBaseURL)/goal/\(userId)?refresh=true")
+        let (data, _) = try await session.data(for: req)
+        return try JSONDecoder().decode(GoalResponse.self, from: data)
+    }
+
     func getWorkbookInsight(userId: String, date: String? = nil) async throws -> (insight: String, activity: String) {
         var urlString = "\(kBaseURL)/workbook/insight/\(userId)"
         if let date { urlString += "?date=\(date)" }
