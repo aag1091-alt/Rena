@@ -274,10 +274,19 @@ struct ScanItemCard: View {
     private var sliderMin: Double { 50 }
     private var sliderMax: Double { Double(max(500, item.calories * 3)) }
 
+    /// Estimated grams based on macro totals (protein+carbs+fat ≈ dry weight),
+    /// scaled proportionally to the adjusted calorie amount.
+    private var estimatedGrams: Int? {
+        let totalMacroG = item.proteinG + item.carbsG + item.fatG
+        guard totalMacroG > 0, item.calories > 0 else { return nil }
+        let ratio = Double(adjustedCalories) / Double(item.calories)
+        return max(1, Int(Double(totalMacroG) * ratio))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
 
-            // Name + calories
+            // Name + calories + estimated grams
             HStack(alignment: .top) {
                 Text(item.name)
                     .font(.headline)
@@ -292,6 +301,13 @@ struct ScanItemCard: View {
                     Text("kcal")
                         .font(.caption)
                         .foregroundColor(Color(hex: "7C5C45"))
+                    if let grams = estimatedGrams {
+                        Text("~\(grams)g")
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(Color(hex: "B09880"))
+                            .contentTransition(.numericText())
+                            .animation(.spring(duration: 0.2), value: grams)
+                    }
                 }
             }
 
