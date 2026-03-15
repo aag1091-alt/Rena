@@ -341,7 +341,7 @@ def get_goal(user_id: str) -> dict:
             )
 
             response = client.models.generate_content(
-                model="gemini-2.5-flash-preview-05-20",
+                model="gemini-2.0-flash-preview-image-generation",
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(
                     response_modalities=["IMAGE", "TEXT"]
