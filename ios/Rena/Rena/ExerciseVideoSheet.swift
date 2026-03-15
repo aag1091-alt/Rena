@@ -5,7 +5,8 @@ import AVFoundation
 struct ExerciseVideoSheet: View {
     let exercise: PlannedExercise
 
-    @State private var player: AVPlayer? = nil
+    @State private var player: AVQueuePlayer? = nil
+    @State private var playerLooper: AVPlayerLooper? = nil
     @State private var status: String = "loading"   // "loading" | "generating" | "ready" | "error"
     @State private var jobId: String? = nil
     @State private var errorMessage: String = ""
@@ -100,7 +101,9 @@ struct ExerciseVideoSheet: View {
         .onAppear { fetchVideo() }
         .onDisappear {
             pollTimer?.invalidate()
+            playerLooper = nil
             player?.pause()
+            player = nil
         }
     }
 
@@ -142,15 +145,12 @@ struct ExerciseVideoSheet: View {
     private func handleVideoStatus(_ vs: VideoStatus) async {
         if vs.status == "ready" || vs.status == "done", let url = vs.videoUrl {
             await MainActor.run {
+                let item = AVPlayerItem(url: URL(string: url)!)
+                let queuePlayer = AVQueuePlayer()
+                playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
+                player = queuePlayer
                 status = "ready"
-                player = AVPlayer(url: URL(string: url)!)
-                player?.play()
-                // Loop
-                NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
-                    object: player?.currentItem, queue: .main) { _ in
-                    player?.seek(to: .zero)
-                    player?.play()
-                }
+                queuePlayer.play()
             }
         } else if vs.status == "generating", let jid = vs.jobId {
             await MainActor.run { status = "generating"; jobId = jid }
