@@ -881,16 +881,56 @@ def log_exercise_from_plan(user_id: str, exercise_id: str, for_date: str = None,
 # EXERCISE VIDEO (Veo 2)
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _detect_trainer_gender(video_bytes: bytes) -> str:
+    """Extract a frame from the video and use Gemini Vision to detect trainer gender."""
+    import subprocess, tempfile, os as _os, base64
+    from google.genai import types as genai_types
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_path = _os.path.join(tmpdir, "video.mp4")
+            frame_path = _os.path.join(tmpdir, "frame.jpg")
+            with open(video_path, "wb") as f:
+                f.write(video_bytes)
+            # Extract frame at 1 second
+            subprocess.run(
+                ["ffmpeg", "-y", "-ss", "1", "-i", video_path, "-frames:v", "1", frame_path],
+                check=True, capture_output=True,
+            )
+            with open(frame_path, "rb") as f:
+                frame_bytes = f.read()
+
+        client = _get_genai_client()
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                genai_types.Part.from_bytes(data=frame_bytes, mime_type="image/jpeg"),
+                "Is the fitness trainer in this image male or female? Reply with only one word: male or female.",
+            ],
+        )
+        gender = response.text.strip().lower()
+        print(f"[tts] detected trainer gender: {gender}")
+        return gender if gender in ("male", "female") else "male"
+    except Exception as e:
+        print(f"[tts] gender detection failed: {e}")
+        return "male"
+
+
 def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: str = "") -> bytes:
     """
     Generate a short coaching voiceover for an exercise and mux it into the video.
-    Uses Gemini to write the script and Google Cloud TTS for speech synthesis.
+    Detects trainer gender from the video and matches the TTS voice accordingly.
     Falls back to returning the original silent video if anything fails.
     """
     import subprocess, tempfile, os as _os
     from google.cloud import texttospeech
 
-    # 1. Generate coaching script (~8s spoken = ~30 words)
+    # 1. Detect trainer gender to match voice
+    gender = _detect_trainer_gender(video_bytes)
+    # Neural2 voices: D/J = male, F/H = female
+    tts_voice_name = "en-US-Neural2-D" if gender == "male" else "en-US-Neural2-F"
+
+    # 2. Generate coaching script (~8s spoken = ~30 words)
     muscles_hint = f" targeting {target_muscles}" if target_muscles else ""
     prompt = (
         f"Write an 8-second coaching voiceover script for a fitness video demonstrating {exercise_name}{muscles_hint}. "
@@ -900,14 +940,14 @@ def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: 
     client   = _get_genai_client()
     response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
     script   = response.text.strip()
-    print(f"[tts] script for '{exercise_name}': {script}")
+    print(f"[tts] voice={tts_voice_name} script for '{exercise_name}': {script}")
 
-    # 2. TTS → MP3
-    tts_client     = texttospeech.TextToSpeechClient()
+    # 3. TTS → MP3
+    tts_client      = texttospeech.TextToSpeechClient()
     synthesis_input = texttospeech.SynthesisInput(text=script)
     voice = texttospeech.VoiceSelectionParams(
         language_code="en-US",
-        name="en-US-Neural2-D",  # natural male coaching voice
+        name=tts_voice_name,
     )
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
