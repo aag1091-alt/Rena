@@ -35,6 +35,7 @@ struct DataView: View {
     private var displayWater: Int            { dayData?.waterGlasses     ?? (isToday ? appState.waterGlasses     : 0) }
     private var displayMeals: [MealEntry]    { dayData?.mealsLogged      ?? (isToday ? appState.mealsLogged     : []) }
     private var displayWorkouts: [WorkoutEntry] { dayData?.workoutsLogged ?? (isToday ? appState.workoutsLogged : []) }
+    private var displayWeight: Double?       { dayData?.weightKg         ?? (isToday ? appState.todayWeightKg  : nil) }
 
     var body: some View {
         NavigationView {
@@ -117,6 +118,7 @@ struct DataView: View {
                             caloriesTarget: displayCaloriesTarget,
                             water: displayWater
                         )
+                        WeightCard(weight: displayWeight, isToday: isToday)
                         DayFoodLog(meals: displayMeals)
                         DayWorkoutLog(workouts: displayWorkouts)
                     }
@@ -631,7 +633,8 @@ struct WorkoutRow: View {
 // MARK: - Weight card
 
 struct WeightCard: View {
-    @EnvironmentObject var appState: AppState
+    let weight: Double?
+    var isToday: Bool = true
 
     var body: some View {
         HStack(spacing: 16) {
@@ -644,11 +647,11 @@ struct WeightCard: View {
                     .foregroundColor(Color(hex: "9B7EC8"))
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text("TODAY'S WEIGHT")
+                Text(isToday ? "TODAY'S WEIGHT" : "WEIGHT")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
-                if let w = appState.todayWeightKg {
+                if let w = weight {
                     HStack(alignment: .lastTextBaseline, spacing: 4) {
                         Text(String(format: "%.1f", w))
                             .font(.system(size: 26, weight: .bold, design: .rounded))
@@ -658,10 +661,10 @@ struct WeightCard: View {
                             .foregroundColor(Color(hex: "B09880"))
                     }
                 } else {
-                    Text("Not logged yet")
+                    Text("Not logged")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(Color(hex: "B09880"))
-                    Text("Log it in the Workbook tab")
+                    Text(isToday ? "Use the weight button on home" : "No weight recorded this day")
                         .font(.system(size: 11))
                         .foregroundColor(Color(hex: "C4AFA0"))
                 }

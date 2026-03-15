@@ -310,11 +310,11 @@ struct CustomTabBar: View {
                         ZStack {
                             Circle()
                                 .fill(showRena
-                                    ? Color(hex: "E76F51")
-                                    : LinearGradient(
+                                    ? AnyShapeStyle(Color(hex: "E76F51"))
+                                    : AnyShapeStyle(LinearGradient(
                                         colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
                                         startPoint: .topLeading, endPoint: .bottomTrailing
-                                    )
+                                    ))
                                 )
                                 .frame(width: 52, height: 52)
                                 .shadow(color: Color(hex: "E76F51").opacity(0.4), radius: 10, y: 4)
