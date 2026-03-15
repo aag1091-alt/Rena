@@ -135,6 +135,43 @@ async def log_weight_endpoint(req: LogWeightRequest):
 
 
 
+@app.get("/workbook/insight/{user_id}")
+async def workbook_insight(user_id: str):
+    """Generate a brief AI interpretation of today's progress for the Workbook tab."""
+    from datetime import datetime, timezone
+    from google import genai as _genai
+    from rena.tools import _get_genai_client
+
+    if not user_id or user_id.strip() == "":
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    p = get_progress(user_id)
+    hour = datetime.now(timezone.utc).hour
+    time_of_day = "morning" if hour < 12 else ("evening" if hour >= 17 else "afternoon")
+
+    meals_count = len(p.get("meals_logged") or [])
+    workouts_count = len(p.get("workouts_logged") or [])
+    consumed = p.get("calories_consumed", 0)
+    target = p.get("calories_target", 2000)
+    burned = p.get("calories_burned", 0)
+    protein = p.get("protein_consumed_g", 0)
+    protein_target = p.get("protein_target_g", 120)
+    water = p.get("water_glasses", 0)
+
+    prompt = (
+        f"You are Rena, a warm health companion. Write exactly 2 short sentences "
+        f"interpreting this person's {time_of_day} so far. Be specific, encouraging, and end with one actionable tip. "
+        f"No markdown, no bullet points.\n\n"
+        f"Calories: {consumed}/{target} consumed, {burned} burned from exercise. "
+        f"Protein: {protein}g/{protein_target}g. Water: {water}/8 glasses. "
+        f"Meals logged: {meals_count}. Workouts logged: {workouts_count}."
+    )
+
+    client = _get_genai_client()
+    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+    return {"insight": response.text.strip()}
+
+
 @app.websocket("/ws/{user_id}")
 async def voice_endpoint(websocket: WebSocket, user_id: str,
                          context: str | None = None, name: str | None = None):

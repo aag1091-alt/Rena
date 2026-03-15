@@ -34,7 +34,6 @@ struct DataView: View {
     private var displayProteinConsumed: Int  { dayData?.proteinConsumedG ?? (isToday ? appState.proteinConsumedG : 0) }
     private var displayProteinTarget: Int    { dayData?.proteinTargetG   ?? (isToday ? appState.proteinTargetG   : 120) }
     private var displayWater: Int            { dayData?.waterGlasses     ?? (isToday ? appState.waterGlasses     : 0) }
-    private var displayWeightKg: Double?     { dayData?.weightKg         ?? (isToday ? appState.todayWeightKg   : nil) }
     private var displayMeals: [MealEntry]    { dayData?.mealsLogged      ?? (isToday ? appState.mealsLogged     : []) }
     private var displayWorkouts: [WorkoutEntry] { dayData?.workoutsLogged ?? (isToday ? appState.workoutsLogged : []) }
 
@@ -92,7 +91,6 @@ struct DataView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 40)
                     } else {
-                        DayWeightCard(weightKg: displayWeightKg)
                         DaySummaryRow(
                             caloriesConsumed: displayCaloriesConsumed,
                             caloriesBurned: displayCaloriesBurned,
@@ -152,43 +150,6 @@ struct DataView: View {
 }
 
 // MARK: - Day-scoped subviews (take data as params, not from appState)
-
-struct DayWeightCard: View {
-    let weightKg: Double?
-    var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: "9B7EC8").opacity(0.10))
-                    .frame(width: 44, height: 44)
-                Image(systemName: "scalemass")
-                    .font(.system(size: 20))
-                    .foregroundColor(Color(hex: "9B7EC8"))
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text("WEIGHT")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color(hex: "B09880"))
-                    .kerning(1.0)
-                if let w = weightKg {
-                    HStack(alignment: .lastTextBaseline, spacing: 4) {
-                        Text(String(format: "%.1f", w))
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(hex: "9B7EC8"))
-                        Text("kg").font(.system(size: 13)).foregroundColor(Color(hex: "B09880"))
-                    }
-                } else {
-                    Text("Not logged").font(.system(size: 15, weight: .medium)).foregroundColor(Color(hex: "B09880"))
-                }
-            }
-            Spacer()
-        }
-        .padding(18)
-        .background(Color.white)
-        .cornerRadius(18)
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
-    }
-}
 
 struct DaySummaryRow: View {
     let caloriesConsumed: Int

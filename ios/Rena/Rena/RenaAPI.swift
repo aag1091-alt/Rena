@@ -282,6 +282,16 @@ class RenaAPI {
         return try JSONDecoder().decode(GoalResponse.self, from: data)
     }
 
+    func getWorkbookInsight(userId: String) async throws -> String {
+        let req = request("\(kBaseURL)/workbook/insight/\(userId)")
+        let (data, _) = try await session.data(for: req)
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let insight = json["insight"] as? String {
+            return insight
+        }
+        return ""
+    }
+
     func devReset(userId: String) async throws {
         let req = request("\(kBaseURL)/dev/reset/\(userId)", method: "DELETE")
         _ = try await session.data(for: req)

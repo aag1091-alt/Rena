@@ -2,12 +2,73 @@ import SwiftUI
 
 struct WorkbookView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var voice: VoiceManager
+
+    @State private var insight: String = ""
+    @State private var insightLoading = false
+    @State private var activeContext: String? = nil
+    @State private var isVoiceConnected = false
+
+    private var hour: Int { Calendar.current.component(.hour, from: Date()) }
+    private var isMorning: Bool  { hour >= 5  && hour < 12 }
+    private var isEvening: Bool  { hour >= 17 }
+    private var timeLabel: String {
+        if isMorning { return "Good morning" }
+        if isEvening { return "Good evening" }
+        return "Good afternoon"
+    }
 
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 20) {
-                    WeightLogSection()
+                VStack(spacing: 16) {
+
+                    // ── Header ─────────────────────────────────────
+                    WorkbookHeader(
+                        greeting: timeLabel,
+                        name: appState.name.components(separatedBy: " ").first ?? appState.name,
+                        isMorning: isMorning,
+                        isEvening: isEvening,
+                        caloriesConsumed: appState.caloriesConsumed,
+                        caloriesTarget: appState.caloriesTarget,
+                        caloriesBurned: appState.caloriesBurned
+                    )
+
+                    // ── Day So Far (AI insight) ────────────────────
+                    DaySoFarCard(insight: insight, isLoading: insightLoading)
+
+                    // ── Workout Plan ───────────────────────────────
+                    WorkbookVoiceCard(
+                        icon: "figure.run",
+                        iconColor: Color(hex: "2A9D8F"),
+                        title: "Today's Workout",
+                        subtitle: "Let Rena suggest a workout tailored to your goal",
+                        buttonLabel: "Plan with Rena",
+                        isActive: activeContext == "workout_plan" && isVoiceConnected,
+                        voiceState: activeContext == "workout_plan" ? voice.state : .idle,
+                        onTap: { toggleVoice(context: "workout_plan") }
+                    )
+
+                    // ── Plan Tomorrow (evening only) ───────────────
+                    if isEvening {
+                        WorkbookVoiceCard(
+                            icon: "moon.stars.fill",
+                            iconColor: Color(hex: "9B7EC8"),
+                            title: "Plan Tomorrow",
+                            subtitle: "Review today with Rena and set tomorrow's targets",
+                            buttonLabel: "Plan with Rena",
+                            isActive: activeContext == "plan_tomorrow" && isVoiceConnected,
+                            voiceState: activeContext == "plan_tomorrow" ? voice.state : .idle,
+                            onTap: { toggleVoice(context: "plan_tomorrow") }
+                        )
+                    }
+
+                    // ── Food Log ───────────────────────────────────
+                    DayFoodLog(meals: appState.mealsLogged)
+
+                    // ── Workout Log ────────────────────────────────
+                    DayWorkoutLog(workouts: appState.workoutsLogged)
+
                     Spacer(minLength: 40)
                 }
                 .padding(.horizontal, 16)
@@ -17,135 +78,251 @@ struct WorkbookView: View {
             .navigationTitle("Workbook")
             .navigationBarTitleDisplayMode(.large)
             .scrollBounceBehavior(.always)
+            .refreshable { await refresh() }
+            .onAppear { Task { await refresh() } }
+            .onDisappear { if isVoiceConnected { endVoice() } }
+            .onChange(of: voice.turnCount) { Task { await refresh() } }
         }
+    }
+
+    // MARK: - Voice
+
+    private func toggleVoice(context: String) {
+        if isVoiceConnected && activeContext == context {
+            endVoice()
+        } else {
+            if isVoiceConnected { endVoice() }
+            activeContext = context
+            let name = appState.name.components(separatedBy: " ").first ?? appState.name
+            voice.connect(userId: appState.userId, context: context, name: name)
+            isVoiceConnected = true
+        }
+    }
+
+    private func endVoice() {
+        voice.disconnect()
+        isVoiceConnected = false
+        activeContext = nil
+    }
+
+    // MARK: - Data
+
+    private func refresh() async {
+        insightLoading = true
+        if let text = try? await RenaAPI.shared.getWorkbookInsight(userId: appState.userId), !text.isEmpty {
+            await MainActor.run { insight = text }
+        }
+        await MainActor.run { insightLoading = false }
     }
 }
 
-// MARK: - Weight log section
+// MARK: - Header card
 
-struct WeightLogSection: View {
-    @EnvironmentObject var appState: AppState
-    @State private var sliderValue: Double = 70.0
-    @State private var isSaving = false
-    @State private var savedConfirmation = false
+struct WorkbookHeader: View {
+    let greeting: String
+    let name: String
+    let isMorning: Bool
+    let isEvening: Bool
+    let caloriesConsumed: Int
+    let caloriesTarget: Int
+    let caloriesBurned: Int
+
+    private var netCalories: Int { caloriesConsumed - caloriesBurned }
+    private var remaining: Int   { max(0, caloriesTarget - netCalories) }
+    private var progress: Double { min(1.0, Double(max(0, netCalories)) / Double(max(caloriesTarget, 1))) }
+
+    private var phaseIcon: String {
+        if isMorning { return "sun.rise.fill" }
+        if isEvening { return "moon.fill" }
+        return "sun.max.fill"
+    }
+    private var phaseColor: Color {
+        if isMorning { return Color(hex: "F4A261") }
+        if isEvening { return Color(hex: "9B7EC8") }
+        return Color(hex: "E9C46A")
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-
-            // Header
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "9B7EC8").opacity(0.10))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "scalemass")
-                        .font(.system(size: 20))
-                        .foregroundColor(Color(hex: "9B7EC8"))
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("WEIGHT")
-                        .font(.system(size: 10, weight: .semibold))
+                Image(systemName: phaseIcon)
+                    .font(.system(size: 18))
+                    .foregroundColor(phaseColor)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(greeting)
+                        .font(.system(size: 13))
                         .foregroundColor(Color(hex: "B09880"))
-                        .kerning(1.0)
-                    Text("Log today's weight")
-                        .font(.system(size: 16, weight: .bold))
+                    Text(name)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundColor(Color(hex: "3D2B1F"))
                 }
-            }
-
-            // Big display
-            HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text(String(format: "%.1f", sliderValue))
-                    .font(.system(size: 64, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: "9B7EC8"))
-                    .animation(nil)
-                Text("kg")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundColor(Color(hex: "B09880"))
-                    .padding(.bottom, 8)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 8)
-
-            // Slider
-            VStack(spacing: 6) {
-                Slider(value: $sliderValue, in: 30...200, step: 0.5)
-                    .tint(Color(hex: "9B7EC8"))
-                HStack {
-                    Text("30 kg")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(hex: "C4AFA0"))
-                    Spacer()
-                    Text("200 kg")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(hex: "C4AFA0"))
-                }
-            }
-
-            // Last logged note
-            if let logged = appState.todayWeightKg {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundColor(Color(hex: "9B7EC8"))
-                    Text("Last logged today: \(String(format: "%.1f", logged)) kg")
-                        .font(.system(size: 12))
+                Spacer()
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("\(remaining)")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(hex: "E76F51"))
+                    Text("kcal left")
+                        .font(.system(size: 10))
                         .foregroundColor(Color(hex: "B09880"))
                 }
             }
 
-            // Log button
-            Button {
-                Task { await saveWeight() }
-            } label: {
-                HStack(spacing: 8) {
-                    if isSaving {
-                        ProgressView().tint(.white).scaleEffect(0.85)
-                    } else if savedConfirmation {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("Saved!")
-                            .font(.system(size: 16, weight: .semibold))
-                    } else {
-                        Image(systemName: "scalemass")
-                            .font(.system(size: 15))
-                        Text(appState.todayWeightKg != nil ? "Update weight" : "Log weight")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 5).fill(Color(hex: "F0E6DA")).frame(height: 8)
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(LinearGradient(colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: geo.size.width * progress, height: 8)
+                        .animation(.spring(), value: progress)
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(savedConfirmation ? Color(hex: "2A9D8F") : Color(hex: "9B7EC8"))
-                .cornerRadius(14)
-                .animation(.easeInOut(duration: 0.2), value: savedConfirmation)
             }
-            .disabled(isSaving)
+            .frame(height: 8)
+
+            HStack {
+                Label("\(caloriesConsumed) eaten", systemImage: "fork.knife")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: "E76F51"))
+                Spacer()
+                Label("\(caloriesBurned) burned", systemImage: "figure.run")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: "2A9D8F"))
+                Spacer()
+                Label("\(caloriesTarget) target", systemImage: "target")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: "B09880"))
+            }
         }
-        .padding(20)
+        .padding(18)
         .background(Color.white)
         .cornerRadius(18)
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
-        .onAppear {
-            sliderValue = appState.todayWeightKg ?? 70.0
+    }
+}
+
+// MARK: - Day So Far (AI insight)
+
+struct DaySoFarCard: View {
+    let insight: String
+    let isLoading: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(hex: "E76F51"))
+                Text("DAY SO FAR")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color(hex: "B09880"))
+                    .kerning(1.0)
+            }
+
+            if isLoading {
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.8)
+                    Text("Rena is reading your day…")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "B09880"))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            } else if insight.isEmpty {
+                Text("Start logging meals and workouts — Rena will give you a read on your day.")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(hex: "B09880"))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(insight)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(Color(hex: "3D2B1F"))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(3)
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color(hex: "FFF8F2"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(Color(hex: "F4C9A8"), lineWidth: 1)
+                )
+        )
+    }
+}
+
+// MARK: - Voice action card (workout plan / plan tomorrow)
+
+struct WorkbookVoiceCard: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let subtitle: String
+    let buttonLabel: String
+    let isActive: Bool
+    let voiceState: VoiceState
+    let onTap: () -> Void
+
+    private var stateLabel: String {
+        switch voiceState {
+        case .connecting:          return "Connecting…"
+        case .listening:           return "Listening…"
+        case .thinking:            return "Thinking…"
+        case .speaking:            return "Rena is speaking…"
+        case .error(let m):        return "Error: \(m)"
+        default:                   return isActive ? "Tap to end" : buttonLabel
         }
     }
 
-    private func saveWeight() async {
-        isSaving = true
-        do {
-            let rounded = (sliderValue * 2).rounded() / 2
-            _ = try await RenaAPI.shared.logWeight(userId: appState.userId, weightKg: rounded)
-            await MainActor.run {
-                appState.todayWeightKg = rounded
-                isSaving = false
-                savedConfirmation = true
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(iconColor.opacity(0.12))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: icon)
+                        .font(.system(size: 17))
+                        .foregroundColor(iconColor)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(Color(hex: "3D2B1F"))
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(hex: "B09880"))
+                }
+                Spacer()
             }
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            await MainActor.run { savedConfirmation = false }
-        } catch {
-            print("[Workbook] save error: \(error)")
-            isSaving = false
+
+            Button(action: onTap) {
+                HStack(spacing: 8) {
+                    if isActive {
+                        Circle()
+                            .fill(iconColor)
+                            .frame(width: 8, height: 8)
+                    } else {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 13))
+                    }
+                    Text(stateLabel)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(isActive ? .white : iconColor)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(isActive ? iconColor : iconColor.opacity(0.1))
+                .cornerRadius(12)
+                .animation(.easeInOut(duration: 0.2), value: isActive)
+            }
         }
+        .padding(18)
+        .background(Color.white)
+        .cornerRadius(18)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
     }
 }

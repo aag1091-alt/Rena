@@ -69,6 +69,20 @@ _CONTEXT_PROMPTS = {
         "SPEAK OUT LOUD NOW: Say 'Hi {name}! What would you like to do today?' "
         "Keep it short and friendly — one sentence."
     ),
+    "workout_plan": (
+        "SPEAK OUT LOUD NOW: Suggest a specific workout for today based on the user's goal. "
+        "For cardio: give duration and intensity (e.g. 30-min brisk walk or 20-min easy run). "
+        "For strength: list 4-5 exercises with sets and reps. "
+        "Keep it brief and actionable — under 30 seconds. "
+        "After describing it, ask: 'Does that work for you, or want me to adjust?'"
+    ),
+    "plan_tomorrow": (
+        "SPEAK OUT LOUD NOW: Say 'Let's plan tomorrow, {name}!' "
+        "Briefly mention one thing that went well today (use [current_weight_kg] or calories if available). "
+        "Ask: 'Any events or schedule constraints tomorrow I should know about?' "
+        "Based on their answer, suggest a calorie target and whether to include a workout. "
+        "Keep it to 2-3 exchanges total — warm and practical."
+    ),
 }
 
 
