@@ -33,6 +33,19 @@ struct MainTabView: View {
                         .cornerRadius(12)
                 }
                 .padding(.horizontal)
+
+                Button {
+                    Task {
+                        try? await RenaAPI.shared.devSeed(userId: appState.userId)
+                    }
+                } label: {
+                    Label("Seed test data (7 days)", systemImage: "flask.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(12)
+                }
+                .padding(.horizontal)
             }
             .tabItem { Label("Dev", systemImage: "wrench.fill") }
         }
