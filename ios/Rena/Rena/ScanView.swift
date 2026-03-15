@@ -271,8 +271,8 @@ struct ScanItemCard: View {
     let item: ScanItem
     @Binding var adjustedCalories: Int
 
-    private var sliderMin: Double { Double(max(10, item.calories / 2)) }
-    private var sliderMax: Double { Double(max(100, item.calories * 2)) }
+    private var sliderMin: Double { 0 }
+    private var sliderMax: Double { Double(max(500, item.calories * 3)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
