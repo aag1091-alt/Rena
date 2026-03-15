@@ -881,6 +881,72 @@ def log_exercise_from_plan(user_id: str, exercise_id: str, for_date: str = None,
 # EXERCISE VIDEO (Veo 2)
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: str = "") -> bytes:
+    """
+    Generate a short coaching voiceover for an exercise and mux it into the video.
+    Uses Gemini to write the script and Google Cloud TTS for speech synthesis.
+    Falls back to returning the original silent video if anything fails.
+    """
+    import subprocess, tempfile, os as _os
+    from google.cloud import texttospeech
+
+    # 1. Generate coaching script (~8s spoken = ~30 words)
+    muscles_hint = f" targeting {target_muscles}" if target_muscles else ""
+    prompt = (
+        f"Write an 8-second coaching voiceover script for a fitness video demonstrating {exercise_name}{muscles_hint}. "
+        f"Cover: starting position, 1-2 key movement cues, one breathing tip. "
+        f"Natural, encouraging tone. Exactly 28-35 words. No intro like 'Here we go'. Just the cues."
+    )
+    client   = _get_genai_client()
+    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    script   = response.text.strip()
+    print(f"[tts] script for '{exercise_name}': {script}")
+
+    # 2. TTS → MP3
+    tts_client     = texttospeech.TextToSpeechClient()
+    synthesis_input = texttospeech.SynthesisInput(text=script)
+    voice = texttospeech.VoiceSelectionParams(
+        language_code="en-US",
+        name="en-US-Neural2-D",  # natural male coaching voice
+    )
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=0.95,
+    )
+    tts_response = tts_client.synthesize_speech(
+        input=synthesis_input, voice=voice, audio_config=audio_config
+    )
+    audio_bytes = tts_response.audio_content
+
+    # 3. Mux video + audio with ffmpeg
+    with tempfile.TemporaryDirectory() as tmpdir:
+        video_path  = _os.path.join(tmpdir, "video.mp4")
+        audio_path  = _os.path.join(tmpdir, "audio.mp3")
+        output_path = _os.path.join(tmpdir, "output.mp4")
+
+        with open(video_path, "wb") as f:
+            f.write(video_bytes)
+        with open(audio_path, "wb") as f:
+            f.write(audio_bytes)
+
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", video_path,
+                "-i", audio_path,
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-shortest",
+                output_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+        with open(output_path, "rb") as f:
+            return f.read()
+
+
 def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
     """
     Return a cached video URL for an exercise, or start a Veo 2 generation job.
@@ -930,6 +996,7 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
         jobs_ref.document(job_id).set({
             "slug":           slug,
             "exercise_name":  exercise_name,
+            "target_muscles": target_muscles,
             "operation_name": op_name,
             "status":         "generating",
             "created_at":     firestore.SERVER_TIMESTAMP,
@@ -976,6 +1043,14 @@ def get_exercise_video_status(job_id: str) -> dict:
 
         # Veo returns inline video_bytes (not a GCS URI)
         video_bytes = operation.response.generated_videos[0].video.video_bytes
+
+        # Generate coaching voiceover and mux into video
+        try:
+            video_bytes = _add_coaching_audio(
+                video_bytes, job["exercise_name"], job.get("target_muscles", "")
+            )
+        except Exception as e:
+            print(f"[veo] audio mux failed (uploading silent video): {e}")
 
         gcs_client  = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
         dest_bucket = gcs_client.bucket(bucket_name)
