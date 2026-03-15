@@ -11,81 +11,93 @@ enum VoiceState {
     case error(String)
 }
 
+/// Shared voice manager — one instance for the whole app lifetime.
+/// The audio engine starts once and never stops, eliminating interruptions
+/// caused by session-category switches between screens.
 class VoiceManager: NSObject, ObservableObject {
     @Published var state: VoiceState = .idle
     @Published var transcript: String = ""
     @Published var lastResponse: String = ""
+    /// Increments on every turn_complete — observe to refresh data after Rena logs something.
+    @Published var turnCount: Int = 0
 
     private var webSocket: URLSessionWebSocketTask?
-    private var audioEngine = AVAudioEngine()
-    private var audioPlayer = AVAudioPlayerNode()
+    private let urlSession = URLSession(configuration: .default)
+    private let audioEngine = AVAudioEngine()
+    private let audioPlayer = AVAudioPlayerNode()
     private var playerFormat: AVAudioFormat?
-    private let session = URLSession(configuration: .default)
+    private var micTapInstalled = false
 
-    /// Connect with mic for full conversation. Context and name are passed to the
-    /// server so the opening prompt is injected server-side — no client-side sendText needed.
+    override init() {
+        super.init()
+    }
+
+    // MARK: - Engine (lazy start — called when first connection is made, never stopped after)
+
+    private func ensureEngineRunning() {
+        guard !audioEngine.isRunning else { return }
+
+        let avSession = AVAudioSession.sharedInstance()
+        try? avSession.setCategory(.playAndRecord, mode: .voiceChat,
+                                   options: [.defaultToSpeaker, .allowBluetooth])
+        try? avSession.setActive(true)
+
+        if playerFormat == nil {
+            playerFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
+                                         sampleRate: 24000, channels: 1, interleaved: true)
+            audioEngine.attach(audioPlayer)
+            if let pf = playerFormat {
+                audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: pf)
+            }
+        }
+
+        audioEngine.prepare()
+        do {
+            try audioEngine.start()
+            print("[audio] engine started")
+        } catch {
+            print("[audio] engine start failed: \(error)")
+        }
+    }
+
+    // MARK: - Connect (full duplex: mic + speaker)
+
     func connect(userId: String, context: String? = nil, name: String? = nil) {
-        // Cancel any stale WebSocket — do NOT touch audioEngine.inputNode here
-        // as accessing it before mic permission can break the permission flow on iOS.
-        webSocket?.cancel(with: .normalClosure, reason: nil)
-        webSocket = nil
-
+        disconnectWebSocket()
         state = .connecting
+
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self else { return }
             guard granted else {
                 DispatchQueue.main.async { self.state = .error("Microphone access denied") }
                 return
             }
-            // Safe to touch audio engine now that permission is confirmed
-            self.audioEngine.inputNode.removeTap(onBus: 0)
-            if self.audioEngine.isRunning { self.audioEngine.stop() }
-
-            let wsBase = kBaseURL.replacingOccurrences(of: "http", with: "ws")
-            var components = URLComponents(string: "\(wsBase)/ws/\(userId)")!
-            var queryItems: [URLQueryItem] = []
-            if let context { queryItems.append(URLQueryItem(name: "context", value: context)) }
-            if let name    { queryItems.append(URLQueryItem(name: "name",    value: name))    }
-            if !queryItems.isEmpty { components.queryItems = queryItems }
-            let url = components.url!
-
-            self.webSocket = self.session.webSocketTask(with: url)
-            self.webSocket?.resume()
-            DispatchQueue.main.async { self.state = .listening }
-            self.receiveLoop()
-            self.startAudioCapture()
+            DispatchQueue.main.async {
+                // Install tap first — accessing inputNode may reconfigure + stop the engine.
+                // Then ensure engine is running after the reconfiguration settles.
+                self.installMicTapIfNeeded()
+                self.ensureEngineRunning()
+                self.openWebSocket(userId: userId, context: context, name: name)
+                self.state = .listening
+            }
         }
     }
 
-    /// Connects without mic capture — Rena speaks, user just listens (intro screen).
-    func connectGreetOnly() {
-        // Clear any stale connection first
-        webSocket?.cancel(with: .normalClosure, reason: nil)
-        webSocket = nil
-        if audioEngine.isRunning { audioEngine.stop() }
+    // MARK: - Connect (playback only — intro screen, no mic)
 
+    func connectGreetOnly() {
+        disconnectWebSocket()
+        ensureEngineRunning()
         state = .connecting
         let guestId = "guest-\(UUID().uuidString)"
-        let wsBase = kBaseURL.replacingOccurrences(of: "http", with: "ws")
-        let url = URL(string: "\(wsBase)/ws/\(guestId)?context=intro")!
-
-        let avSession = AVAudioSession.sharedInstance()
-        try? avSession.setCategory(.playback, mode: .default)
-        try? avSession.setActive(true)
-
-        setupPlaybackOnly()
-
-        webSocket = session.webSocketTask(with: url)
-        webSocket?.resume()
+        openWebSocket(userId: guestId, context: "intro", name: nil)
         DispatchQueue.main.async { self.state = .listening }
-        receiveLoop()
     }
 
+    // MARK: - Disconnect (WebSocket only — engine stays alive)
+
     func disconnect() {
-        webSocket?.cancel(with: .normalClosure, reason: nil)
-        webSocket = nil
-        audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.stop()
+        disconnectWebSocket()
         state = .idle
     }
 
@@ -97,74 +109,68 @@ class VoiceManager: NSObject, ObservableObject {
         state = .thinking
     }
 
-    // MARK: - Playback-only setup (no mic)
+    // MARK: - Private helpers
 
-    private func setupPlaybackOnly() {
-        playerFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
-                                     sampleRate: 24000,
-                                     channels: 1,
-                                     interleaved: true)
-        audioEngine.attach(audioPlayer)
-        if let pf = playerFormat {
-            audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: pf)
-        }
-        if !audioEngine.isRunning {
-            try? audioEngine.start()
-        }
+    private func disconnectWebSocket() {
+        webSocket?.cancel(with: .normalClosure, reason: nil)
+        webSocket = nil
     }
 
-    // MARK: - Audio capture
+    private func openWebSocket(userId: String, context: String?, name: String?) {
+        let wsBase = kBaseURL.replacingOccurrences(of: "http", with: "ws")
+        var components = URLComponents(string: "\(wsBase)/ws/\(userId)")!
+        var queryItems: [URLQueryItem] = []
+        if let context { queryItems.append(URLQueryItem(name: "context", value: context)) }
+        if let name    { queryItems.append(URLQueryItem(name: "name",    value: name))    }
+        if !queryItems.isEmpty { components.queryItems = queryItems }
 
-    private func startAudioCapture() {
-        // AVAudioSession must be configured before engine setup
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: .defaultToSpeaker)
-        try? session.setActive(true)
+        webSocket = urlSession.webSocketTask(with: components.url!)
+        webSocket?.resume()
+        receiveLoop()
+    }
 
-        let inputNode = audioEngine.inputNode
-        // Use the input node's native hardware format — no forced format on tap
-        let hwFormat = inputNode.inputFormat(forBus: 0)
+    private func installMicTapIfNeeded() {
+        guard !micTapInstalled else { return }
 
-        // Setup playback node
-        audioEngine.attach(audioPlayer)
-        playerFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
-                                      sampleRate: 24000,
-                                      channels: 1,
-                                      interleaved: true)
-        if let pf = playerFormat {
-            audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: pf)
-        }
-
-        // Converter: hardware format → 16kHz PCM16 mono (what Gemini expects)
+        micTapInstalled = true
         let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
-                                         sampleRate: 16000,
-                                         channels: 1,
-                                         interleaved: true)!
-        guard let converter = AVAudioConverter(from: hwFormat, to: targetFormat) else {
-            print("[audio] failed to create converter from \(hwFormat) to 16kHz")
-            return
-        }
+                                         sampleRate: 16000, channels: 1, interleaved: true)!
+        // Converter is created lazily on the first real buffer — avoids the 0.0Hz
+        // sample rate that inputNode reports before the hardware finishes initializing.
+        var converter: AVAudioConverter?
+        var micChunkCount = 0
 
-        // Install tap with nil format — uses hardware native format automatically
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
+        audioEngine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
             guard let self else { return }
-            // Don't send mic audio while Rena is speaking — prevents self-interruption
             if case .speaking = self.state { return }
+
+            // Build converter from the first real buffer format
+            if converter == nil {
+                guard buffer.format.sampleRate > 0,
+                      let c = AVAudioConverter(from: buffer.format, to: targetFormat) else {
+                    print("[audio] mic converter failed for format \(buffer.format.sampleRate)Hz")
+                    return
+                }
+                converter = c
+                print("[audio] mic converter ready: \(buffer.format.sampleRate)Hz → 16kHz")
+            }
+            guard let converter else { return }
+
             let ratio = 16000.0 / buffer.format.sampleRate
             let outFrames = AVAudioFrameCount(max(1, Double(buffer.frameLength) * ratio))
-            guard let converted = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outFrames) else { return }
+            guard let converted = AVAudioPCMBuffer(pcmFormat: targetFormat,
+                                                   frameCapacity: outFrames) else { return }
             var error: NSError?
             converter.convert(to: converted, error: &error) { _, status in
                 status.pointee = .haveData
                 return buffer
             }
             guard error == nil, let data = converted.toData() else { return }
+            micChunkCount += 1
+            if micChunkCount % 50 == 1 { print("[audio] mic chunk \(micChunkCount) ws=\(self.webSocket != nil)") }
             self.webSocket?.send(.data(data)) { _ in }
         }
-
-        if !audioEngine.isRunning {
-            try? audioEngine.start()
-        }
+        print("[audio] mic tap installed")
     }
 
     // MARK: - Receive loop
@@ -181,7 +187,10 @@ class VoiceManager: NSObject, ObservableObject {
                 case .string(let text):
                     if let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
                         if json["type"] as? String == "turn_complete" {
-                            DispatchQueue.main.async { self.state = .listening }
+                            DispatchQueue.main.async {
+                                self.state = .listening
+                                self.turnCount += 1
+                            }
                         } else if let t = json["text"] as? String {
                             DispatchQueue.main.async {
                                 self.lastResponse = t
@@ -198,7 +207,7 @@ class VoiceManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Audio playback
+    // MARK: - Playback
 
     private func playAudio(_ data: Data) {
         guard let format = playerFormat else { return }
@@ -209,6 +218,16 @@ class VoiceManager: NSObject, ObservableObject {
         data.withUnsafeBytes { ptr in
             if let base = ptr.baseAddress {
                 memcpy(buffer.int16ChannelData![0], base, data.count)
+            }
+        }
+        if !audioEngine.isRunning {
+            print("[audio] engine not running — restarting before playback")
+            try? AVAudioSession.sharedInstance().setActive(true)
+            do {
+                try audioEngine.start()
+            } catch {
+                print("[audio] engine restart failed: \(error) — dropping chunk")
+                return
             }
         }
         if !audioPlayer.isPlaying { audioPlayer.play() }

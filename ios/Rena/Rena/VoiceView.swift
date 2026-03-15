@@ -2,7 +2,7 @@ import SwiftUI
 
 struct VoiceView: View {
     @EnvironmentObject var appState: AppState
-    @StateObject private var voice = VoiceManager()
+    @EnvironmentObject var voice: VoiceManager
     @State private var isConnected = false
 
     var body: some View {

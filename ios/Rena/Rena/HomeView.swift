@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var appState: AppState
-    @StateObject private var voice = VoiceManager()
+    @EnvironmentObject var voice: VoiceManager
 
     @State private var goalText: String = ""
     @State private var goalType: String = "event"
@@ -122,6 +122,7 @@ struct HomeView: View {
         }
         .onAppear { Task { await loadGoal(); await loadProgress() } }
         .onDisappear { if isConnected { toggleVoice() } }
+        .onChange(of: voice.turnCount) { Task { await loadProgress() } }
     }
 
     // MARK: - Voice
@@ -131,7 +132,7 @@ struct HomeView: View {
             voice.disconnect()
             isConnected = false
         } else {
-            voice.connect(userId: appState.userId)
+            voice.connect(userId: appState.userId, context: "home", name: appState.name)
             isConnected = true
         }
     }

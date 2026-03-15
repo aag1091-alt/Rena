@@ -9,7 +9,7 @@ struct RenaIntroView: View {
     @State private var isSigningIn = false
     @State private var errorMessage: String?
 
-    @StateObject private var voice = VoiceManager()
+    @EnvironmentObject var voice: VoiceManager
 
     var body: some View {
         ZStack {

@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 
+// Toggle for local dev vs production
 let kBaseURL = "https://rena-agent-879054433521.us-central1.run.app"
 
 // MARK: - Onboard

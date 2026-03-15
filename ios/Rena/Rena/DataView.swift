@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DataView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var voice: VoiceManager
     @State private var selectedDate = Date()
     @State private var dayData: ProgressResponse? = nil
     @State private var isLoading = false
@@ -21,6 +22,7 @@ struct DataView: View {
     private var dateString: String {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
+        fmt.timeZone = TimeZone(identifier: "UTC")
         return fmt.string(from: selectedDate)
     }
 
@@ -118,6 +120,7 @@ struct DataView: View {
             .scrollBounceBehavior(.always)
             .refreshable { await loadData() }
             .onAppear { Task { await loadData() } }
+            .onChange(of: voice.turnCount) { if isToday { Task { await loadData() } } }
         }
     }
 

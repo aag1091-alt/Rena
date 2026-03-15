@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D9DFEC752F6647AB00E454CC /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		D9DFEC762F6647AB00E454CC /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		ED7A4F12E2184D73A39E845E /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 1AB2874B1967444A8D5746BC /* Sentry */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		D9CAE0322F63FD4000C71743 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -65,6 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ED7A4F12E2184D73A39E845E /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,6 +79,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D9DFEC752F6647AB00E454CC /* (null) in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -79,6 +87,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D9DFEC762F6647AB00E454CC /* (null) in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -115,6 +124,7 @@
 				D9CAE01E2F63FD3D00C71743 /* Sources */,
 				D9CAE01F2F63FD3D00C71743 /* Frameworks */,
 				D9CAE0202F63FD3D00C71743 /* Resources */,
+				AC7530B37F2B4BB2946F8C57 /* Upload Debug Symbols to Sentry */,
 			);
 			buildRules = (
 			);
@@ -125,6 +135,7 @@
 			);
 			name = Rena;
 			packageProductDependencies = (
+				1AB2874B1967444A8D5746BC /* Sentry */,
 			);
 			productName = Rena;
 			productReference = D9CAE0222F63FD3D00C71743 /* Rena.app */;
@@ -208,6 +219,9 @@
 			);
 			mainGroup = D9CAE0192F63FD3D00C71743;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4B3C6BC4639449DFA81DF72A /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D9CAE0232F63FD3D00C71743 /* Products */;
 			projectDirPath = "";
@@ -243,6 +257,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AC7530B37F2B4BB2946F8C57 /* Upload Debug Symbols to Sentry */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
+			);
+			name = "Upload Debug Symbols to Sentry";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script is responsible for uploading debug symbols and source context for Sentry.\nif which sentry-cli >/dev/null; then\n  export SENTRY_ORG=aag1091\n  export SENTRY_PROJECT=rena-app\n  ERROR=$(sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\" 2>&1 >/dev/null)\n  if [ ! $? -eq 0 ]; then\n    echo \"warning: sentry-cli - $ERROR\"\n  fi\nelse\n  echo \"warning: sentry-cli not installed, download from https://github.com/getsentry/sentry-cli/releases\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D9CAE01E2F63FD3D00C71743 /* Sources */ = {
@@ -410,9 +442,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = W6LAV5G2G5;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Rena uses your camera to identify food";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Rena needs your microphone for voice conversations ";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Rena scans your photos to log meals automatically";
@@ -445,9 +480,12 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = W6LAV5G2G5;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Rena uses your camera to identify food";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Rena needs your microphone for voice conversations ";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Rena scans your photos to log meals automatically";
@@ -597,6 +635,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4B3C6BC4639449DFA81DF72A /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa/";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1AB2874B1967444A8D5746BC /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4B3C6BC4639449DFA81DF72A /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D9CAE01A2F63FD3D00C71743 /* Project object */;
 }

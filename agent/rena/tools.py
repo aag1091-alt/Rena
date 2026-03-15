@@ -30,7 +30,7 @@ def _goal_ref(user_id: str):
 
 
 def _today_log_ref(user_id: str):
-    today = date.today().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
     return _user_ref(user_id).collection("logs").document(today)
 
 
@@ -142,7 +142,7 @@ def set_goal(
     tdee = profile.get("tdee", 2000)
 
     try:
-        days_left = (date.fromisoformat(deadline) - date.today()).days
+        days_left = (date.fromisoformat(deadline) - datetime.now(timezone.utc).date()).days
     except ValueError:
         days_left = 90
 
@@ -195,7 +195,7 @@ def _get_latest_weight(user_id: str) -> float | None:
     """Return the most recently logged weight for a user (scans last 30 days)."""
     from datetime import timedelta
     for i in range(30):
-        d = (date.today() - timedelta(days=i)).isoformat()
+        d = (datetime.now(timezone.utc).date() - timedelta(days=i)).isoformat()
         log = _user_ref(user_id).collection("logs").document(d).get().to_dict() or {}
         if log.get("weight_kg"):
             return float(log["weight_kg"])
@@ -261,8 +261,8 @@ def _compute_goal_progress(goal_doc: dict, user_id: str) -> dict:
 
     else:  # event
         try:
-            total_days = (date.fromisoformat(goal_doc.get("deadline", date.today().isoformat())) -
-                          date.fromisoformat(goal_doc.get("created_at_date", date.today().isoformat()))).days
+            total_days = (date.fromisoformat(goal_doc.get("deadline", datetime.now(timezone.utc).date().isoformat())) -
+                          date.fromisoformat(goal_doc.get("created_at_date", datetime.now(timezone.utc).date().isoformat()))).days
             days_elapsed = total_days - goal_doc.get("days_until_goal", total_days)
             progress_pct = int(min(100, (days_elapsed / max(total_days, 1)) * 100))
         except Exception:
@@ -340,14 +340,14 @@ def get_goal(user_id: str) -> dict:
 
     # Recompute days_until_goal live
     try:
-        days_left = (date.fromisoformat(goal_doc["deadline"]) - date.today()).days
+        days_left = (date.fromisoformat(goal_doc["deadline"]) - datetime.now(timezone.utc).date()).days
     except Exception:
         days_left = goal_doc.get("days_until_goal", 0)
 
     # Save created_at_date once (needed for event progress calculation)
     if not goal_doc.get("created_at_date"):
-        _goal_ref(user_id).set({"created_at_date": date.today().isoformat()}, merge=True)
-        goal_doc["created_at_date"] = date.today().isoformat()
+        _goal_ref(user_id).set({"created_at_date": datetime.now(timezone.utc).date().isoformat()}, merge=True)
+        goal_doc["created_at_date"] = datetime.now(timezone.utc).date().isoformat()
 
     goal_doc["days_until_goal"] = days_left
     progress = _compute_goal_progress(goal_doc, user_id)
@@ -380,7 +380,7 @@ def get_progress(user_id: str, for_date: str = None) -> dict:
         Dict with goal info and today's logged activity.
     """
     profile = _user_ref(user_id).get().to_dict() or {}
-    log_date = for_date or date.today().isoformat()
+    log_date = for_date or datetime.now(timezone.utc).date().isoformat()
     log_ref = _user_ref(user_id).collection("logs").document(log_date)
     today_log = log_ref.get().to_dict() or {}
     goal_doc = _goal_ref(user_id).get().to_dict() or {}
@@ -443,7 +443,7 @@ def seed_test_data(user_id: str) -> dict:
     water_by_day = [6, 8, 5, 7, 8, 4, 6]
     weight_by_day = [83.5, 83.3, 83.4, 83.1, 83.2, 82.9, 83.0]
 
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     written = []
     for i in range(7):
         day = today - timedelta(days=6 - i)
@@ -494,7 +494,8 @@ def _estimate_macros(meal_name: str, calories: int) -> dict:
             "carbs_g":   int(data.get("carbs_g", 0)),
             "fat_g":     int(data.get("fat_g", 0)),
         }
-    except Exception:
+    except Exception as e:
+        print(f"[_estimate_macros] failed for '{meal_name}': {e}")
         return {"protein_g": 0, "carbs_g": 0, "fat_g": 0}
 
 
@@ -759,7 +760,7 @@ The image should feel {('like the very start of something exciting' if pct < 25 
     storage_client = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
     bucket = storage_client.bucket(bucket_name)
 
-    filename = f"{user_id}/{date.today().isoformat()}_{pct}pct_{uuid.uuid4().hex[:8]}.jpg"
+    filename = f"{user_id}/{datetime.now(timezone.utc).date().isoformat()}_{pct}pct_{uuid.uuid4().hex[:8]}.jpg"
     blob = bucket.blob(filename)
     blob.upload_from_string(image_data, content_type="image/jpeg")
     public_url = f"https://storage.googleapis.com/{bucket_name}/{filename}"
@@ -809,7 +810,20 @@ def correct_scan(user_id: str, description: str, correction: str) -> dict:
     raw = response.text.strip()
     raw = re.sub(r"^```(?:json)?\n?", "", raw)
     raw = re.sub(r"\n?```$", "", raw)
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # Try extracting embedded JSON object
+        match = re.search(r"\{[\s\S]*\}", raw)
+        if match:
+            try:
+                data = json.loads(match.group())
+            except json.JSONDecodeError:
+                print(f"[correct_scan] JSON parse failed, raw:\n{raw}")
+                return {"identified": False, "description": description, "total_calories": 0}
+        else:
+            print(f"[correct_scan] JSON parse failed, raw:\n{raw}")
+            return {"identified": False, "description": description, "total_calories": 0}
     data["identified"] = True
 
     # Store in Firestore so iOS can poll and pick up the corrected result

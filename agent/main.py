@@ -172,6 +172,7 @@ async def pending_correction(user_id: str):
 
 @app.websocket("/ws/{user_id}")
 async def voice_endpoint(websocket: WebSocket, user_id: str,
-                         context: str | None = None, name: str | None = None):
+                         context: str | None = None, name: str | None = None,
+                         food: str | None = None):
     """Real-time voice conversation with Rena via Gemini Live API."""
-    await handle_voice(websocket, user_id, context=context, name=name)
+    await handle_voice(websocket, user_id, context=context, name=name, food=food)
