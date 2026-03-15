@@ -3,52 +3,70 @@ import SwiftUI
 struct MainTabView: View {
     @EnvironmentObject var appState: AppState
 
+    @State private var selectedTab = 0
+    @State private var showRena = false
+
     var body: some View {
-        TabView {
-            HomeView()
-                .tabItem { Label("Home", systemImage: "house.fill") }
+        ZStack(alignment: .bottom) {
 
-            DataView()
-                .tabItem { Label("Data", systemImage: "chart.bar.fill") }
-
-            ScanView()
-                .tabItem { Label("Log Food", systemImage: "camera.fill") }
-
-            WorkbookView()
-                .tabItem { Label("Workbook", systemImage: "note.text") }
-
-            // DEV — remove before App Store submission
-            VStack(spacing: 20) {
-                Text("Dev Tools").font(.headline)
-                Button(role: .destructive) {
-                    Task {
-                        try? await RenaAPI.shared.devReset(userId: appState.userId)
-                        appState.signOut()
-                    }
-                } label: {
-                    Label("Reset onboarding", systemImage: "arrow.counterclockwise")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.red.opacity(0.1))
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
-
-                Button {
-                    Task {
-                        try? await RenaAPI.shared.devSeed(userId: appState.userId)
-                    }
-                } label: {
-                    Label("Seed test data (7 days)", systemImage: "flask.fill")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
+            // ── Tab content ───────────────────────────────────────
+            TabView(selection: $selectedTab) {
+                HomeView().tag(0)
+                DataView().tag(1)
+                WorkbookView().tag(2)
+                devView.tag(3)
             }
-            .tabItem { Label("Dev", systemImage: "wrench.fill") }
+            .accentColor(Color(hex: "E76F51"))
+            // Hide the default tab bar — we draw our own below
+            .toolbar(.hidden, for: .tabBar)
+            // Pad content so it doesn't hide under the custom tab bar
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 74)
+            }
+
+            // ── Rena overlay ──────────────────────────────────────
+            if showRena {
+                RenaOverlay(selectedTab: selectedTab, isShowing: $showRena)
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
+
+            // ── Custom tab bar ────────────────────────────────────
+            CustomTabBar(selectedTab: $selectedTab, showRena: $showRena)
+                .zIndex(2)
         }
-        .accentColor(Color(hex: "E76F51"))
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    // MARK: - Dev tab
+
+    private var devView: some View {
+        VStack(spacing: 20) {
+            Text("Dev Tools").font(.headline)
+            Button(role: .destructive) {
+                Task {
+                    try? await RenaAPI.shared.devReset(userId: appState.userId)
+                    appState.signOut()
+                }
+            } label: {
+                Label("Reset onboarding", systemImage: "arrow.counterclockwise")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(12)
+            }
+            .padding(.horizontal)
+
+            Button {
+                Task { try? await RenaAPI.shared.devSeed(userId: appState.userId) }
+            } label: {
+                Label("Seed test data (7 days)", systemImage: "flask.fill")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(12)
+            }
+            .padding(.horizontal)
+        }
     }
 }
