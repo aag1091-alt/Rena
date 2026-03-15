@@ -923,16 +923,19 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
             config={"aspect_ratio": "9:16", "duration_seconds": 8},
         )
 
+        # generate_videos may return an operation object or the name string directly
+        op_name = operation if isinstance(operation, str) else operation.name
+
         job_id = str(uuid.uuid4())
         jobs_ref.document(job_id).set({
             "slug":           slug,
             "exercise_name":  exercise_name,
-            "operation_name": operation.name,
+            "operation_name": op_name,
             "status":         "generating",
             "created_at":     firestore.SERVER_TIMESTAMP,
         })
 
-        print(f"[veo] started job {job_id} for '{exercise_name}' op={operation.name}")
+        print(f"[veo] started job {job_id} for '{exercise_name}' op={op_name}")
         return {"status": "generating", "job_id": job_id}
 
     except Exception as e:
