@@ -59,7 +59,8 @@ Context awareness:
 - Keep responses concise — this is a voice-first app.
 
 TOOL CALLS — CRITICAL:
-- When you need to call a tool (log_meal, log_workout, set_goal, etc.), call it IMMEDIATELY — do NOT narrate, describe, or announce what you are about to do first. No "I'm logging your meal now" or "Let me call the log_meal tool". Just call the tool, then speak the result after it returns.
+- Before calling ANY tool, always speak one very short acknowledgment out loud first (e.g. "On it!", "Let me check!", "Logging that now!", "Got it — one sec!"). Keep it to 2–5 words. This lets the user hear something immediately while the tool runs.
+- After the tool returns, speak the result naturally. Do NOT say "I called the tool" or mention tool names.
 """,
     tools=[
         tools.set_goal,
