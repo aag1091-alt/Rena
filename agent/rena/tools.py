@@ -987,6 +987,71 @@ def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: 
             return f.read()
 
 
+def _critique_exercise_video(video_bytes: bytes, exercise_name: str) -> tuple:
+    """
+    Use Gemini Vision to check if a generated exercise video is acceptable.
+    Returns (is_acceptable: bool, reason: str).
+    Checks: exactly one person visible, person is performing the exercise, no obvious glitches.
+    """
+    import subprocess, tempfile, os as _os
+    from google.genai import types as genai_types
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_path = _os.path.join(tmpdir, "video.mp4")
+            with open(video_path, "wb") as f:
+                f.write(video_bytes)
+
+            frame_bytes_list = []
+            for t in [1, 3, 5]:
+                frame_path = _os.path.join(tmpdir, f"frame_{t}.jpg")
+                result = subprocess.run(
+                    ["ffmpeg", "-y", "-ss", str(t), "-i", video_path, "-frames:v", "1", frame_path],
+                    capture_output=True,
+                )
+                if result.returncode == 0 and _os.path.exists(frame_path):
+                    with open(frame_path, "rb") as fp:
+                        frame_bytes_list.append(fp.read())
+
+        if not frame_bytes_list:
+            print("[critic] could not extract frames, accepting video")
+            return True, ""
+
+        client = _get_genai_client()
+        parts = [genai_types.Part.from_bytes(data=fb, mime_type="image/jpeg") for fb in frame_bytes_list]
+        parts.append(
+            f"These frames are from a fitness coaching video for '{exercise_name}'. "
+            "Is the video acceptable? Fail it if: (1) more than one person is visible at any point, "
+            "(2) the person is clearly not performing the stated exercise, "
+            "(3) there are obvious AI glitches like body parts merging or distorted limbs. "
+            "Reply with exactly PASS if acceptable, or FAIL: <brief one-line reason> if not."
+        )
+
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=parts)
+        result_text = response.text.strip()
+        print(f"[critic] '{exercise_name}': {result_text}")
+
+        if result_text.upper().startswith("PASS"):
+            return True, ""
+        reason = result_text[5:].strip() if result_text.upper().startswith("FAIL") else result_text
+        return False, reason
+
+    except Exception as e:
+        print(f"[critic] critique failed (accepting): {e}")
+        return True, ""
+
+
+def _veo_prompt(exercise_name: str, target_muscles: str = "") -> str:
+    muscles_hint = f", targeting {target_muscles}" if target_muscles else ""
+    return (
+        f"A single certified personal trainer, alone in frame with no other people visible, "
+        f"demonstrating perfect form for {exercise_name}{muscles_hint}. "
+        f"Only one person on screen at all times. Full body visible from a 45-degree angle, "
+        f"clear coaching perspective showing correct technique and posture. "
+        f"Clean gym background. Professional fitness coaching video."
+    )
+
+
 def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
     """
     Return a cached video URL for an exercise, or start a Veo 2 generation job.
@@ -1015,13 +1080,8 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
 
     # Submit new Veo 2 job
     try:
-        client       = _get_genai_client()
-        muscles_hint = f", targeting {target_muscles}" if target_muscles else ""
-        prompt       = (
-            f"A certified personal trainer demonstrating perfect form for {exercise_name}{muscles_hint}. "
-            f"Full body visible from a 45-degree angle, clear coaching perspective showing correct technique and posture. "
-            f"Clean gym background. Professional fitness coaching video."
-        )
+        client = _get_genai_client()
+        prompt = _veo_prompt(exercise_name, target_muscles)
 
         operation = client.models.generate_videos(
             model="veo-2.0-generate-001",
@@ -1039,6 +1099,7 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
             "target_muscles": target_muscles,
             "operation_name": op_name,
             "status":         "generating",
+            "attempt":        0,
             "created_at":     firestore.SERVER_TIMESTAMP,
         })
 
@@ -1083,6 +1144,29 @@ def get_exercise_video_status(job_id: str) -> dict:
 
         # Veo returns inline video_bytes (not a GCS URI)
         video_bytes = operation.response.generated_videos[0].video.video_bytes
+
+        # Critic layer — reject bad videos (multiple people, wrong exercise, glitches)
+        attempt = job.get("attempt", 0)
+        is_ok, reason = _critique_exercise_video(video_bytes, job["exercise_name"])
+        if not is_ok and attempt < 3:
+            print(f"[critic] rejected (attempt {attempt}): {reason} — submitting new Veo job")
+            new_prompt = _veo_prompt(job["exercise_name"], job.get("target_muscles", ""))
+            new_op = client.models.generate_videos(
+                model="veo-2.0-generate-001",
+                prompt=new_prompt,
+                config={"aspect_ratio": "9:16", "duration_seconds": 8},
+            )
+            new_op_name = new_op if isinstance(new_op, str) else new_op.name
+            db.collection("exercise_video_jobs").document(job_id).update({
+                "operation_name": new_op_name,
+                "attempt":        attempt + 1,
+                "status":         "generating",
+                "last_rejection": reason,
+            })
+            return {"status": "generating"}
+
+        if not is_ok:
+            print(f"[critic] max attempts reached for '{job['exercise_name']}', using last video")
 
         # Generate coaching voiceover and mux into video
         try:
