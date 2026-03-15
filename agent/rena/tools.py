@@ -904,7 +904,7 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
 
     # Return existing pending job for the same exercise
     jobs_ref = db.collection("exercise_video_jobs")
-    for job_doc in jobs_ref.where("slug", "==", slug).where("status", "==", "generating").limit(1).stream():
+    for job_doc in jobs_ref.where(filter=firestore.FieldFilter("slug", "==", slug)).where(filter=firestore.FieldFilter("status", "==", "generating")).limit(1).stream():
         return {"status": "generating", "job_id": job_doc.id}
 
     # Submit new Veo 2 job
