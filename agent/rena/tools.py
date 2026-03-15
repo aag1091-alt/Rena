@@ -881,56 +881,8 @@ def log_exercise_from_plan(user_id: str, exercise_id: str, for_date: str = None,
 # EXERCISE VIDEO (Veo 2)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _detect_trainer_gender(video_bytes: bytes) -> str:
-    """Extract a frame from the video and use Gemini Vision to detect trainer gender."""
-    import subprocess, tempfile, os as _os, base64
-    from google.genai import types as genai_types
-
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            video_path = _os.path.join(tmpdir, "video.mp4")
-            frame_path = _os.path.join(tmpdir, "frame.jpg")
-            with open(video_path, "wb") as f:
-                f.write(video_bytes)
-            # Extract frame at 1 second
-            subprocess.run(
-                ["ffmpeg", "-y", "-ss", "1", "-i", video_path, "-frames:v", "1", frame_path],
-                check=True, capture_output=True,
-            )
-            with open(frame_path, "rb") as f:
-                frame_bytes = f.read()
-
-        client = _get_genai_client()
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                genai_types.Part.from_bytes(data=frame_bytes, mime_type="image/jpeg"),
-                "Is the fitness trainer in this image male or female? Reply with only one word: male or female.",
-            ],
-        )
-        gender = response.text.strip().lower()
-        print(f"[tts] detected trainer gender: {gender}")
-        return gender if gender in ("male", "female") else "male"
-    except Exception as e:
-        print(f"[tts] gender detection failed: {e}")
-        return "male"
-
-
-def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: str = "") -> bytes:
-    """
-    Generate a short coaching voiceover for an exercise and mux it into the video.
-    Detects trainer gender from the video and matches the TTS voice accordingly.
-    Falls back to returning the original silent video if anything fails.
-    """
-    import subprocess, tempfile, os as _os
-    from google.cloud import texttospeech
-
-    # 1. Detect trainer gender to match voice
-    gender = _detect_trainer_gender(video_bytes)
-    # Neural2 voices: D/J = male, F/H = female
-    tts_voice_name = "en-US-Neural2-D" if gender == "male" else "en-US-Neural2-F"
-
-    # 2. Generate coaching script (~8s spoken = ~30 words)
+def _generate_coaching_script(exercise_name: str, target_muscles: str = "") -> str:
+    """Generate an 8-second coaching voiceover script before video generation."""
     muscles_focus = (
         f"You are working your {target_muscles}. Mention them by name in the cues so the athlete knows what to feel. "
         if target_muscles else ""
@@ -941,18 +893,25 @@ def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: 
         f"Cover: starting position, 1-2 key movement cues, one breathing tip. "
         f"Natural, encouraging tone. Exactly 28-35 words. No intro like 'Here we go'. Just the cues."
     )
-    client   = _get_genai_client()
+    client = _get_genai_client()
     response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    script   = response.text.strip()
-    print(f"[tts] voice={tts_voice_name} script for '{exercise_name}': {script}")
+    script = response.text.strip()
+    print(f"[script] '{exercise_name}': {script}")
+    return script
 
-    # 3. TTS → MP3
+
+def _add_coaching_audio(video_bytes: bytes, script: str) -> bytes:
+    """
+    Mux a pre-generated coaching script into the video using Rena's fixed voice.
+    Always uses en-US-Neural2-F (Rena's voice) regardless of trainer gender in the video.
+    """
+    import subprocess, tempfile, os as _os
+    from google.cloud import texttospeech
+
+    # Rena always speaks — fixed voice, not tied to video trainer gender
     tts_client      = texttospeech.TextToSpeechClient()
     synthesis_input = texttospeech.SynthesisInput(text=script)
-    voice = texttospeech.VoiceSelectionParams(
-        language_code="en-US",
-        name=tts_voice_name,
-    )
+    voice = texttospeech.VoiceSelectionParams(language_code="en-US", name="en-US-Neural2-F")
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3,
         speaking_rate=0.95,
@@ -961,8 +920,8 @@ def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: 
         input=synthesis_input, voice=voice, audio_config=audio_config
     )
     audio_bytes = tts_response.audio_content
+    print(f"[tts] generated {len(audio_bytes)} bytes of coaching audio")
 
-    # 3. Mux video + audio with ffmpeg
     with tempfile.TemporaryDirectory() as tmpdir:
         video_path  = _os.path.join(tmpdir, "video.mp4")
         audio_path  = _os.path.join(tmpdir, "audio.mp3")
@@ -974,17 +933,9 @@ def _add_coaching_audio(video_bytes: bytes, exercise_name: str, target_muscles: 
             f.write(audio_bytes)
 
         subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-i", audio_path,
-                "-c:v", "copy",
-                "-c:a", "aac",
-                "-shortest",
-                output_path,
-            ],
-            check=True,
-            capture_output=True,
+            ["ffmpeg", "-y", "-i", video_path, "-i", audio_path,
+             "-c:v", "copy", "-c:a", "aac", "-shortest", output_path],
+            check=True, capture_output=True,
         )
 
         with open(output_path, "rb") as f:
@@ -1054,17 +1005,20 @@ def _critique_exercise_video(video_bytes: bytes, exercise_name: str, target_musc
         return True, ""
 
 
-def _veo_prompt(exercise_name: str, target_muscles: str = "") -> str:
+def _veo_prompt(exercise_name: str, target_muscles: str = "", gender: str = "female", script: str = "") -> str:
     muscles_hint = f", engaging {target_muscles}" if target_muscles else ""
     muscles_visual = (
-        f" Clearly show the {target_muscles} being activated — camera angle and lighting should make "
-        f"the muscle engagement visible."
+        f" Clearly show the {target_muscles} being activated — camera angle and lighting should highlight the muscle engagement."
         if target_muscles else ""
     )
+    script_direction = (
+        f" The trainer's movements follow this sequence: {script}"
+        if script else ""
+    )
     return (
-        f"A certified personal trainer demonstrating perfect form for {exercise_name}{muscles_hint}. "
+        f"A {gender} certified personal trainer demonstrating perfect form for {exercise_name}{muscles_hint}. "
         f"Full body visible from a 45-degree angle, clear coaching perspective showing correct technique, "
-        f"posture, and muscle engagement.{muscles_visual} "
+        f"posture, and muscle engagement.{muscles_visual}{script_direction} "
         f"Clean gym background. Professional fitness coaching video."
     )
 
@@ -1097,8 +1051,18 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
 
     # Submit new Veo 2 job
     try:
+        import random
         client = _get_genai_client()
-        prompt = _veo_prompt(exercise_name, target_muscles)
+
+        # 1. Generate coaching script first — video movements will follow it
+        script = _generate_coaching_script(exercise_name, target_muscles)
+
+        # 2. Randomly pick trainer gender for the video
+        gender = random.choice(["male", "female"])
+        print(f"[veo] trainer gender={gender} for '{exercise_name}'")
+
+        # 3. Build Veo prompt informed by the script
+        prompt = _veo_prompt(exercise_name, target_muscles, gender=gender, script=script)
 
         operation = client.models.generate_videos(
             model="veo-2.0-generate-001",
@@ -1114,6 +1078,8 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
             "slug":           slug,
             "exercise_name":  exercise_name,
             "target_muscles": target_muscles,
+            "script":         script,
+            "trainer_gender": gender,
             "operation_name": op_name,
             "status":         "generating",
             "attempt":        0,
@@ -1166,8 +1132,14 @@ def get_exercise_video_status(job_id: str) -> dict:
         attempt = job.get("attempt", 0)
         is_ok, reason = _critique_exercise_video(video_bytes, job["exercise_name"], job.get("target_muscles", ""))
         if not is_ok and attempt < 3:
+            import random
             print(f"[critic] rejected (attempt {attempt}): {reason} — submitting new Veo job")
-            new_prompt = _veo_prompt(job["exercise_name"], job.get("target_muscles", ""))
+            # Keep same script; pick a new random gender for variety
+            gender = random.choice(["male", "female"])
+            new_prompt = _veo_prompt(
+                job["exercise_name"], job.get("target_muscles", ""),
+                gender=gender, script=job.get("script", ""),
+            )
             new_op = client.models.generate_videos(
                 model="veo-2.0-generate-001",
                 prompt=new_prompt,
@@ -1176,6 +1148,7 @@ def get_exercise_video_status(job_id: str) -> dict:
             new_op_name = new_op if isinstance(new_op, str) else new_op.name
             db.collection("exercise_video_jobs").document(job_id).update({
                 "operation_name": new_op_name,
+                "trainer_gender": gender,
                 "attempt":        attempt + 1,
                 "status":         "generating",
                 "last_rejection": reason,
@@ -1185,11 +1158,12 @@ def get_exercise_video_status(job_id: str) -> dict:
         if not is_ok:
             print(f"[critic] max attempts reached for '{job['exercise_name']}', using last video")
 
-        # Generate coaching voiceover and mux into video
+        # Mux Rena's coaching voiceover using the pre-generated script
         try:
-            video_bytes = _add_coaching_audio(
-                video_bytes, job["exercise_name"], job.get("target_muscles", "")
+            script = job.get("script") or _generate_coaching_script(
+                job["exercise_name"], job.get("target_muscles", "")
             )
+            video_bytes = _add_coaching_audio(video_bytes, script)
         except Exception as e:
             print(f"[veo] audio mux failed (uploading silent video): {e}")
 
