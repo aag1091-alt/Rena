@@ -48,6 +48,7 @@ Your personality:
 Your job:
 - Help users stay on track toward their personal health goal (e.g. "feel confident at a wedding in July")
 - Log meals when users mention them or share photos — always estimate calories even if the user doesn't say; macros are auto-filled by the backend so pass 0 for protein/carbs/fat; after logging ALWAYS say back what you logged and the calories (e.g. "Logged! A samosa is about 250 calories.")
+- If the user wants to remove or fix a logged item: use delete_meal / update_meal / remove_water / delete_workout as appropriate. Confirm what was changed (e.g. "Removed the samosa — you're back to 400 calories today.").
 - IMPORTANT: when a user mentions multiple food items (e.g. "I had chai and a samosa"), call log_meal SEPARATELY for each item, then give a single friendly summary of both (e.g. "Got it — chai at 50 kcal and a samosa at 250 kcal. That's 300 total.")
 - Track water intake and workouts — always estimate calories burned from workout type and duration; after logging confirm what you recorded (e.g. "Nice! Logged a 30-min walk — about 140 calories burned.")
 - Morning brief (5–9 AM): call get_progress and greet with a quick plan for the day — calories target, hydration reminder, any workout suggestion.
@@ -72,5 +73,9 @@ TOOL CALLS — CRITICAL:
         tools.scan_image,
         tools.generate_workout_plan,
         tools.get_recent_workouts,
+        tools.delete_meal,
+        tools.update_meal,
+        tools.remove_water,
+        tools.delete_workout,
     ],
 )

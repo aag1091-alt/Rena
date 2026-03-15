@@ -832,6 +832,157 @@ def log_weight(user_id: str, weight_kg: float) -> dict:
     return {"status": "logged", "weight_kg": weight_kg}
 
 
+def delete_meal(user_id: str, meal_name: str) -> dict:
+    """
+    Remove a logged meal from today's food log.
+    Matches by name (case-insensitive, partial match on the first hit found).
+
+    Args:
+        user_id: The user's unique ID.
+        meal_name: Name or partial name of the meal to remove (e.g. "samosa", "chai").
+
+    Returns:
+        Confirmation with the removed meal and updated daily calorie total.
+    """
+    log_ref = _today_log_ref(user_id)
+    today = log_ref.get().to_dict() or {}
+    meals = today.get("meals", [])
+
+    key = meal_name.lower().strip()
+    removed = None
+    kept = []
+    for m in meals:
+        if removed is None and key in m.get("name", "").lower():
+            removed = m
+        else:
+            kept.append(m)
+
+    if removed is None:
+        return {"status": "not_found", "message": f"No meal matching '{meal_name}' found in today's log."}
+
+    log_ref.set({"meals": kept}, merge=True)
+    calories_now = sum(m.get("calories", 0) for m in kept)
+    return {
+        "status": "deleted",
+        "removed_meal": removed["name"],
+        "calories_removed": removed.get("calories", 0),
+        "total_calories_today": calories_now,
+    }
+
+
+def update_meal(
+    user_id: str,
+    meal_name: str,
+    new_name: str = None,
+    calories: int = None,
+    protein_g: int = None,
+    carbs_g: int = None,
+    fat_g: int = None,
+) -> dict:
+    """
+    Update fields of an already-logged meal. Only pass the fields you want to change.
+    Matches the meal by name (case-insensitive, partial match on the first hit).
+
+    Args:
+        user_id: The user's unique ID.
+        meal_name: Name of the meal to update.
+        new_name: Rename the meal (optional).
+        calories: New calorie value (optional).
+        protein_g: New protein in grams (optional).
+        carbs_g: New carbs in grams (optional).
+        fat_g: New fat in grams (optional).
+
+    Returns:
+        Confirmation with the updated meal details.
+    """
+    log_ref = _today_log_ref(user_id)
+    today = log_ref.get().to_dict() or {}
+    meals = today.get("meals", [])
+
+    key = meal_name.lower().strip()
+    updated = None
+    for m in meals:
+        if updated is None and key in m.get("name", "").lower():
+            if new_name is not None:
+                m["name"] = new_name
+            if calories is not None:
+                m["calories"] = calories
+            if protein_g is not None:
+                m["protein_g"] = protein_g
+            if carbs_g is not None:
+                m["carbs_g"] = carbs_g
+            if fat_g is not None:
+                m["fat_g"] = fat_g
+            updated = m
+            break
+
+    if updated is None:
+        return {"status": "not_found", "message": f"No meal matching '{meal_name}' found in today's log."}
+
+    log_ref.set({"meals": meals}, merge=True)
+    calories_now = sum(m.get("calories", 0) for m in meals)
+    return {
+        "status": "updated",
+        "meal": updated,
+        "total_calories_today": calories_now,
+    }
+
+
+def remove_water(user_id: str, glasses: int) -> dict:
+    """
+    Remove glasses of water from today's count. Floors at zero.
+
+    Args:
+        user_id: The user's unique ID.
+        glasses: Number of glasses to remove.
+
+    Returns:
+        Updated total glasses for today.
+    """
+    log_ref = _today_log_ref(user_id)
+    today = log_ref.get().to_dict() or {}
+    current = today.get("water_glasses", 0)
+    new_total = max(0, current - glasses)
+    log_ref.set({"water_glasses": new_total}, merge=True)
+    return {"status": "updated", "water_glasses_today": new_total}
+
+
+def delete_workout(user_id: str, workout_type: str) -> dict:
+    """
+    Remove a logged workout from today's workout log.
+    Matches by type (case-insensitive, partial match on the first hit found).
+
+    Args:
+        user_id: The user's unique ID.
+        workout_type: Type or partial name of the workout to remove (e.g. "run", "yoga").
+
+    Returns:
+        Confirmation with the removed workout.
+    """
+    log_ref = _today_log_ref(user_id)
+    today = log_ref.get().to_dict() or {}
+    workouts = today.get("workouts", [])
+
+    key = workout_type.lower().strip()
+    removed = None
+    kept = []
+    for w in workouts:
+        if removed is None and key in w.get("type", "").lower():
+            removed = w
+        else:
+            kept.append(w)
+
+    if removed is None:
+        return {"status": "not_found", "message": f"No workout matching '{workout_type}' found in today's log."}
+
+    log_ref.set({"workouts": kept}, merge=True)
+    return {
+        "status": "deleted",
+        "removed_workout": removed["type"],
+        "calories_removed": removed.get("calories_burned", 0),
+    }
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # WORKOUT PLAN
 # ──────────────────────────────────────────────────────────────────────────────
