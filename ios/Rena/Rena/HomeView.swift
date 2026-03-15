@@ -40,6 +40,13 @@ struct HomeView: View {
                     VStack(spacing: 12) {
                         GoalCard(goal: goalData, isLoading: isLoadingGoal)
 
+                        DayCalorieBreakdownCard(
+                            caloriesConsumed: appState.caloriesConsumed,
+                            caloriesBurned: appState.caloriesBurned,
+                            caloriesTarget: appState.caloriesTarget,
+                            burnRequired: appState.burnRequired
+                        )
+
                         DaySoFarCard(insight: insight, isLoading: isInsightLoading, isToday: true)
 
                         NudgeStrip()
