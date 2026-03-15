@@ -70,14 +70,22 @@ _CONTEXT_PROMPTS = {
         "Keep it short and friendly — one sentence."
     ),
     "workout_plan": (
-        "SPEAK OUT LOUD NOW: Call generate_workout_plan with the user's user_id first to create today's plan. "
-        "Then describe it warmly in 1-2 sentences — workout name and main exercises. "
-        "Ask: 'Does that work for you, or want me to swap anything out?'"
+        "SPEAK OUT LOUD NOW. First call get_recent_workouts with the user's user_id to check their workout history. "
+        "TWO paths: "
+        "(A) They HAVE recent workouts: acknowledge it in one warm sentence (e.g. 'Looks like you've been hitting the gym a lot this week!'), "
+        "then immediately call generate_workout_plan to build today's plan — no questions needed. "
+        "Describe the plan in 1-2 sentences and ask: 'Does that work, or want me to tweak anything?' "
+        "(B) They have NO recent workouts: ask 2 quick questions only — "
+        "'Do you have access to a gym or working out at home?' then 'Any specific muscle group or goal for today?' "
+        "Then call generate_workout_plan and describe the plan. "
+        "Keep the whole exchange to 3-4 turns max."
     ),
     "update_workout_plan": (
-        "SPEAK OUT LOUD NOW: The user wants to update their workout plan. "
-        "Ask what they want to change. Once confirmed, call generate_workout_plan again to create a fresh plan, "
-        "then describe the updated workout. Keep it to 2-3 exchanges."
+        "SPEAK OUT LOUD NOW. The user wants to change their workout plan. "
+        "Listen to what they want — swap an exercise, adjust intensity, more cardio, shorter session, etc. "
+        "Call generate_workout_plan right away to create a fresh updated plan. "
+        "Describe the key change in one sentence and end with a short motivating line. "
+        "Keep it to 2 turns max."
     ),
     "plan_tomorrow": (
         "SPEAK OUT LOUD NOW: Say 'Let's plan tomorrow, {name}!' "

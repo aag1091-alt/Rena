@@ -102,41 +102,34 @@ struct WorkbookView: View {
                         isToday: isToday
                     )
 
-                    // ── Voice cards — today only ───────────────────
+                    // ── Workout plan (unified) — today only ────────
                     if isToday {
-                        WorkbookVoiceCard(
-                            icon: "figure.run",
-                            iconColor: Color(hex: "2A9D8F"),
-                            title: "Today's Workout",
-                            subtitle: "Let Rena suggest a workout tailored to your goal",
-                            buttonLabel: "Plan with Rena",
-                            isActive: activeContext == "workout_plan" && isVoiceConnected,
-                            voiceState: activeContext == "workout_plan" ? voice.state : .idle,
-                            onTap: { toggleVoice(context: "workout_plan") }
-                        )
-                        if isEvening {
-                            WorkbookVoiceCard(
-                                icon: "moon.stars.fill",
-                                iconColor: Color(hex: "9B7EC8"),
-                                title: "Plan Tomorrow",
-                                subtitle: "Review today with Rena and set tomorrow's targets",
-                                buttonLabel: "Plan with Rena",
-                                isActive: activeContext == "plan_tomorrow" && isVoiceConnected,
-                                voiceState: activeContext == "plan_tomorrow" ? voice.state : .idle,
-                                onTap: { toggleVoice(context: "plan_tomorrow") }
-                            )
-                        }
-                    }
-
-                    // ── Planned workout — today only ───────────────
-                    if isToday {
-                        PlannedWorkoutCard(
+                        WorkoutPlanSection(
                             plan: workoutPlan,
                             isGenerating: isGeneratingPlan,
-                            onGenerate: { Task { await generatePlan() } },
+                            voiceState: voice.state,
+                            isPlanningActive: activeContext == "workout_plan" && isVoiceConnected,
+                            isUpdatingActive: activeContext == "update_workout_plan" && isVoiceConnected,
+                            onPlanWithRena: { toggleVoice(context: "workout_plan") },
+                            onUpdateWithRena: { toggleVoice(context: "update_workout_plan") },
+                            onRegenerate: { Task { await generatePlan() } },
                             onToggleComplete: { ex in Task { await toggleComplete(ex) } },
                             onPlay: { ex in videoSheet = ex },
                             onLog: { ex in logSheet = ex }
+                        )
+                    }
+
+                    // ── Plan Tomorrow — evening only ───────────────
+                    if isToday && isEvening {
+                        WorkbookVoiceCard(
+                            icon: "moon.stars.fill",
+                            iconColor: Color(hex: "9B7EC8"),
+                            title: "Plan Tomorrow",
+                            subtitle: "Review today with Rena and set tomorrow's targets",
+                            buttonLabel: "Plan with Rena",
+                            isActive: activeContext == "plan_tomorrow" && isVoiceConnected,
+                            voiceState: activeContext == "plan_tomorrow" ? voice.state : .idle,
+                            onTap: { toggleVoice(context: "plan_tomorrow") }
                         )
                     }
 
@@ -428,29 +421,38 @@ struct TodayActivityCard: View {
     }
 }
 
-// MARK: - Planned Workout Card
+// MARK: - Unified Workout Plan Section
 
-struct PlannedWorkoutCard: View {
+struct WorkoutPlanSection: View {
     let plan: PlannedWorkout?
     let isGenerating: Bool
-    let onGenerate: () -> Void
+    let voiceState: VoiceState
+    let isPlanningActive: Bool
+    let isUpdatingActive: Bool
+    let onPlanWithRena: () -> Void
+    let onUpdateWithRena: () -> Void
+    let onRegenerate: () -> Void
     let onToggleComplete: (PlannedExercise) -> Void
     let onPlay: (PlannedExercise) -> Void
     let onLog: (PlannedExercise) -> Void
 
+    private let suggestions = ["Swap an exercise", "Make it harder", "Add more cardio", "Make it shorter", "Upper body focus", "No equipment"]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+
+            // Header
             HStack(spacing: 8) {
                 Image(systemName: "dumbbell.fill")
                     .font(.system(size: 13))
                     .foregroundColor(Color(hex: "2A9D8F"))
-                Text("TODAY'S WORKOUT PLAN")
+                Text("TODAY'S WORKOUT")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
                 Spacer()
-                if plan != nil {
-                    Button(action: onGenerate) {
+                if plan != nil && !isPlanningActive && !isUpdatingActive {
+                    Button(action: onRegenerate) {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 13))
                             .foregroundColor(Color(hex: "B09880"))
@@ -466,8 +468,16 @@ struct PlannedWorkoutCard: View {
                         .foregroundColor(Color(hex: "B09880"))
                 }
                 .padding(.vertical, 4)
+
+            } else if isPlanningActive {
+                voiceActiveView(
+                    label: voiceLabel,
+                    color: Color(hex: "2A9D8F"),
+                    onEnd: onPlanWithRena
+                )
+
             } else if let plan {
-                // Plan summary
+                // Plan header
                 HStack(spacing: 12) {
                     Label(plan.name, systemImage: "figure.strengthtraining.traditional")
                         .font(.system(size: 14, weight: .semibold))
@@ -476,8 +486,7 @@ struct PlannedWorkoutCard: View {
                     Text("\(plan.totalDurationMin) min")
                         .font(.system(size: 12))
                         .foregroundColor(Color(hex: "B09880"))
-                    Text("·")
-                        .foregroundColor(Color(hex: "D4B8A0"))
+                    Text("·").foregroundColor(Color(hex: "D4B8A0"))
                     Text("\(plan.totalCalories) kcal")
                         .font(.system(size: 12))
                         .foregroundColor(Color(hex: "B09880"))
@@ -499,21 +508,30 @@ struct PlannedWorkoutCard: View {
                         }
                     }
                 }
+
+                Divider().background(Color(hex: "F0E6DA"))
+
+                // Update with Rena
+                updateSection
+
             } else {
-                VStack(spacing: 10) {
-                    Text("No workout planned yet. Let Rena create one based on your goal, or generate one now.")
+                // No plan yet
+                VStack(spacing: 12) {
+                    Text("Let Rena build a workout based on your recent activity and goals.")
                         .font(.system(size: 14))
                         .foregroundColor(Color(hex: "B09880"))
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Button(action: onGenerate) {
-                        Label("Generate Today's Workout", systemImage: "sparkles")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color(hex: "2A9D8F"))
-                            .cornerRadius(12)
+                    Button(action: onPlanWithRena) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "waveform").font(.system(size: 13))
+                            Text("Plan with Rena").font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color(hex: "2A9D8F"))
+                        .cornerRadius(12)
                     }
                 }
             }
@@ -523,6 +541,82 @@ struct PlannedWorkoutCard: View {
         .background(Color.white)
         .cornerRadius(18)
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+
+    // MARK: - Sub-views
+
+    private var updateSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("UPDATE WITH RENA")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(Color(hex: "B09880"))
+                .kerning(1.0)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(suggestions, id: \.self) { s in
+                        Text(s)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(hex: "9B7EC8"))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(hex: "9B7EC8").opacity(0.1))
+                            .cornerRadius(12)
+                            .onTapGesture { onUpdateWithRena() }
+                    }
+                }
+            }
+
+            if isUpdatingActive {
+                voiceActiveView(
+                    label: voiceLabel,
+                    color: Color(hex: "9B7EC8"),
+                    onEnd: onUpdateWithRena
+                )
+            } else {
+                Button(action: onUpdateWithRena) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform").font(.system(size: 13))
+                        Text("Update with Rena").font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(Color(hex: "9B7EC8"))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color(hex: "9B7EC8").opacity(0.1))
+                    .cornerRadius(12)
+                }
+            }
+        }
+    }
+
+    private func voiceActiveView(label: String, color: Color, onEnd: @escaping () -> Void) -> some View {
+        Button(action: onEnd) {
+            HStack(spacing: 8) {
+                Circle().fill(color).frame(width: 8, height: 8)
+                Text(label).font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Text("Tap to end")
+                    .font(.system(size: 12))
+                    .foregroundColor(color.opacity(0.7))
+            }
+            .foregroundColor(color)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .background(color.opacity(0.1))
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var voiceLabel: String {
+        switch voiceState {
+        case .connecting: return "Connecting…"
+        case .listening:  return "Listening…"
+        case .thinking:   return "Thinking…"
+        case .speaking:   return "Rena is speaking…"
+        case .error(let m): return "Error: \(m)"
+        default: return isPlanningActive ? "Planning your workout…" : "Updating your plan…"
+        }
     }
 }
 

@@ -645,6 +645,56 @@ def log_workout(user_id: str, workout_type: str, duration_min: int, calories_bur
     }
 
 
+def get_recent_workouts(user_id: str, days: int = 14) -> dict:
+    """
+    Return the user's logged workouts from the past N days, mapped by date.
+    Use this before generating a workout plan to understand the user's recent activity patterns.
+
+    Args:
+        user_id: The user's unique ID.
+        days: Number of past days to look back (default 14).
+
+    Returns:
+        Dict with workouts_by_date (date → list of workouts) and a plain-English summary.
+    """
+    from datetime import timedelta
+
+    today = datetime.now(timezone.utc).date()
+    workouts_by_date = {}
+    for i in range(days):
+        d = (today - timedelta(days=i)).isoformat()
+        doc = _user_ref(user_id).collection("logs").document(d).get()
+        if doc.exists:
+            data = doc.to_dict() or {}
+            entries = data.get("workouts", [])
+            if entries:
+                workouts_by_date[d] = [
+                    {"type": w.get("type", "workout"), "duration_min": w.get("duration_min", 0),
+                     "calories_burned": w.get("calories_burned", 0)}
+                    for w in entries
+                ]
+
+    if not workouts_by_date:
+        return {
+            "workouts_by_date": {},
+            "total_workout_days": 0,
+            "summary": f"No workouts logged in the past {days} days. Ask the user what kind of workout they'd like.",
+        }
+
+    total_days = len(workouts_by_date)
+    all_types = [w["type"] for entries in workouts_by_date.values() for w in entries]
+    type_counts = {}
+    for t in all_types:
+        type_counts[t] = type_counts.get(t, 0) + 1
+    top_types = sorted(type_counts, key=lambda x: -type_counts[x])[:3]
+    summary = (
+        f"User has worked out on {total_days} of the past {days} days. "
+        f"Most frequent activities: {', '.join(top_types)}. "
+        f"Use this to build a plan that complements their recent activity."
+    )
+    return {"workouts_by_date": workouts_by_date, "total_workout_days": total_days, "summary": summary}
+
+
 def scan_image(user_id: str, image_base64: str, mime_type: str = "image/jpeg") -> dict:
     """
     Identify food in a photo and estimate nutritional content using Gemini Vision.
