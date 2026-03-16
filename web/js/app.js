@@ -17,9 +17,6 @@ const app = {
   scanItems: [],
   scanAdjusted: {},
   scanLogged: false,
-  // goal onboarding
-  goalConnected: false,
-  goalTimer: null,
 };
 
 const voice = new VoiceManager();
@@ -105,9 +102,6 @@ window.addEventListener("DOMContentLoaded", () => {
     showScreen("onboarding");
     document.getElementById("onboard-welcome").textContent =
       `Welcome, ${app.user.name.split(" ")[0]} 👋`;
-  } else if (!app.hasGoal) {
-    showScreen("goal");
-    setupGoalScreen();
   } else {
     showApp();
   }
@@ -147,18 +141,7 @@ async function handleCredential(response) {
     const progress = await API.progress(app.user.id);
     app.profile = { onboarded: true };
     localStorage.setItem("rena_profile", JSON.stringify(app.profile));
-    // Check if goal already set
-    const goalSet = progress.goal && progress.goal !== "Not set";
-    if (goalSet) {
-      app.hasGoal = true;
-      localStorage.setItem("rena_has_goal", "true");
-    }
-    if (!app.hasGoal) {
-      showScreen("goal");
-      setupGoalScreen();
-    } else {
-      showApp();
-    }
+    showApp();
   } catch {
     // Not yet onboarded
     btn.disabled = false;
@@ -249,8 +232,7 @@ async function submitOnboarding() {
     });
     app.profile = { onboarded: true };
     localStorage.setItem("rena_profile", JSON.stringify(app.profile));
-    showScreen("goal");
-    setupGoalScreen();
+    showApp();
   } catch {
     document.getElementById("activity-error").textContent = "Something went wrong. Please try again.";
     document.getElementById("activity-error").classList.remove("hidden");
@@ -258,101 +240,7 @@ async function submitOnboarding() {
   }
 }
 
-// ── Goal Onboarding ───────────────────────────────────────────────────────
 
-function setupGoalScreen() {
-  const orb = document.getElementById("goal-orb");
-  orb.addEventListener("click", toggleGoalVoice);
-  document.getElementById("goal-tap-hint").addEventListener("click", toggleGoalVoice);
-  document.getElementById("goal-confirm").addEventListener("click", confirmGoal);
-  document.getElementById("goal-change").addEventListener("click", resetGoal);
-  // Auto-connect after brief delay
-  setTimeout(() => toggleGoalVoice(), 500);
-}
-
-function toggleGoalVoice() {
-  if (app.goalConnected) {
-    voice.disconnect();
-    app.goalConnected = false;
-    document.getElementById("goal-orb").classList.remove("connected");
-    document.getElementById("goal-orb-pulse").classList.remove("pulsing");
-    document.getElementById("goal-tap-hint").textContent = "Tap to start";
-    clearInterval(app.goalTimer);
-  } else {
-    const first = (app.user.name || "").split(" ")[0];
-    voice.connect(app.user.id, "goal", first);
-    app.goalConnected = true;
-    document.getElementById("goal-orb").classList.add("connected");
-    document.getElementById("goal-orb-pulse").classList.add("pulsing");
-    document.getElementById("goal-tap-hint").textContent = "Tap to end";
-    document.getElementById("goal-status").textContent = "Connecting to Rena…";
-    startGoalPolling();
-  }
-}
-
-function startGoalPolling() {
-  app.goalTimer = setInterval(async () => {
-    try {
-      const progress = await API.progress(app.user.id);
-      if (progress.goal && progress.goal !== "Not set") {
-        clearInterval(app.goalTimer);
-        showGoalCard(progress.goal, progress.deadline);
-      }
-    } catch {}
-  }, 2000);
-}
-
-function showGoalCard(goal, deadline) {
-  document.getElementById("goal-card-text").textContent = goal;
-  const deadlineEl = document.getElementById("goal-card-deadline");
-  if (deadline && deadline !== "Not set") {
-    const d = new Date(deadline + "T12:00:00");
-    deadlineEl.textContent = "📅 " + d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  } else {
-    deadlineEl.textContent = "";
-  }
-  document.getElementById("goal-card").classList.remove("hidden");
-}
-
-function confirmGoal() {
-  clearInterval(app.goalTimer);
-  voice.disconnect();
-  app.goalConnected = false;
-  app.hasGoal = true;
-  localStorage.setItem("rena_has_goal", "true");
-  showApp();
-}
-
-function resetGoal() {
-  document.getElementById("goal-card").classList.add("hidden");
-  voice.sendText("The user wants to change their goal. Please ask them again what they want to work toward and when.");
-  startGoalPolling();
-}
-
-// update orb status from voice state
-voice.addEventListener("statechange", (e) => {
-  const state = e.detail;
-  if (document.getElementById("screen-goal")?.classList.contains("active")) {
-    const labels = {
-      idle: "Tap the orb to start",
-      connecting: "Connecting to Rena…",
-      listening: "Listening…",
-      thinking: "Rena is thinking…",
-      speaking: "Rena is speaking…",
-      error: "Connection error — try again",
-    };
-    const el = document.getElementById("goal-status");
-    if (el) el.textContent = labels[state] || "";
-    const pulse = document.getElementById("goal-orb-pulse");
-    if (pulse) {
-      if (state === "listening" || state === "speaking") {
-        pulse.classList.add("pulsing");
-      } else {
-        pulse.classList.remove("pulsing");
-      }
-    }
-  }
-});
 
 // ── App Shell ─────────────────────────────────────────────────────────────
 
@@ -453,7 +341,7 @@ function renderHome(p, goal, insight, nudge) {
   }
 
   // Goal card
-  if (goal) html += renderGoalCard(goal);
+  html += renderGoalCard(goal);
 
   // Calorie breakdown
   html += `<div class="cal-breakdown">
@@ -537,6 +425,19 @@ function renderHome(p, goal, insight, nudge) {
 }
 
 function renderGoalCard(goal) {
+  if (!goal || !goal.goal) {
+    return `<div class="goal-card-home" style="background:linear-gradient(135deg,#E76F5111,white)">
+      <div class="goal-header-row">
+        <div class="goal-icon-box" style="background:#E76F5122;color:#E76F51">◎</div>
+        <div class="card-label" style="flex:1">YOUR GOAL</div>
+      </div>
+      <div class="goal-text" style="color:#888;font-style:italic">No goal set yet</div>
+      <button onclick="openVoiceOverlay('goal')" style="margin-top:14px;width:100%;padding:12px;border:none;border-radius:14px;background:linear-gradient(90deg,#E76F51,#F4A261);color:white;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+        <span>✦</span> Add goal with Rena
+      </button>
+    </div>`;
+  }
+
   const gt    = goal.goal_type || "event";
   const text  = goal.goal || "Set your goal";
   const days  = goal.days_until_goal || 0;
@@ -587,6 +488,11 @@ function renderGoalCard(goal) {
       </div>
       ${label ? `<div style="font-size:12px;font-weight:500;color:${color};margin-top:8px">${label}</div>` : ""}
     ` : ""}
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button onclick="openVoiceOverlay('goal')" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:20px;border:1.5px solid ${color}44;background:${color}11;color:${color};font-size:12px;font-weight:600;cursor:pointer;letter-spacing:0.2px">
+        <span style="font-size:11px">✦</span> Change goal
+      </button>
+    </div>
   </div>`;
 }
 

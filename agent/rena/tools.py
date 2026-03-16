@@ -2067,7 +2067,7 @@ def reset_user(user_id: str) -> dict:
 
     _tz_cache.pop(user_id, None)
     user_ref = _user_ref(user_id)
-    for sub in ["logs", "progress", "visual_journey", "workout_plans", "session_notes", "morning_nudges"]:
+    for sub in ["logs", "progress", "visual_journey", "workout_plans", "meal_plans", "tomorrow_plans", "session_notes", "morning_nudges"]:
         delete_collection(user_ref.collection(sub))
     user_ref.delete()
 
