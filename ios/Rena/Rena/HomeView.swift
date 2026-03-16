@@ -209,6 +209,7 @@ struct DailyStatsBar: View {
 
 struct AppHeader: View {
     @EnvironmentObject var appState: AppState
+    @State private var showDev = false
 
     private var greeting: String {
         let h = Calendar.current.component(.hour, from: Date())
@@ -237,10 +238,86 @@ struct AppHeader: View {
             Text(dateString)
                 .font(.system(size: 13))
                 .foregroundColor(Color(hex: "B09880"))
+            Button { showDev = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(hex: "C4A882"))
+                    .padding(.leading, 10)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 24)
         .padding(.top, 56)
         .padding(.bottom, 16)
+        .sheet(isPresented: $showDev) { DevSheet() }
+    }
+}
+
+// MARK: - Dev Tools Sheet
+
+struct DevSheet: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) var dismiss
+    @State private var isResetting = false
+    @State private var isSeeding = false
+    @State private var seedDone = false
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 16) {
+                Button(role: .destructive) {
+                    isResetting = true
+                    Task {
+                        try? await RenaAPI.shared.devReset(userId: appState.userId)
+                        await MainActor.run {
+                            isResetting = false
+                            dismiss()
+                            appState.signOut()
+                        }
+                    }
+                } label: {
+                    HStack {
+                        if isResetting { ProgressView().tint(.red) }
+                        else { Image(systemName: "arrow.counterclockwise") }
+                        Text("Reset Onboarding")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(12)
+                }
+                .disabled(isResetting || isSeeding)
+
+                Button {
+                    isSeeding = true
+                    Task {
+                        try? await RenaAPI.shared.devSeed(userId: appState.userId)
+                        await MainActor.run { isSeeding = false; seedDone = true }
+                    }
+                } label: {
+                    HStack {
+                        if isSeeding { ProgressView() }
+                        else { Image(systemName: seedDone ? "checkmark.circle.fill" : "flask.fill") }
+                        Text(seedDone ? "Seeded!" : "Seed Last 7 Days Data")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(12)
+                }
+                .disabled(isResetting || isSeeding)
+
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Dev Tools")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
     }
 }
 
