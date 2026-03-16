@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 struct WorkbookView: View {
     @Binding var showRena: Bool
@@ -1118,71 +1119,69 @@ struct PlannedMealRow: View {
     }
 }
 
+// MARK: - YouTube WebView
+
+struct YouTubeWebView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.load(URLRequest(url: url))
+        return webView
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
+
 // MARK: - Meal YouTube Sheet
 
 struct MealYouTubeSheet: View {
     let meal: PlannedMeal
     @Environment(\.dismiss) var dismiss
 
+    private var searchURL: URL? {
+        let encoded = meal.youtubeQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? meal.name
+        return URL(string: "https://m.youtube.com/results?search_query=\(encoded)")
+    }
+
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 0) {
+            // Header
             HStack {
-                Text(meal.name)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(Color(hex: "3D2B1F"))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(meal.name)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Color(hex: "3D2B1F"))
+                        .lineLimit(1)
+                    Text("Cooking videos")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: "B09880"))
+                }
                 Spacer()
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 24))
+                        .font(.system(size: 26))
                         .foregroundColor(Color(hex: "C4A882"))
                 }
             }
-            .padding(.top, 4)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.white)
 
-            VStack(spacing: 10) {
-                Image(systemName: "play.rectangle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(Color(hex: "FF0000").opacity(0.85))
+            Divider()
 
-                Text("Watch on YouTube")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: "3D2B1F"))
-
-                Text("Find a cooking guide for \"\(meal.name)\"")
-                    .font(.system(size: 13))
+            if let url = searchURL {
+                YouTubeWebView(url: url)
+            } else {
+                Spacer()
+                Text("Could not load YouTube")
                     .foregroundColor(Color(hex: "B09880"))
-                    .multilineTextAlignment(.center)
+                Spacer()
             }
-            .frame(maxWidth: .infinity)
-            .padding(24)
-            .background(Color(hex: "F7F3EE"))
-            .cornerRadius(16)
-
-            Button(action: openYouTube) {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.up.right.square.fill")
-                    Text("Open YouTube")
-                }
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color(hex: "FF0000").opacity(0.85))
-                .cornerRadius(14)
-            }
-
-            Spacer()
         }
-        .padding(20)
         .background(Color.white)
-    }
-
-    private func openYouTube() {
-        let encoded = meal.youtubeQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? meal.name
-        let urlStr = "https://www.youtube.com/results?search_query=\(encoded)"
-        if let url = URL(string: urlStr) {
-            UIApplication.shared.open(url)
-        }
-        dismiss()
     }
 }
