@@ -10,6 +10,7 @@ from rena.tools import (
     get_workout_plan, generate_workout_plan, delete_workout_plan, toggle_exercise_complete, log_exercise_from_plan,
     get_exercise_video, get_exercise_video_status, get_morning_nudge,
     get_meal_plan, delete_meal_plan, log_meal_from_plan,
+    get_tomorrow_plan, save_tomorrow_plan_note, delete_tomorrow_plan_note,
 )
 
 load_dotenv()
@@ -351,6 +352,43 @@ async def morning_nudge_endpoint(user_id: str):
     if not user_id or user_id.strip() == "":
         raise HTTPException(status_code=400, detail="user_id is required")
     return await asyncio.to_thread(get_morning_nudge, user_id)
+
+
+@app.get("/tomorrow-plan/{user_id}")
+async def get_tomorrow_plan_endpoint(user_id: str, date: str = None):
+    """Get the saved tomorrow-plan note for a user (defaults to tomorrow)."""
+    if not user_id or user_id.strip() == "":
+        raise HTTPException(status_code=400, detail="user_id is required")
+    plan = await asyncio.to_thread(get_tomorrow_plan, user_id, date)
+    if plan is None:
+        return {}
+    return plan
+
+
+class UpdateTomorrowPlanRequest(BaseModel):
+    summary: str
+    workout_planned: bool = False
+    meal_planned: bool = False
+    date: str = None
+
+
+@app.post("/tomorrow-plan/{user_id}")
+async def upsert_tomorrow_plan_endpoint(user_id: str, req: UpdateTomorrowPlanRequest):
+    """Create or update the tomorrow-plan note for a user."""
+    if not user_id or user_id.strip() == "":
+        raise HTTPException(status_code=400, detail="user_id is required")
+    return await asyncio.to_thread(
+        save_tomorrow_plan_note,
+        user_id, req.summary, req.workout_planned, req.meal_planned, req.date,
+    )
+
+
+@app.delete("/tomorrow-plan/{user_id}")
+async def delete_tomorrow_plan_endpoint(user_id: str, date: str = None):
+    """Delete the tomorrow-plan note for a given date."""
+    if not user_id or user_id.strip() == "":
+        raise HTTPException(status_code=400, detail="user_id is required")
+    return await asyncio.to_thread(delete_tomorrow_plan_note, user_id, date)
 
 
 @app.websocket("/ws/{user_id}")

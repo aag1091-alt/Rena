@@ -943,6 +943,10 @@ def _meal_plan_ref(user_id: str, date_str: str):
     return _user_ref(user_id).collection("meal_plans").document(date_str)
 
 
+def _tomorrow_plan_ref(user_id: str, date_str: str):
+    return _user_ref(user_id).collection("tomorrow_plans").document(date_str)
+
+
 def get_workout_plan(user_id: str, for_date: str = None) -> dict | None:
     """Return the saved workout plan for a given date, or None if not set."""
     date_str = for_date or datetime.now(timezone.utc).date().isoformat()
@@ -1535,6 +1539,63 @@ def get_rich_context(user_id: str) -> dict:
     }
 
 
+def get_tomorrow_plan(user_id: str, for_date: str = None) -> dict | None:
+    """Return the saved tomorrow-plan note for a given date, or None if not set."""
+    from datetime import timedelta
+    date_str = for_date or (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+    doc = _tomorrow_plan_ref(user_id, date_str).get()
+    return doc.to_dict() if doc.exists else None
+
+
+def save_tomorrow_plan_note(
+    user_id: str,
+    summary: str,
+    workout_planned: bool = False,
+    meal_planned: bool = False,
+    for_date: str = None,
+) -> dict:
+    """
+    Save (or update) a summary of the plan_tomorrow session so it can be used
+    as a morning nudge. Call this at the END of every plan_tomorrow conversation
+    regardless of whether any plans were generated.
+
+    Args:
+        user_id: The user's unique ID.
+        summary: 1–2 sentence description of what was discussed and planned.
+        workout_planned: True if generate_workout_plan was called this session.
+        meal_planned: True if generate_meal_plan was called this session.
+        for_date: The date the plan is for (ISO string). Defaults to tomorrow.
+    """
+    from datetime import timedelta
+    date_str = for_date or (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+    ref = _tomorrow_plan_ref(user_id, date_str)
+    existing = (ref.get().to_dict() or {})
+    now = datetime.now(timezone.utc)
+    data = {
+        **existing,
+        "summary": summary,
+        "workout_planned": workout_planned,
+        "meal_planned": meal_planned,
+        "date": date_str,
+        "updated_at": now,
+    }
+    if "created_at" not in existing:
+        data["created_at"] = now
+    ref.set(data)
+    # Invalidate today's morning-nudge cache so it reflects the new plan
+    today = datetime.now(timezone.utc).date().isoformat()
+    _user_ref(user_id).collection("morning_nudges").document(today).delete()
+    return {"saved": True, "date": date_str}
+
+
+def delete_tomorrow_plan_note(user_id: str, for_date: str = None) -> dict:
+    """Delete the tomorrow-plan note for a given date."""
+    from datetime import timedelta
+    date_str = for_date or (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+    _tomorrow_plan_ref(user_id, date_str).delete()
+    return {"deleted": True, "date": date_str}
+
+
 def get_morning_nudge(user_id: str) -> dict:
     """
     Look for a recent plan_tomorrow session note (within ~18 hours) and generate
@@ -1551,24 +1612,27 @@ def get_morning_nudge(user_id: str) -> dict:
     if cached:
         return {"has_nudge": True, "nudge": cached["nudge"]}
 
-    # Look for a recent plan_tomorrow session note (within 18 hours)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=18)
-    docs = (
-        _user_ref(user_id).collection("session_notes")
-        .order_by("created_at", direction=firestore.Query.DESCENDING)
-        .limit(10)
-        .stream()
-    )
+    # Prefer the dedicated tomorrow_plan summary for today
+    tp = _tomorrow_plan_ref(user_id, today).get().to_dict()
+    note_text = (tp or {}).get("summary", "")
 
-    note_text = None
-    for doc in docs:
-        d = doc.to_dict()
-        if d.get("context") != "plan_tomorrow":
-            continue
-        created_at = d.get("created_at")
-        if created_at and created_at > cutoff:
-            note_text = d.get("note", "")
-            break
+    if not note_text:
+        # Fall back: look for a recent plan_tomorrow session note (within 18 hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=18)
+        docs = (
+            _user_ref(user_id).collection("session_notes")
+            .order_by("created_at", direction=firestore.Query.DESCENDING)
+            .limit(10)
+            .stream()
+        )
+        for doc in docs:
+            d = doc.to_dict()
+            if d.get("context") != "plan_tomorrow":
+                continue
+            created_at = d.get("created_at")
+            if created_at and created_at > cutoff:
+                note_text = d.get("note", "")
+                break
 
     if not note_text:
         return {"has_nudge": False, "nudge": ""}

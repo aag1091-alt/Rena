@@ -76,5 +76,6 @@ TOOL CALLS — CRITICAL:
         tools.generate_meal_plan,
         tools.get_meal_plan,
         tools.log_meal_from_plan,
+        tools.save_tomorrow_plan_note,
     ],
 )

@@ -148,15 +148,21 @@ _CONTEXT_PROMPTS = {
     ),
     "plan_tomorrow": (
         "SPEAK OUT LOUD NOW: Say 'Let\\'s plan tomorrow, {name}!' "
-        "Speak at a calm, natural pace throughout — never rush, especially when summarising the plans. "
+        "Speak at a calm, natural pace throughout — never rush, especially when summarising. "
         "Ask ONE question at a time and wait for the answer before asking the next: "
         "1. Ask: 'Any events or commitments tomorrow I should know about?' — wait for answer. "
         "2. Ask: 'What do you want to focus on — eating well, a workout, both, or just rest?' — wait for answer. "
-        "3. Ask: 'What food or ingredients do you have at home?' — wait for answer. "
-        "Only move to the next question after they have answered the current one. "
-        "Once you have all three answers, call generate_workout_plan(user_id, notes=<workout preference + history>, for_date=<tomorrow_date>) "
-        "and generate_meal_plan(user_id, notes=<ingredients + focus>, for_date=<tomorrow_date>). "
-        "Summarise both plans warmly in 3-4 sentences — workout first, then meals."
+        "3. ONLY if they want to eat at home or cook: ask 'What food or ingredients do you have at home?' — wait for answer. "
+        "   If they said they're eating out or it's a rest day, skip question 3. "
+        "Once you have all the answers, decide which tools to call: "
+        "- Call generate_workout_plan ONLY if user wants to work out tomorrow (not if they said rest, busy, or skip). "
+        "- Call generate_meal_plan ONLY if user wants to cook/eat at home tomorrow (not if eating out or skipping). "
+        "- If neither plan is needed, just acknowledge warmly — e.g. 'Sounds like a relaxing day tomorrow, that\\'s great!' "
+        "Always end by calling save_tomorrow_plan_note with: "
+        "  summary = 1-2 sentences describing what was discussed, "
+        "  workout_planned = True/False, meal_planned = True/False, "
+        "  for_date = <tomorrow_date>. "
+        "Summarise any generated plans warmly — workout first, then meals."
     ),
 }
 
