@@ -18,7 +18,7 @@ const API = {
 
   workoutPlan(userId, date)        { return this._fetch(`/workout-plan/${userId}${date ? `?date=${date}` : ""}`); },
   mealPlan(userId, date)           { return this._fetch(`/meal-plan/${userId}${date ? `?date=${date}` : ""}`); },
-  tomorrowPlan(userId)             { return this._fetch(`/tomorrow-plan/${userId}`); },
+  tomorrowPlan(userId, date)       { return this._fetch(`/tomorrow-plan/${userId}${date ? `?date=${date}` : ""}`); },
 
   logMealFromPlan(userId, mealId)  { return this._fetch(`/meal-plan/${userId}/meal/${mealId}/log`, { method: "POST" }); },
   logExercise(userId, exId)        { return this._fetch(`/workout-plan/${userId}/exercise/${exId}/log`, { method: "POST" }); },

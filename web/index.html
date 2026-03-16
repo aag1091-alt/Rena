@@ -14,141 +14,299 @@
 </head>
 <body>
 
-  <!-- ── Login ─────────────────────────────────────────────────────────── -->
+  <!-- ── Login ───────────────────────────────────────────────────────────── -->
   <div class="screen" id="screen-login">
-    <div class="login-logo">✨</div>
-    <div class="login-title">Rena</div>
-    <div class="login-sub">Your personal health companion</div>
-    <div id="google-btn"></div>
-  </div>
-
-  <!-- ── Onboarding ────────────────────────────────────────────────────── -->
-  <div class="screen" id="screen-onboarding">
-    <div class="onboard-wrap">
-      <div class="onboard-title">Let's get started</div>
-      <div class="onboard-sub">Tell Rena a bit about yourself so she can personalise your plan.</div>
-      <form id="onboard-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Age</label>
-            <input type="number" name="age" placeholder="28" required min="13" max="100"/>
-          </div>
-          <div class="form-group">
-            <label>Sex</label>
-            <select name="sex" required>
-              <option value="">Select…</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Height (cm)</label>
-            <input type="number" name="height_cm" placeholder="170" required min="100" max="250"/>
-          </div>
-          <div class="form-group">
-            <label>Weight (kg)</label>
-            <input type="number" name="weight_kg" placeholder="70" required min="30" max="300" step="0.1"/>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Activity level</label>
-          <select name="activity_level" required>
-            <option value="">Select…</option>
-            <option value="sedentary">Sedentary (desk job, little exercise)</option>
-            <option value="lightly_active">Lightly active (1–3 days/week)</option>
-            <option value="moderately_active">Moderately active (3–5 days/week)</option>
-            <option value="very_active">Very active (6–7 days/week)</option>
-          </select>
-        </div>
-        <button type="submit" class="btn-primary">Get started</button>
-      </form>
+    <div class="login-spacer"></div>
+    <div class="login-center">
+      <div class="login-logo">✦</div>
+      <div class="login-title">Rena</div>
+      <div class="login-sub">Your personal health companion</div>
+    </div>
+    <div class="login-spacer"></div>
+    <div class="login-bottom">
+      <div id="login-error" class="login-error hidden"></div>
+      <button class="btn-google" id="google-btn-custom">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="white"/>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="white"/>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="white"/>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="white"/>
+        </svg>
+        Continue with Google
+      </button>
+      <div id="google-btn"></div>
+      <div class="login-terms">By continuing you agree to our Terms &amp; Privacy Policy</div>
     </div>
   </div>
 
-  <!-- ── App ───────────────────────────────────────────────────────────── -->
+  <!-- ── Onboarding ──────────────────────────────────────────────────────── -->
+  <div class="screen" id="screen-onboarding">
+    <div class="onboard-header">
+      <div class="onboard-welcome" id="onboard-welcome">Welcome 👋</div>
+      <div class="onboard-sub">Just a few quick questions to personalise your experience</div>
+    </div>
+    <div class="onboard-dots" id="onboard-dots">
+      <div class="dot active" data-step="1"></div>
+      <div class="dot" data-step="2"></div>
+      <div class="dot" data-step="3"></div>
+      <div class="dot" data-step="4"></div>
+    </div>
+    <div class="onboard-content">
+
+      <!-- Step 1: Sex -->
+      <div class="onboard-step active" id="step-sex">
+        <div class="step-prompt">I'm a…</div>
+        <div class="sex-grid">
+          <button class="sex-card" data-sex="male">
+            <span class="sex-emoji">👨</span>
+            <span class="sex-label">Male</span>
+          </button>
+          <button class="sex-card" data-sex="female">
+            <span class="sex-emoji">👩</span>
+            <span class="sex-label">Female</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Age -->
+      <div class="onboard-step" id="step-age">
+        <div class="step-prompt">How old are you?</div>
+        <div class="big-num" id="age-display">28</div>
+        <input type="range" id="age-slider" min="16" max="80" value="28" class="rena-slider"/>
+        <div class="slider-labels"><span>16</span><span>80</span></div>
+        <button class="btn-coral" id="age-next">Next →</button>
+      </div>
+
+      <!-- Step 3: Body -->
+      <div class="onboard-step" id="step-body">
+        <div class="step-prompt">Tell me about<br/>your body</div>
+        <div class="slider-group">
+          <span class="slider-unit-label">HEIGHT</span>
+          <div class="big-num" id="height-display">5'10"</div>
+          <input type="range" id="height-slider" min="48" max="84" value="70" class="rena-slider"/>
+          <div class="slider-labels"><span>4'0"</span><span>7'0"</span></div>
+        </div>
+        <div class="slider-group">
+          <span class="slider-unit-label">WEIGHT</span>
+          <div class="big-num" id="weight-display">70.0<span class="unit">kg</span></div>
+          <input type="range" id="weight-slider" min="30" max="200" value="70" step="0.5" class="rena-slider"/>
+          <div class="slider-labels"><span>30 kg</span><span>200 kg</span></div>
+        </div>
+        <div id="body-error" class="step-error hidden"></div>
+        <button class="btn-coral" id="body-next">Almost done →</button>
+      </div>
+
+      <!-- Step 4: Activity -->
+      <div class="onboard-step" id="step-activity">
+        <div class="step-prompt">How active<br/>are you?</div>
+        <div class="activity-list">
+          <button class="activity-item" data-level="sedentary">
+            <span class="activity-icon">🪑</span>
+            <span class="activity-label">Mostly sitting</span>
+          </button>
+          <button class="activity-item" data-level="lightly_active">
+            <span class="activity-icon">🚶</span>
+            <span class="activity-label">Light exercise (1–3×/week)</span>
+          </button>
+          <button class="activity-item" data-level="moderately_active">
+            <span class="activity-icon">🏃</span>
+            <span class="activity-label">Moderate exercise (3–5×/week)</span>
+          </button>
+          <button class="activity-item" data-level="very_active">
+            <span class="activity-icon">🔥</span>
+            <span class="activity-label">Very active (daily intense)</span>
+          </button>
+        </div>
+        <div id="activity-error" class="step-error hidden"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Goal Onboarding ─────────────────────────────────────────────────── -->
+  <div class="screen" id="screen-goal">
+    <div class="goal-header">
+      <div class="goal-title">Set your goal</div>
+      <div class="goal-sub">Tell Rena what you're working toward</div>
+    </div>
+    <div class="goal-status" id="goal-status">Tap the orb to start</div>
+    <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+      <div class="goal-orb-wrap">
+        <div class="goal-orb-pulse" id="goal-orb-pulse"></div>
+        <div class="goal-orb" id="goal-orb">✦</div>
+      </div>
+      <div class="goal-tap-hint" id="goal-tap-hint">Tap to start</div>
+    </div>
+    <div id="goal-card" class="goal-card hidden">
+      <div class="goal-card-inner">
+        <div class="goal-card-label">YOUR GOAL</div>
+        <div class="goal-card-text" id="goal-card-text"></div>
+        <div class="goal-card-deadline" id="goal-card-deadline"></div>
+      </div>
+      <div class="goal-card-actions">
+        <button class="btn-outline-coral" id="goal-change">Change</button>
+        <button class="btn-primary-coral" id="goal-confirm">Looks good →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── App ────────────────────────────────────────────────────────────── -->
   <div class="screen" id="screen-app">
     <div class="views">
 
       <!-- Home -->
-      <div class="view" id="view-home">
-        <div class="view-title">Good day 👋</div>
-        <div id="home-content"></div>
+      <div class="view active" id="view-home">
+        <div class="app-header">
+          <div class="header-left">
+            <div class="header-greeting" id="home-greeting">Good morning</div>
+            <div class="header-name" id="home-name">–</div>
+          </div>
+          <div class="header-right">
+            <div class="header-date" id="home-date"></div>
+            <button class="header-gear" id="home-gear" title="Settings">⚙</button>
+          </div>
+        </div>
+        <div class="view-scroll">
+          <div class="view-cards" id="home-content">
+            <div class="loading-row"><div class="spinner"></div></div>
+          </div>
+        </div>
       </div>
 
       <!-- History -->
       <div class="view" id="view-history">
-        <div class="view-title">History</div>
-        <div id="history-content"></div>
+        <div class="app-header">
+          <div class="header-left">
+            <div class="header-greeting" id="history-greeting">Good morning</div>
+            <div class="header-name" id="history-name">–</div>
+          </div>
+          <div class="header-right">
+            <div class="header-date" id="history-date"></div>
+          </div>
+        </div>
+        <div class="view-scroll">
+          <div class="view-cards" id="history-content">
+            <div class="loading-row"><div class="spinner"></div></div>
+          </div>
+        </div>
       </div>
 
       <!-- Plan -->
       <div class="view" id="view-plan">
-        <div class="view-title">Today's plan</div>
-        <div id="plan-content"></div>
+        <div class="app-header">
+          <div class="header-left">
+            <div class="header-greeting" id="plan-greeting">Good morning</div>
+            <div class="header-name" id="plan-name">–</div>
+          </div>
+          <div class="header-right">
+            <div class="header-date" id="plan-date"></div>
+          </div>
+        </div>
+        <div class="view-scroll">
+          <div class="view-cards" id="plan-content">
+            <div class="loading-row"><div class="spinner"></div></div>
+          </div>
+        </div>
       </div>
 
       <!-- Scan -->
       <div class="view" id="view-scan">
-        <div class="view-title">Scan food</div>
-        <div class="scan-actions">
-          <label class="scan-btn">
-            📷 Take a photo
-            <input id="scan-camera" type="file" accept="image/*" capture="environment"/>
-          </label>
-          <label class="scan-btn">
-            🖼 Choose from library
-            <input id="scan-file" type="file" accept="image/*"/>
-          </label>
+        <div class="app-header">
+          <div class="header-left">
+            <div class="header-greeting" id="scan-greeting">Good morning</div>
+            <div class="header-name" id="scan-name">–</div>
+          </div>
+          <div class="header-right">
+            <div class="header-date" id="scan-date"></div>
+          </div>
         </div>
-        <div id="scan-result"></div>
+        <div class="view-scroll">
+          <div class="view-cards">
+            <div class="scan-sources">
+              <label class="scan-source-btn">
+                <div class="scan-source-icon">📷</div>
+                <div class="scan-source-label">Camera</div>
+                <input id="scan-camera" type="file" accept="image/*" capture="environment"/>
+              </label>
+              <label class="scan-source-btn">
+                <div class="scan-source-icon">🖼</div>
+                <div class="scan-source-label">Gallery</div>
+                <input id="scan-file" type="file" accept="image/*"/>
+              </label>
+            </div>
+            <div id="scan-preview" class="hidden"></div>
+            <div id="scan-result"></div>
+          </div>
+        </div>
       </div>
 
     </div>
 
-    <!-- Tab bar -->
+    <!-- Custom Tab Bar -->
     <nav class="tab-bar">
       <button class="tab-btn active" data-tab="home">
-        <span class="tab-icon">🏠</span>
-        <span class="tab-label">Home</span>
+        <div class="tab-inner">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+          <span class="tab-label">Home</span>
+        </div>
       </button>
       <button class="tab-btn" data-tab="history">
-        <span class="tab-icon">📊</span>
-        <span class="tab-label">History</span>
+        <div class="tab-inner">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg>
+          <span class="tab-label">History</span>
+        </div>
       </button>
-      <button class="tab-btn rena-btn" data-tab="rena">
-        <div class="rena-circle">✨</div>
+      <button class="tab-btn rena-tab" data-tab="rena">
+        <div class="rena-circle">✦</div>
         <span class="tab-label">Rena</span>
       </button>
       <button class="tab-btn" data-tab="scan">
-        <span class="tab-icon">📷</span>
-        <span class="tab-label">Scan</span>
+        <div class="tab-inner">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h1.5v1.5H13V13zm1.5 1.5H16V16h-1.5v-1.5zM16 13h1.5v1.5H16V13zm-3 3h1.5v1.5H13V16zm1.5 1.5H16V19h-1.5v-1.5zM16 16h1.5v1.5H16V16zm1.5-1.5H19V16h-1.5v-1.5zM19 13h1.5v1.5H19V13zm0 3h1.5v1.5H19V16zm-1.5 1.5V19H16v-1.5h1.5z"/></svg>
+          <span class="tab-label">Scan</span>
+        </div>
       </button>
       <button class="tab-btn" data-tab="plan">
-        <span class="tab-icon">📅</span>
-        <span class="tab-label">Plan</span>
+        <div class="tab-inner">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm0 16H5V8h14v11z"/></svg>
+          <span class="tab-label">Plan</span>
+        </div>
       </button>
     </nav>
   </div>
 
-  <!-- ── Voice overlay ──────────────────────────────────────────────────── -->
-  <div id="voice-overlay">
-    <div class="voice-card">
-      <div class="voice-header">
-        <span class="voice-title">Talk to Rena</span>
-        <button class="voice-close" id="voice-close-btn">✕</button>
+  <!-- ── Dev tools sheet ─────────────────────────────────────────────────── -->
+  <div id="dev-sheet" class="bottom-sheet hidden">
+    <div class="sheet-card">
+      <div class="sheet-header">
+        <span class="sheet-title">Dev Tools</span>
+        <button class="sheet-close" id="dev-close">✕</button>
       </div>
-      <div class="voice-wave" id="voice-wave">
-        <div class="wave-bar"></div>
-        <div class="wave-bar"></div>
-        <div class="wave-bar"></div>
-        <div class="wave-bar"></div>
-        <div class="wave-bar"></div>
+      <button class="dev-btn danger" id="dev-reset">↩ Reset Onboarding</button>
+      <button class="dev-btn" id="dev-seed">🧪 Seed Last 7 Days Data</button>
+      <button class="dev-btn danger" id="dev-signout">⬡ Log Out</button>
+    </div>
+  </div>
+
+  <!-- ── Voice Overlay ───────────────────────────────────────────────────── -->
+  <div id="voice-overlay" class="hidden">
+    <div class="voice-backdrop" id="voice-backdrop"></div>
+    <div class="voice-sheet">
+      <div class="voice-hints-label">What can I help with?</div>
+      <div class="voice-hints-grid" id="voice-hints"></div>
+      <div class="voice-transcript-wrap" id="voice-transcript-wrap" style="display:none">
+        <div class="voice-transcript" id="voice-transcript"></div>
       </div>
-      <div class="voice-state-label" id="voice-state-label">Connecting…</div>
-      <div class="voice-transcript" id="voice-transcript"></div>
-      <button class="voice-action-btn" id="voice-action-btn">Tap to end</button>
+      <button class="voice-talk-btn" id="voice-talk-btn">
+        <div class="voice-btn-icon" id="voice-btn-icon">
+          <span class="voice-wave-icon">≋</span>
+        </div>
+        <div class="voice-btn-text">
+          <div class="voice-btn-label" id="voice-btn-label">Talk to Rena</div>
+          <div class="voice-btn-sub" id="voice-btn-sub">Speak naturally — log, update, ask anything</div>
+        </div>
+        <span class="voice-btn-end" id="voice-btn-end" style="display:none">Tap to end</span>
+      </button>
     </div>
   </div>
 
