@@ -367,8 +367,6 @@ async def get_tomorrow_plan_endpoint(user_id: str, date: str = None):
 
 class UpdateTomorrowPlanRequest(BaseModel):
     summary: str
-    workout_planned: bool = False
-    meal_planned: bool = False
     date: str = None
 
 
@@ -379,7 +377,7 @@ async def upsert_tomorrow_plan_endpoint(user_id: str, req: UpdateTomorrowPlanReq
         raise HTTPException(status_code=400, detail="user_id is required")
     return await asyncio.to_thread(
         save_tomorrow_plan_note,
-        user_id, req.summary, req.workout_planned, req.meal_planned, req.date,
+        user_id, req.summary, req.date,
     )
 
 

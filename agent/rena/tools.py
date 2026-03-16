@@ -1566,8 +1566,6 @@ def get_tomorrow_plan(user_id: str, for_date: str = None) -> dict | None:
 def save_tomorrow_plan_note(
     user_id: str,
     summary: str,
-    workout_planned: bool = False,
-    meal_planned: bool = False,
     for_date: str = None,
 ) -> dict:
     """
@@ -1578,8 +1576,6 @@ def save_tomorrow_plan_note(
     Args:
         user_id: The user's unique ID.
         summary: 1–2 sentence description of what was discussed and planned.
-        workout_planned: True if generate_workout_plan was called this session.
-        meal_planned: True if generate_meal_plan was called this session.
         for_date: The date the plan is for (ISO string). Defaults to tomorrow.
     """
     _emit_tool_status(user_id, "Saving your plan…")
@@ -1591,8 +1587,6 @@ def save_tomorrow_plan_note(
     data = {
         **existing,
         "summary": summary,
-        "workout_planned": workout_planned,
-        "meal_planned": meal_planned,
         "date": date_str,
         "updated_at": now,
     }

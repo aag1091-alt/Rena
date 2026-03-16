@@ -162,9 +162,7 @@ _CONTEXT_PROMPTS = {
         "- Call generate_meal_plan(user_id, notes=<ingredients + preferences>, for_date=<tomorrow_date>) "
         "  ONLY if user plans to cook/eat at home (skip if eating out). "
         "- If neither plan is needed, acknowledge warmly — e.g. 'Sounds like a relaxing day, enjoy the break!' "
-        "Always end by calling save_tomorrow_plan_note with: "
-        "  summary = 1-2 sentences of what was discussed and planned, "
-        "  workout_planned = True/False, meal_planned = True/False, for_date = <tomorrow_date>. "
+        "Always end by calling save_tomorrow_plan_note(user_id, summary=<1-2 sentences of what was discussed>, for_date=<tomorrow_date>). "
         "Summarise any generated plans warmly in 3-4 sentences — workout first, then meals."
     ),
 }
