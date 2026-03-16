@@ -212,6 +212,7 @@ html, body {
 /* ── Goal Onboarding ───────────────────────────────────────────────────── */
 #screen-goal {
   background: linear-gradient(180deg, #FDF6EE 0%, #F9E4C8 100%);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 .goal-header {
   padding: 60px 28px 0; text-align: center;
