@@ -371,6 +371,29 @@ async def handle_voice(websocket: WebSocket, user_id: str,
 
     asyncio.create_task(inject_opening())
 
+    # Exception type names that mean "iOS already closed the socket" — safe to ignore.
+    _SILENT_CLOSE = {"ConnectionClosedOK", "ClientDisconnected", "WebSocketDisconnect"}
+
+    async def _safe_send_bytes(data: bytes) -> bool:
+        """Send bytes; return False and set ws_closed if the socket is gone."""
+        nonlocal ws_closed
+        try:
+            await websocket.send_bytes(data)
+            return True
+        except Exception:
+            ws_closed = True
+            return False
+
+    async def _safe_send_text(payload: str) -> bool:
+        """Send text; return False and set ws_closed if the socket is gone."""
+        nonlocal ws_closed
+        try:
+            await websocket.send_text(payload)
+            return True
+        except Exception:
+            ws_closed = True
+            return False
+
     async def send_to_client():
         nonlocal ws_closed
         try:
@@ -388,26 +411,36 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                         if getattr(part, "thought", False):
                             continue
                         if part.inline_data:
-                            await websocket.send_bytes(part.inline_data.data)
+                            if not await _safe_send_bytes(part.inline_data.data):
+                                return
                         elif part.text:
-                            await websocket.send_text(
+                            if not await _safe_send_text(
                                 json.dumps({"type": "text", "text": part.text})
-                            )
+                            ):
+                                return
                 if event.output_transcription and event.output_transcription.text:
                     cc = event.output_transcription.text.strip()
                     if cc and not ws_closed:
-                        await websocket.send_text(
+                        if not await _safe_send_text(
                             json.dumps({"type": "transcript", "text": cc})
-                        )
+                        ):
+                            return
                 if event.turn_complete and not ws_closed:
-                    await websocket.send_text(json.dumps({"type": "turn_complete"}))
+                    await _safe_send_text(json.dumps({"type": "turn_complete"}))
         except genai_errors.APIError as e:
             # 1000 = Gemini closed cleanly because we closed live_queue after iOS disconnect
             if e.status_code != 1000:
                 traceback.print_exc()
                 sentry_sdk.capture_exception(e)
         except Exception as e:
-            if not ws_closed:
+            ename = type(e).__name__
+            if ename in _SILENT_CLOSE or ws_closed:
+                pass  # Normal iOS disconnect — not an error
+            elif ename == "ConnectionClosedError" and "1008" in str(e):
+                # Stale Gemini session (server restart / session expired).
+                # Clear cache so the next connect starts a fresh session.
+                _active_sessions.pop(user_id, None)
+            else:
                 traceback.print_exc()
                 sentry_sdk.capture_exception(e)
         finally:
@@ -466,7 +499,7 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             try:
                 msg = await asyncio.wait_for(status_q.get(), timeout=0.3)
                 if not ws_closed:
-                    await websocket.send_text(
+                    await _safe_send_text(
                         json.dumps({"type": "tool_status", "message": msg})
                     )
             except asyncio.TimeoutError:
