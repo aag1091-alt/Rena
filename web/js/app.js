@@ -472,7 +472,7 @@ function renderHome(p, goal, insight, nudge) {
   html += `<div class="stats-bar">
     <div class="stat-tile">
       <div class="stat-tile-header">
-        <span class="stat-tile-icon" style="color:#2A9D8F">💪</span>
+        <span class="stat-tile-icon" style="color:#2A9D8F">Ⓟ</span>
         <span class="stat-tile-key">PROTEIN</span>
         <span class="stat-tile-val" style="color:#2A9D8F">${protein}/${proteinT}g</span>
       </div>
@@ -484,7 +484,7 @@ function renderHome(p, goal, insight, nudge) {
       <div class="stat-tile-header">
         <span class="stat-tile-icon" style="color:#457B9D">💧</span>
         <span class="stat-tile-key">WATER</span>
-        <span class="stat-tile-val" style="color:#457B9D">${water}/8</span>
+        <span class="stat-tile-val" style="color:#457B9D">${water}/8 glasses</span>
       </div>
       <div class="stat-tile-bar-track" style="background:rgba(69,123,157,0.12)">
         <div class="stat-tile-bar-fill" style="width:${waterPct}%;background:#457B9D"></div>
