@@ -26,6 +26,19 @@ const voice = new VoiceManager();
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+// Known pre-generated exercise videos in GCS (gs://rena-assets/exercise_videos/)
+const EXERCISE_VIDEOS = {
+  "bodyweight_squats": "https://storage.googleapis.com/rena-assets/exercise_videos/bodyweight_squats.mp4",
+  "glute_bridges":     "https://storage.googleapis.com/rena-assets/exercise_videos/glute_bridges.mp4",
+  "plank":             "https://storage.googleapis.com/rena-assets/exercise_videos/plank.mp4",
+  "walking_lunges":    "https://storage.googleapis.com/rena-assets/exercise_videos/walking_lunges.mp4",
+};
+function exerciseVideoUrl(name) {
+  const key = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/_+$/, "");
+  return EXERCISE_VIDEOS[key]
+    || `https://m.youtube.com/results?search_query=${encodeURIComponent(name + " exercise tutorial")}`;
+}
+
 function fmtDate(d) {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
@@ -888,26 +901,9 @@ function renderPlanDay(workout, meal, note, date) {
     });
   });
   document.querySelectorAll(".ex-play-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const name    = btn.dataset.exName;
-      const muscles = btn.dataset.exMuscles;
-      try {
-        const res = await API.exerciseVideo(name, muscles);
-        if (res.video_url) {
-          window.open(res.video_url, "_blank");
-        } else if (res.job_id) {
-          btn.textContent = "⏳";
-          const poll = setInterval(async () => {
-            try {
-              const s = await API.exerciseVideoStatus(res.job_id);
-              if (s.video_url) { clearInterval(poll); btn.textContent = "▶"; window.open(s.video_url, "_blank"); }
-              else if (s.status !== "generating") { clearInterval(poll); btn.textContent = "▶"; }
-            } catch { clearInterval(poll); btn.textContent = "▶"; }
-          }, 5000);
-        }
-      } catch {
-        window.open(`https://m.youtube.com/results?search_query=${encodeURIComponent(name + " exercise tutorial")}`, "_blank");
-      }
+    btn.addEventListener("click", () => {
+      const name = btn.dataset.exName;
+      window.open(exerciseVideoUrl(name), "_blank");
     });
   });
 }

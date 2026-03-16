@@ -7,10 +7,9 @@ struct ExerciseVideoSheet: View {
 
     @State private var player: AVQueuePlayer? = nil
     @State private var playerLooper: AVPlayerLooper? = nil
-    @State private var status: String = "loading"   // "loading" | "generating" | "ready" | "error"
-    @State private var jobId: String? = nil
+    @State private var status: String = "loading"   // "loading" | "ready" | "error"
     @State private var errorMessage: String = ""
-    @State private var pollTimer: Timer? = nil
+    @State private var youtubeURL: URL? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -51,22 +50,26 @@ struct ExerciseVideoSheet: View {
                         .padding(.horizontal, 20)
                 } else {
                     VStack(spacing: 14) {
-                        if status == "loading" || status == "generating" {
+                        if status == "loading" {
                             ProgressView()
                                 .scaleEffect(1.4)
                                 .tint(.white)
-                            Text(status == "generating" ? "Generating exercise video…\nThis may take up to 60 seconds." : "Loading…")
+                            Text("Loading…")
                                 .font(.system(size: 14))
                                 .foregroundColor(.white.opacity(0.7))
-                                .multilineTextAlignment(.center)
                         } else if status == "error" {
-                            Image(systemName: "exclamationmark.triangle.fill")
+                            Image(systemName: "play.rectangle.fill")
                                 .font(.system(size: 36))
                                 .foregroundColor(Color(hex: "E76F51"))
-                            Text(errorMessage.isEmpty ? "Video unavailable" : errorMessage)
+                            Text("No video available")
                                 .font(.system(size: 13))
                                 .foregroundColor(.white.opacity(0.7))
-                                .multilineTextAlignment(.center)
+                            if let url = youtubeURL {
+                                Link("Watch on YouTube →", destination: url)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(Color(hex: "F4A261"))
+                                    .padding(.top, 4)
+                            }
                         }
                     }
                 }
@@ -100,7 +103,6 @@ struct ExerciseVideoSheet: View {
         .background(Color(hex: "F7F3EE").ignoresSafeArea())
         .onAppear { fetchVideo() }
         .onDisappear {
-            pollTimer?.invalidate()
             playerLooper = nil
             player?.pause()
             player = nil
@@ -125,60 +127,38 @@ struct ExerciseVideoSheet: View {
         }
     }
 
+    // Known pre-generated videos in GCS — add new keys as more are generated
+    private static let knownVideos: [String: String] = [
+        "bodyweight_squats": "https://storage.googleapis.com/rena-assets/exercise_videos/bodyweight_squats.mp4",
+        "glute_bridges":     "https://storage.googleapis.com/rena-assets/exercise_videos/glute_bridges.mp4",
+        "plank":             "https://storage.googleapis.com/rena-assets/exercise_videos/plank.mp4",
+        "walking_lunges":    "https://storage.googleapis.com/rena-assets/exercise_videos/walking_lunges.mp4",
+    ]
+
     private func fetchVideo() {
         // Allow audio even when ringer/silent switch is on
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         try? AVAudioSession.sharedInstance().setActive(true)
-        Task {
-            do {
-                let result = try await RenaAPI.shared.getExerciseVideo(
-                    exerciseName: exercise.name,
-                    targetMuscles: exercise.targetMuscles ?? ""
-                )
-                await handleVideoStatus(result)
-            } catch {
-                await MainActor.run { status = "error"; errorMessage = error.localizedDescription }
-            }
-        }
-    }
 
-    private func handleVideoStatus(_ vs: VideoStatus) async {
-        if vs.status == "ready" || vs.status == "done", let url = vs.videoUrl {
-            await MainActor.run {
-                guard let videoURL = URL(string: url) else {
-                    status = "error"; errorMessage = "Invalid video URL"
-                    return
-                }
-                let item = AVPlayerItem(url: videoURL)
-                let queuePlayer = AVQueuePlayer()
-                playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
-                player = queuePlayer
-                status = "ready"
-                queuePlayer.play()
-            }
-        } else if vs.status == "generating", let jid = vs.jobId {
-            await MainActor.run { status = "generating"; jobId = jid }
-            startPolling(jobId: jid)
-        } else if vs.status == "error" {
-            await MainActor.run { status = "error"; errorMessage = vs.message ?? "Generation failed" }
-        }
-    }
+        let key = exercise.name
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: "_")
 
-    private func startPolling(jobId: String) {
-        pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { timer in
-            Task {
-                do {
-                    let vs = try await RenaAPI.shared.pollExerciseVideoStatus(jobId: jobId)
-                    if vs.status != "generating" {
-                        timer.invalidate()
-                        await handleVideoStatus(vs)
-                    }
-                } catch {
-                    timer.invalidate()
-                    await MainActor.run { status = "error"; errorMessage = error.localizedDescription }
-                }
-            }
+        if let urlStr = Self.knownVideos[key], let videoURL = URL(string: urlStr) {
+            let item = AVPlayerItem(url: videoURL)
+            let queuePlayer = AVQueuePlayer()
+            playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
+            player = queuePlayer
+            status = "ready"
+            queuePlayer.play()
+        } else {
+            // No pre-generated video — show YouTube link (never trigger generation)
+            let q = "\(exercise.name) exercise tutorial"
+                .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            youtubeURL = URL(string: "https://m.youtube.com/results?search_query=\(q)")
+            status = "error"
         }
     }
 }
