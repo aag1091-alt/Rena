@@ -199,8 +199,9 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Receive loop
 
     private func receiveLoop() {
-        webSocket?.receive { [weak self] result in
-            guard let self else { return }
+        guard let ws = webSocket else { return }
+        ws.receive { [weak self] result in
+            guard let self, self.webSocket === ws else { return }  // ignore if already disconnected/replaced
             switch result {
             case .success(let msg):
                 switch msg {

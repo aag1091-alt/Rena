@@ -42,7 +42,7 @@ struct HomeView: View {
                             water: appState.waterGlasses
                         )
 
-                        DaySoFarCard(insight: insight, isLoading: isInsightLoading, isToday: true)
+                            DaySoFarCard(insight: insight, isLoading: isInsightLoading, isToday: true)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
