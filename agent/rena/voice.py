@@ -403,13 +403,18 @@ async def handle_voice(websocket: WebSocket, user_id: str,
     live_queue = LiveRequestQueue()
     ws_closed = False
 
+    # Set once inject_opening has queued the opening text.  recv_from_client
+    # holds audio until this fires so Gemini always sees text before audio.
+    opening_sent = asyncio.Event()
+
     # Inject user_id + optional opening prompt as ONE combined message so the
     # agent has a single trigger → single response with no double-greeting.
     async def inject_opening():
-        await asyncio.sleep(0.2)
+        # No sleep needed — audio is held in recv_from_client until we signal.
         from rena.tools import _user_ref, get_morning_nudge
         try:
-            profile = _user_ref(user_id).get().to_dict() or {}
+            # Use asyncio.to_thread so this blocking Firestore read doesn't stall the event loop.
+            profile = await asyncio.to_thread(lambda: _user_ref(user_id).get().to_dict() or {})
             weight_kg = profile.get("weight_kg")
             text = f"[user_id:{user_id}]" + (f"[current_weight_kg:{weight_kg}]" if weight_kg else "")
         except Exception:
@@ -524,7 +529,8 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                     pass
 
         if context:
-            prompt = _get_prompt(base_context).replace("{name}", name or "there")
+            # Run in thread — _get_prompt may do a blocking Firestore read on cache miss.
+            prompt = (await asyncio.to_thread(_get_prompt, base_context)).replace("{name}", name or "there")
             if day_label:
                 prompt = prompt.replace("{day_label}", day_label)
             if prompt:
@@ -546,6 +552,8 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                 parts=[genai_types.Part(text=text)],
             )
         )
+        # Signal recv_from_client that it can now forward mic audio to Gemini.
+        opening_sent.set()
 
     asyncio.create_task(inject_opening())
 
@@ -634,6 +642,10 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                     break
 
                 if "bytes" in message:
+                    # Hold audio until the opening text has been queued so Gemini
+                    # always sees the prompt before any mic audio.
+                    if not opening_sent.is_set():
+                        continue
                     # Raw PCM audio from iOS — use send_realtime for audio chunks
                     live_queue.send_realtime(
                         genai_types.Blob(
