@@ -389,12 +389,12 @@ function bindTabNav() {
 }
 
 function switchTab(tab) {
-  // Disconnect any active voice session when switching pages
-  if (voice.state !== "idle") {
-    voice.disconnect();
-    setVoiceActive(false);
-    document.getElementById("voice-overlay")?.classList.add("hidden");
-  }
+  // Always reset voice overlay when switching pages
+  voice.disconnect();
+  setVoiceActive(false);
+  document.getElementById("voice-overlay")?.classList.add("hidden");
+  document.getElementById("voice-transcript").textContent = "";
+  document.getElementById("voice-transcript-wrap").style.display = "none";
   app.tab = tab;
   history.replaceState(null, "", `#${tab}`);
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
@@ -1493,6 +1493,21 @@ function bindVoiceEvents() {
       if (app.tab === "history") loadHistory();
       if (app.tab === "plan")    loadPlan();
     }, 500);
+  });
+
+  // Close overlay automatically if the WS drops unexpectedly while it's open
+  voice.addEventListener("sessionended", () => {
+    const overlay = document.getElementById("voice-overlay");
+    if (overlay && !overlay.classList.contains("hidden")) {
+      setVoiceActive(false);
+      overlay.classList.add("hidden");
+      document.getElementById("voice-transcript").textContent = "";
+      document.getElementById("voice-transcript-wrap").style.display = "none";
+      // Refresh data for the current tab
+      if (app.tab === "home")    loadHome();
+      if (app.tab === "history") loadHistory();
+      if (app.tab === "plan")    loadPlan();
+    }
   });
 }
 

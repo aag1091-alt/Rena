@@ -43,8 +43,8 @@ class VoiceManager extends EventTarget {
       this.ws.binaryType = "arraybuffer";
 
       this.ws.onopen    = () => this._setState("listening");
-      this.ws.onclose   = () => { if (this.state !== "idle") this._setState("idle"); };
-      this.ws.onerror   = () => this._setState("error");
+      this.ws.onclose   = () => { this._setState("idle"); this.dispatchEvent(new CustomEvent("sessionended")); };
+      this.ws.onerror   = () => { this._setState("error"); this.dispatchEvent(new CustomEvent("sessionended")); };
       this.ws.onmessage = (e) => this._handleMessage(e);
 
     } catch (err) {
