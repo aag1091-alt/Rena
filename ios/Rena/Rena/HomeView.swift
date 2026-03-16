@@ -307,6 +307,21 @@ struct DevSheet: View {
                 }
                 .disabled(isResetting || isSeeding)
 
+                Button(role: .destructive) {
+                    dismiss()
+                    appState.signOut()
+                } label: {
+                    HStack {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                        Text("Log Out")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red.opacity(0.07))
+                    .cornerRadius(12)
+                }
+                .disabled(isResetting || isSeeding)
+
                 Spacer()
             }
             .padding()
