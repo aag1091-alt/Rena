@@ -120,11 +120,13 @@ _CONTEXT_PROMPTS = {
         "Keep the whole exchange to 3-4 turns max."
     ),
     "update_workout_plan": (
-        "SPEAK OUT LOUD NOW. The user wants to change their workout plan. "
-        "Listen to what they want — swap an exercise, adjust intensity, more cardio, shorter session, etc. "
-        "Call generate_workout_plan right away to create a fresh updated plan. "
+        "SPEAK OUT LOUD NOW. Ask the user what they want to change: "
+        "Say something like 'What would you like to tweak?' and listen for their answer — "
+        "they might want to swap an exercise, adjust intensity, add more cardio, shorten the session, etc. "
+        "Once you understand what they want, call generate_workout_plan with their request in the notes parameter "
+        "along with a one-sentence summary of their recent workout history from your memory. "
         "Describe the key change in one sentence and end with a short motivating line. "
-        "Keep it to 2 turns max."
+        "Keep it to 2-3 turns max."
     ),
     "plan_tomorrow": (
         "SPEAK OUT LOUD NOW: Say 'Let's plan tomorrow, {name}!' "
