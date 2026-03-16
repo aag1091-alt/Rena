@@ -364,7 +364,9 @@ function showScreen(id) {
 function showApp() {
   showScreen("app");
   updateHeaders(app.user?.name || "");
-  switchTab("home");
+  const tabs = ["home", "history", "plan", "scan"];
+  const hash = location.hash.replace("#", "");
+  switchTab(tabs.includes(hash) ? hash : "home");
 }
 
 // ── Tab Navigation ────────────────────────────────────────────────────────
@@ -377,10 +379,18 @@ function bindTabNav() {
       switchTab(tab);
     });
   });
+  const tabs = ["home", "history", "plan", "scan"];
+  window.addEventListener("hashchange", () => {
+    if (document.getElementById("screen-app")?.classList.contains("active")) {
+      const hash = location.hash.replace("#", "");
+      if (tabs.includes(hash)) switchTab(hash);
+    }
+  });
 }
 
 function switchTab(tab) {
   app.tab = tab;
+  history.replaceState(null, "", `#${tab}`);
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   document.getElementById(`view-${tab}`)?.classList.add("active");
   document.querySelectorAll(".tab-btn").forEach(b => {
