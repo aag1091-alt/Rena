@@ -281,15 +281,16 @@ html, body {
 
 /* ── App shell ─────────────────────────────────────────────────────────── */
 #screen-app { background: var(--bg); }
-.views { flex: 1; overflow: hidden; position: relative; }
+.views { flex: 1; overflow: hidden; position: relative; min-height: 0; }
 .view {
   display: none; height: 100%;
-  flex-direction: column; overflow: hidden;
+  flex-direction: column; overflow: hidden; min-height: 0;
 }
 .view.active { display: flex; }
 .view-scroll {
   flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
   padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 16px);
+  min-height: 0;
 }
 .view-cards {
   padding: 8px 16px 4px;
