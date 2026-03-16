@@ -563,8 +563,10 @@ def seed_test_data(user_id: str) -> dict:
             w["logged_at"] = f"{day_str}T07:00:00Z" if rng.random() > 0.5 else f"{day_str}T18:00:00Z"
             workouts.append(w)
 
-        # Realistic weight trend
-        if direction == "decrease":
+        # Realistic weight trend — today (i==6) anchored exactly to profile weight
+        if i == 6:
+            w_day = weight_kg
+        elif direction == "decrease":
             w_day = round(weight_kg + (6 - i) * 0.09 + rng.uniform(-0.12, 0.12), 1)
         elif direction == "increase":
             w_day = round(weight_kg - (6 - i) * 0.07 + rng.uniform(-0.1, 0.1), 1)
@@ -758,6 +760,23 @@ def seed_test_data(user_id: str) -> dict:
         "created_at": now_utc - timedelta(days=2),
         "updated_at": now_utc - timedelta(days=2),
     })
+
+    # ── Back-date the goal to 7 days ago so progress reflects the seeded journey ─
+    if goal_doc:
+        goal_start_dt = datetime.combine(today - timedelta(days=7), datetime.min.time()).replace(tzinfo=timezone.utc)
+        goal_update: dict = {
+            "created_at":      goal_start_dt,
+            "created_at_date": (today - timedelta(days=7)).isoformat(),
+        }
+        # For weight goals, anchor start_value to where weight was 7 days ago
+        if goal_doc.get("goal_type") in ("weight_loss", "weight_gain"):
+            if direction == "decrease":
+                goal_update["start_value"] = round(weight_kg + 7 * 0.09, 1)
+            elif direction == "increase":
+                goal_update["start_value"] = round(weight_kg - 7 * 0.07, 1)
+            else:
+                goal_update["start_value"] = weight_kg
+        _goal_ref(user_id).update(goal_update)
 
     return {
         "status":        "seeded",
@@ -1334,10 +1353,29 @@ def generate_meal_plan(user_id: str, notes: str = "", for_date: str = None) -> d
 
     notes_block = f"\nUser preferences / available ingredients: {notes}" if notes and notes.strip() else ""
 
+    # If a plan already exists for this date, include it so only the requested changes are made
+    try:
+        existing_doc = _meal_plan_ref(user_id, date_str).get()
+        existing_plan_data = existing_doc.to_dict() if existing_doc.exists else None
+    except Exception:
+        existing_plan_data = None
+
+    if existing_plan_data and existing_plan_data.get("meals"):
+        existing_meals_str = "\n".join(
+            f"- {m.get('meal_type', 'meal')}: {m['name']} ({m.get('calories', 0)} kcal)"
+            for m in existing_plan_data["meals"]
+        )
+        existing_block = (
+            f"\nExisting meal plan (UPDATE — keep unchanged meals exactly as-is, only modify what was requested):\n"
+            f"{existing_meals_str}"
+        )
+    else:
+        existing_block = ""
+
     prompt = f"""Generate a meal plan for {date_str} for someone with:
 - Goal: {goal_text} ({goal_type})
 - Daily calorie target: {calorie_target} kcal
-- Protein target: {protein_target}g{notes_block}
+- Protein target: {protein_target}g{notes_block}{existing_block}
 
 Create exactly 4 meals: breakfast, lunch, dinner, snack.
 Each meal must be practical and easy to cook at home.
@@ -1454,10 +1492,31 @@ def generate_workout_plan(user_id: str, notes: str = "", for_date: str = None) -
 
     notes_block = f"\n- User preferences / recent history: {notes}" if notes and notes.strip() else ""
 
+    # If a plan already exists for this date, include it so only the requested changes are made
+    try:
+        existing_doc = _workout_plan_ref(user_id, date_str).get()
+        existing_workout_data = existing_doc.to_dict() if existing_doc.exists else None
+    except Exception:
+        existing_workout_data = None
+
+    if existing_workout_data and existing_workout_data.get("exercises"):
+        existing_exs_str = "\n".join(
+            f"- {ex['name']} ({ex.get('type','?')}, "
+            + (f"{ex.get('sets')}x{ex.get('reps')} reps" if ex.get('type') == 'strength' else f"{ex.get('duration_min')}min")
+            + f", {ex.get('calories_burned', 0)} kcal)"
+            for ex in existing_workout_data["exercises"]
+        )
+        existing_workout_block = (
+            f"\nExisting workout plan '{existing_workout_data.get('name', 'Workout')}' (UPDATE — keep unchanged exercises exactly as-is, only modify what was requested):\n"
+            f"{existing_exs_str}"
+        )
+    else:
+        existing_workout_block = ""
+
     prompt = f"""Generate a workout plan for today for someone with:
 - Goal: {goal_text} ({goal_type}, direction: {direction})
 - Body weight: {weight_kg} kg
-- Calories remaining today: {calories_remaining} kcal{notes_block}
+- Calories remaining today: {calories_remaining} kcal{notes_block}{existing_workout_block}
 
 Rules:
 - 3-6 exercises total.

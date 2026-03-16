@@ -1277,23 +1277,23 @@ API.logMeal = function(userId, name, calories, proteinG, carbsG, fatG) {
 
 const HINTS = {
   home: [
-    { icon: "🍴", label: "Log food",     color: "#E76F51", ctx: "home" },
-    { icon: "💧", label: "Log water",    color: "#457B9D", ctx: "home" },
-    { icon: "🏃", label: "Log exercise", color: "#2A9D8F", ctx: "home" },
-    { icon: "⚖",  label: "Log weight",  color: "#9B7EC8", ctx: "home" },
+    { icon: "🍴", label: "Log food",     color: "#E76F51", ctx: "log_food" },
+    { icon: "💧", label: "Log water",    color: "#457B9D", ctx: "log_water" },
+    { icon: "🏃", label: "Log exercise", color: "#2A9D8F", ctx: "log_workout" },
+    { icon: "⚖",  label: "Log weight",  color: "#9B7EC8", ctx: "log_weight" },
   ],
   history: [
     { icon: "🍴", label: "Remove food log",    color: "#E76F51", ctx: "history" },
     { icon: "🏃", label: "Remove exercise",    color: "#2A9D8F", ctx: "history" },
     { icon: "💧", label: "Remove water entry", color: "#457B9D", ctx: "history" },
-    { icon: "⚖",  label: "Log weight",        color: "#9B7EC8", ctx: "home" },
+    { icon: "⚖",  label: "Log weight",        color: "#9B7EC8", ctx: "log_weight" },
   ],
   // plan tab hints are generated dynamically in openVoiceOverlay with the current planDate
   scan: [
-    { icon: "🍴", label: "Log food",     color: "#E76F51", ctx: "home" },
-    { icon: "💧", label: "Log water",    color: "#457B9D", ctx: "home" },
-    { icon: "🏃", label: "Log exercise", color: "#2A9D8F", ctx: "home" },
-    { icon: "⚖",  label: "Log weight",  color: "#9B7EC8", ctx: "home" },
+    { icon: "🍴", label: "Log food",     color: "#E76F51", ctx: "log_food" },
+    { icon: "💧", label: "Log water",    color: "#457B9D", ctx: "log_water" },
+    { icon: "🏃", label: "Log exercise", color: "#2A9D8F", ctx: "log_workout" },
+    { icon: "⚖",  label: "Log weight",  color: "#9B7EC8", ctx: "log_weight" },
   ],
 };
 

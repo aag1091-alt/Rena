@@ -62,8 +62,9 @@ PROMPTS = {
     ),
     "update_workout_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Open with one sentence referencing {day_label}'s planned workout from [RENA MEMORY] "
-        "(e.g. 'You've got a 40-minute strength session lined up'). "
+        "Open with one sentence referencing {day_label}'s planned workout from [CURRENT_WORKOUT_PLAN] in this message — "
+        "name the actual plan and exercises (e.g. 'You've got a 45-minute Push Day lined up with push-ups, dumbbell press, and a treadmill run'). "
+        "If there is no [CURRENT_WORKOUT_PLAN] in this message, say 'I don't see a workout planned yet for {day_label} — let me help you set one up.' then ask gym/home and muscle focus. "
         "Then ask what they'd like to change: 'What would you like to tweak?' — "
         "they might want to swap an exercise, adjust intensity, add cardio, shorten the session, etc. "
         "Once you understand what they want, call generate_workout_plan with for_date=[workout_date] "
@@ -86,8 +87,9 @@ PROMPTS = {
     ),
     "update_meal_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Open with one sentence referencing {day_label}'s planned meals from [RENA MEMORY] "
-        "(e.g. 'You've got chicken stir fry and oats lined up'). "
+        "Open with one sentence referencing {day_label}'s planned meals from [CURRENT_MEAL_PLAN] in this message — "
+        "name the actual meals (e.g. 'You've got oats for breakfast and a chicken quinoa bowl for lunch'). "
+        "If there is no [CURRENT_MEAL_PLAN] in this message, say 'I don't see a meal plan yet for {day_label} — let me ask a couple of questions.' then ask ingredients and preferences. "
         "Then ask what they'd like to change: 'What would you like to swap or adjust?' — "
         "they might want a different meal, lighter calories, different cuisine, fewer dishes, etc. "
         "Once you understand what they want, call generate_meal_plan with for_date=[meal_date] "

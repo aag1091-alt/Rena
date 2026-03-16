@@ -161,8 +161,9 @@ _CONTEXT_PROMPTS = {
     ),
     "update_workout_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Open with one sentence referencing {day_label}'s planned workout from [RENA MEMORY] "
-        "(e.g. 'You've got a 40-minute strength session lined up'). "
+        "Open with one sentence referencing {day_label}'s planned workout from [CURRENT_WORKOUT_PLAN] in this message — "
+        "name the actual plan and exercises (e.g. 'You've got a 45-minute Push Day lined up with push-ups, dumbbell press, and a treadmill run'). "
+        "If there is no [CURRENT_WORKOUT_PLAN] in this message, say 'I don't see a workout planned yet for {day_label} — let me help you set one up.' then ask gym/home and muscle focus. "
         "Then ask what they'd like to change: 'What would you like to tweak?' — "
         "they might want to swap an exercise, adjust intensity, add cardio, shorten the session, etc. "
         "Once you understand what they want, call generate_workout_plan with for_date=[workout_date] "
@@ -185,8 +186,9 @@ _CONTEXT_PROMPTS = {
     ),
     "update_meal_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Open with one sentence referencing {day_label}'s planned meals from [RENA MEMORY] "
-        "(e.g. 'You've got chicken stir fry and oats lined up'). "
+        "Open with one sentence referencing {day_label}'s planned meals from [CURRENT_MEAL_PLAN] in this message — "
+        "name the actual meals (e.g. 'You've got oats for breakfast and a chicken quinoa bowl for lunch'). "
+        "If there is no [CURRENT_MEAL_PLAN] in this message, say 'I don't see a meal plan yet for {day_label} — let me ask a couple of questions.' then ask ingredients and preferences. "
         "Then ask what they'd like to change: 'What would you like to swap or adjust?' — "
         "they might want a different meal, lighter calories, different cuisine, fewer dishes, etc. "
         "Once you understand what they want, call generate_meal_plan with for_date=[meal_date] "
@@ -435,6 +437,19 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             base_context = "update_meal_plan"
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[meal_date:{plan_date}]"
+            # Inject the actual meal plan so Rena names real foods, not guesses
+            try:
+                from rena.tools import get_meal_plan as _gmp
+                existing = _gmp(user_id, plan_date)
+                if existing and existing.get("meals"):
+                    parts = " | ".join(
+                        f"{m.get('meal_type','meal')}: {m['name']} ({m.get('calories',0)} kcal)"
+                        for m in existing["meals"]
+                    )
+                    total = existing.get("total_calories") or sum(m.get("calories", 0) for m in existing["meals"])
+                    text = f"{text}\n[CURRENT_MEAL_PLAN: {parts} | Total: {total} kcal]"
+            except Exception:
+                pass
         elif context and context.startswith("workout_plan:"):
             _, plan_date = context.split(":", 1)
             base_context = "workout_plan"
@@ -445,6 +460,17 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             base_context = "update_workout_plan"
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[workout_date:{plan_date}]"
+            # Inject the actual workout plan so Rena names real exercises, not guesses
+            try:
+                from rena.tools import get_workout_plan as _gwp
+                existing = _gwp(user_id, plan_date)
+                if existing and existing.get("exercises"):
+                    exercises = ", ".join(ex["name"] for ex in existing["exercises"])
+                    duration = existing.get("total_duration_min", "?")
+                    plan_name = existing.get("name", "Workout")
+                    text = f"{text}\n[CURRENT_WORKOUT_PLAN: {plan_name} ({duration}min) | Exercises: {exercises}]"
+            except Exception:
+                pass
 
         # For home context, inject today's plan_tomorrow nudge (once per hour max).
         if context == "home":
