@@ -653,6 +653,40 @@ def log_workout(user_id: str, workout_type: str, duration_min: int, calories_bur
     }
 
 
+def get_recent_meals_summary(user_id: str, days: int = 7) -> str:
+    """
+    Return a plain-English summary of the user's meal patterns from the past N days
+    (excluding today, which is already in the progress snapshot).
+    """
+    from datetime import timedelta
+    today = datetime.now(timezone.utc).date()
+    meal_names: list[str] = []
+    daily_calories: list[int] = []
+
+    for i in range(1, days + 1):
+        d = (today - timedelta(days=i)).isoformat()
+        doc = _user_ref(user_id).collection("logs").document(d).get()
+        if doc.exists:
+            data = doc.to_dict() or {}
+            meals = data.get("meals", [])
+            if meals:
+                meal_names.extend(m.get("name", "") for m in meals if m.get("name"))
+                daily_calories.append(sum(m.get("calories", 0) for m in meals))
+
+    if not meal_names:
+        return ""
+
+    counts: dict[str, int] = {}
+    for name in meal_names:
+        counts[name] = counts.get(name, 0) + 1
+    top = sorted(counts, key=lambda x: -counts[x])[:5]
+    avg_kcal = int(sum(daily_calories) / len(daily_calories)) if daily_calories else 0
+    return (
+        f"Recent meals (past {days} days): {', '.join(top)}. "
+        f"Average daily intake: ~{avg_kcal} kcal."
+    )
+
+
 def get_recent_workouts(user_id: str, days: int = 7) -> dict:
     """
     Return the user's logged workouts from the past N days, mapped by date.
@@ -1544,6 +1578,9 @@ def get_rich_context(user_id: str) -> dict:
     # Recent workouts summary
     recent = get_recent_workouts(user_id, days=7)
 
+    # Recent meals summary
+    meal_summary = get_recent_meals_summary(user_id, days=7)
+
     # Session notes
     notes = get_session_notes(user_id, limit=4)
 
@@ -1551,6 +1588,7 @@ def get_rich_context(user_id: str) -> dict:
         "progress": progress,
         "weight_trend": weight_entries,
         "workout_summary": recent.get("summary", ""),
+        "meal_summary": meal_summary,
         "session_notes": notes,
     }
 

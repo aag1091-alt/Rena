@@ -146,8 +146,9 @@ _CONTEXT_PROMPTS = {
     ),
     "meal_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Open with one sentence about {name}'s nutrition today from [RENA MEMORY] "
-        "(e.g. 'You've had 800 of your 2000 calories so far — plenty of room to plan something great'). "
+        "Open with one sentence about {name}'s recent meal patterns from [RENA MEMORY] — "
+        "reference what they've been eating lately (from 'Recent meals') or today's calorie intake. "
+        "Do NOT mention workouts. "
         "Then ask 2 quick questions to plan today's meals: "
         "First: 'What food or ingredients do you have at home?' "
         "Then: 'Any dietary preferences or things you want to avoid today?' "
@@ -223,6 +224,10 @@ async def _build_rich_context_text(user_id: str, name: str) -> str:
         # Workout history
         if ctx["workout_summary"]:
             lines.append(ctx["workout_summary"])
+
+        # Meal history
+        if ctx.get("meal_summary"):
+            lines.append(ctx["meal_summary"])
 
         # Session memory
         notes = ctx.get("session_notes", [])
