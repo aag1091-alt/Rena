@@ -84,7 +84,9 @@ _CONTEXT_PROMPTS = {
         "SPEAK OUT LOUD NOW. Ask the user 2 quick questions to personalise today's workout: "
         "First: 'Do you have access to a gym, or are you working out at home?' "
         "Then: 'Any specific muscle group or goal for today?' "
-        "Once they've answered both, call generate_workout_plan passing their answers as the notes parameter. "
+        "Once they've answered both, call generate_workout_plan. In the notes parameter combine: "
+        "(1) their gym/home preference, (2) their muscle group focus, and "
+        "(3) a one-sentence summary of their recent workout pattern from your memory (e.g. 'has been doing mostly running this week'). "
         "Describe the plan in 1-2 sentences and ask: 'Does that work for you, or want me to tweak anything?' "
         "Keep the whole exchange to 3-4 turns max."
     ),
