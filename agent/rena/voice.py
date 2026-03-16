@@ -131,11 +131,20 @@ _CONTEXT_PROMPTS = {
     "home": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
         "Start with a warm, personal greeting for {name}. "
-        "Then give a brief 1–2 sentence snapshot of their day so far using [RENA MEMORY]: "
-        "mention calories eaten vs target, whether they've worked out, and water intake. "
-        "Be specific — use the actual numbers (e.g. 'You've had 650 of your 2000 calories'). "
-        "End with: 'What would you like to do?' "
-        "Keep the whole opening under 20 seconds."
+        "Then in one sentence tell them what you can help with right now — "
+        "log food, log water, log a workout, log their weight, scan a meal photo, or chat about their goal. "
+        "Keep it light and inviting, not a list. Something like: "
+        "'I can log your meals, water, workouts, or weight — or scan a photo if you have one. What's up?' "
+        "Keep the whole opening under 15 seconds."
+    ),
+    "history": (
+        "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
+        "Start with a warm 1-sentence greeting for {name}. "
+        "Then let them know you can help them fix, remove, or update anything from their history — "
+        "delete a meal, remove a water entry, delete a workout, or correct a logged item. "
+        "Keep it to 1-2 sentences, something like: "
+        "'If anything looks off in your history I can remove or fix it for you. What would you like to change?' "
+        "Keep the whole opening under 15 seconds."
     ),
     "workout_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "

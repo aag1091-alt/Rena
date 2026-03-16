@@ -38,6 +38,7 @@ func renaHints(for tab: Int) -> [RenaHint] {
 
 private func voiceContext(for tab: Int) -> String {
     switch tab {
+    case 1: return "history"
     case 2: return "update_workout_plan"
     case 3: return "scan"
     default: return "home"
