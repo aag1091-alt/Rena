@@ -990,7 +990,7 @@ function renderWorkoutSection(plan, interactive, date) {
       inner += `<button class="rena-action-btn" data-rena-ctx="workout_plan:${date}">
         <div class="rena-action-circle">✦</div>
         <div class="rena-action-text">
-          <div class="rena-action-label">Plan with Rena</div>
+          <div class="rena-action-label">Add a Workout Plan</div>
           <div class="rena-action-sub">Rena will build ${isToday(app.planDate) ? "today's" : "tomorrow's"} workout for you</div>
         </div>
         <span class="rena-action-chevron">›</span>
@@ -1064,7 +1064,7 @@ function renderMealSection(plan, interactive, date) {
       inner += `<button class="rena-action-btn" data-rena-ctx="meal_plan:${date}">
         <div class="rena-action-circle">✦</div>
         <div class="rena-action-text">
-          <div class="rena-action-label">Plan with Rena</div>
+          <div class="rena-action-label">Add a Meal Plan</div>
           <div class="rena-action-sub">Rena will plan ${isToday(app.planDate) ? "today's" : "this day's"} meals</div>
         </div>
         <span class="rena-action-chevron">›</span>

@@ -378,7 +378,7 @@ struct WorkoutPlanSection: View {
 
                     if !readOnly {
                         renaActionButton(
-                            label: "Plan with Rena",
+                            label: "Add a Workout Plan",
                             subtitle: isInteractive ? "Rena will build today's workout for you" : "Rena will plan tomorrow's workout",
                             action: onPlanWithRena
                         )
@@ -742,7 +742,7 @@ struct MealPlanSection: View {
 
     private var mealPlanButton: some View {
         renaActionButton(
-            label: "Plan with Rena",
+            label: "Add a Meal Plan",
             subtitle: isInteractive ? "Rena will plan today's meals" : "Rena will plan for this day",
             action: onPlanWithRena
         )
