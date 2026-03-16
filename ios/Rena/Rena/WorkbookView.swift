@@ -927,7 +927,7 @@ struct MealPlanSection: View {
 
                 VStack(spacing: 0) {
                     ForEach(plan.meals) { meal in
-                        MealRow(
+                        PlannedMealRow(
                             meal: meal,
                             isInteractive: isInteractive,
                             onWatch: { onWatch(meal) },
@@ -996,7 +996,7 @@ struct MealPlanSection: View {
 
 // MARK: - Meal Row
 
-struct MealRow: View {
+struct PlannedMealRow: View {
     let meal: PlannedMeal
     var isInteractive: Bool = true
     let onWatch: () -> Void
