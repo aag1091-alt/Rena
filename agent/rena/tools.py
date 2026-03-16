@@ -185,6 +185,7 @@ def set_goal(
     Returns:
         Confirmation with goal details and adjusted daily calorie target.
     """
+    _emit_tool_status(user_id, "Setting your goal…")
     profile = _user_ref(user_id).get().to_dict() or {}
     tdee = profile.get("tdee", 2000)
 
@@ -534,6 +535,7 @@ def log_meal(user_id: str, meal_name: str, calories: int, protein_g: int = 0, ca
     Returns:
         Confirmation with updated daily calorie total.
     """
+    _emit_tool_status(user_id, "Logging your meal…")
     # Auto-estimate macros when not provided
     if protein_g == 0 and carbs_g == 0 and fat_g == 0:
         macros = _estimate_macros(meal_name, calories)
@@ -577,6 +579,7 @@ def log_water(user_id: str, glasses: int) -> dict:
     Returns:
         Updated total glasses for today.
     """
+    _emit_tool_status(user_id, "Logging water…")
     log_ref = _today_log_ref(user_id)
     today = log_ref.get().to_dict() or {}
     new_total = today.get("water_glasses", 0) + glasses
@@ -616,6 +619,7 @@ def log_workout(user_id: str, workout_type: str, duration_min: int, calories_bur
     Returns:
         Confirmation of logged workout with calories burned.
     """
+    _emit_tool_status(user_id, "Logging your workout…")
     if calories_burned <= 0:
         profile = _user_ref(user_id).get().to_dict() or {}
         weight_kg = profile.get("weight_kg", 70)
@@ -776,6 +780,7 @@ def log_weight(user_id: str, weight_kg: float) -> dict:
     Returns:
         Confirmation with the logged weight.
     """
+    _emit_tool_status(user_id, "Saving your weight…")
     _today_log_ref(user_id).set({"weight_kg": weight_kg}, merge=True)
     return {"status": "logged", "weight_kg": weight_kg}
 
@@ -792,6 +797,7 @@ def delete_meal(user_id: str, meal_name: str) -> dict:
     Returns:
         Confirmation with the removed meal and updated daily calorie total.
     """
+    _emit_tool_status(user_id, "Removing meal…")
     log_ref = _today_log_ref(user_id)
     today = log_ref.get().to_dict() or {}
     meals = today.get("meals", [])
@@ -843,6 +849,7 @@ def update_meal(
     Returns:
         Confirmation with the updated meal details.
     """
+    _emit_tool_status(user_id, "Updating meal…")
     log_ref = _today_log_ref(user_id)
     today = log_ref.get().to_dict() or {}
     meals = today.get("meals", [])
@@ -887,6 +894,7 @@ def remove_water(user_id: str, glasses: int) -> dict:
     Returns:
         Updated total glasses for today.
     """
+    _emit_tool_status(user_id, "Removing water…")
     log_ref = _today_log_ref(user_id)
     today = log_ref.get().to_dict() or {}
     current = today.get("water_glasses", 0)
@@ -907,6 +915,7 @@ def delete_workout(user_id: str, workout_type: str) -> dict:
     Returns:
         Confirmation with the removed workout.
     """
+    _emit_tool_status(user_id, "Removing workout…")
     log_ref = _today_log_ref(user_id)
     today = log_ref.get().to_dict() or {}
     workouts = today.get("workouts", [])
@@ -1071,6 +1080,7 @@ def log_meal_from_plan(user_id: str, meal_id: str, for_date: str = None) -> dict
         meal_id: The ID of the meal to log.
         for_date: ISO date string (YYYY-MM-DD). Defaults to today.
     """
+    _emit_tool_status(user_id, "Logging meal…")
     date_str = for_date or datetime.now(timezone.utc).date().isoformat()
     ref      = _meal_plan_ref(user_id, date_str)
     plan     = ref.get().to_dict()
@@ -1195,6 +1205,7 @@ Return ONLY valid JSON, no markdown, no explanation:
 
 def toggle_exercise_complete(user_id: str, exercise_id: str, for_date: str = None) -> dict:
     """Toggle the completed flag on a planned exercise (does not log the workout)."""
+    _emit_tool_status(user_id, "Updating exercise…")
     date_str = for_date or datetime.now(timezone.utc).date().isoformat()
     ref      = _workout_plan_ref(user_id, date_str)
     plan     = ref.get().to_dict()
@@ -1211,6 +1222,7 @@ def toggle_exercise_complete(user_id: str, exercise_id: str, for_date: str = Non
 
 def log_exercise_from_plan(user_id: str, exercise_id: str, for_date: str = None, calories_override: int = None) -> dict:
     """Log a completed exercise from the workout plan into the workout log."""
+    _emit_tool_status(user_id, "Logging exercise…")
     date_str = for_date or datetime.now(timezone.utc).date().isoformat()
     ref      = _workout_plan_ref(user_id, date_str)
     plan     = get_workout_plan(user_id, date_str)
@@ -1566,6 +1578,7 @@ def save_tomorrow_plan_note(
         meal_planned: True if generate_meal_plan was called this session.
         for_date: The date the plan is for (ISO string). Defaults to tomorrow.
     """
+    _emit_tool_status(user_id, "Saving your plan…")
     from datetime import timedelta
     date_str = for_date or (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
     ref = _tomorrow_plan_ref(user_id, date_str)
