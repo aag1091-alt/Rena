@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": ["firebase.json", ".firebaserc", "Dockerfile", "nginx.conf", "cloudbuild.yaml", "node_modules"],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "Cross-Origin-Opener-Policy",   "value": "same-origin-allow-popups" },
+          { "key": "Cross-Origin-Embedder-Policy",  "value": "unsafe-none" }
+        ]
+      }
+    ],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  }
+}
