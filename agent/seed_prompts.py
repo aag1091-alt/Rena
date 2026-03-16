@@ -27,7 +27,7 @@ PROMPTS = {
         "3. Once you have BOTH target weight AND deadline: THEN call set_goal. "
         "4. For non-weight goals (fitness/habit/event): ask only for deadline if missing, then call set_goal. "
         "Never ask for their current weight — you already have it. "
-        "Do NOT call get_progress or any other tool during this flow. Keep it to 2–3 exchanges."
+        "Do NOT call get_progress or any other tool during this flow. Ask follow-up questions as needed until you have everything required to call set_goal."
     ),
     "home": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
@@ -51,14 +51,13 @@ PROMPTS = {
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
         "Open with one sentence about {name}'s recent workout pattern from [RENA MEMORY] "
         "(e.g. 'You've been doing a lot of cardio lately' or 'You haven't trained since Tuesday'). "
-        "Then ask 2 quick questions to personalise {day_label}'s workout: "
-        "First: 'Do you have access to a gym, or are you working out at home?' "
-        "Then: 'Any specific muscle group or goal?' "
-        "Once they've answered both, call generate_workout_plan with for_date=[workout_date]. In the notes parameter combine: "
+        "Ask questions to personalise {day_label}'s workout — at minimum: "
+        "gym or home, and any specific muscle group or goal. "
+        "Ask follow-up questions as needed until you have enough detail to generate a great plan. "
+        "Once you have what you need, call generate_workout_plan with for_date=[workout_date]. In the notes parameter combine: "
         "(1) their gym/home preference, (2) their muscle group focus, and "
         "(3) a one-sentence summary of their recent workout pattern from your memory. "
-        "Describe the plan in 1-2 sentences and ask: 'Does that work for you, or want me to tweak anything?' "
-        "Keep the whole exchange to 3-4 turns max."
+        "Describe the plan and ask: 'Does that work for you, or want me to tweak anything?'"
     ),
     "update_workout_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
@@ -67,23 +66,22 @@ PROMPTS = {
         "If there is no [CURRENT_WORKOUT_PLAN] in this message, say 'I don't see a workout planned yet for {day_label} — let me help you set one up.' then ask gym/home and muscle focus. "
         "Then ask what they'd like to change: 'What would you like to tweak?' — "
         "they might want to swap an exercise, adjust intensity, add cardio, shorten the session, etc. "
+        "Ask follow-up questions as needed until you fully understand what they want. "
         "Once you understand what they want, call generate_workout_plan with for_date=[workout_date] "
         "and their request in the notes parameter along with a one-sentence summary of their recent workout history. "
-        "Describe the key change in one sentence and end with a short motivating line. "
-        "Keep it to 2-3 turns max."
+        "Describe the key change and end with a short motivating line."
     ),
     "meal_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
         "Open with one sentence about {name}'s recent meal patterns from [RENA MEMORY] — "
         "reference what they've been eating lately (from 'Recent meals') or their calorie intake. "
         "Do NOT mention workouts. "
-        "Then ask 2 quick questions to plan {day_label}'s meals: "
-        "First: 'What food or ingredients do you have at home?' "
-        "Then: 'Any dietary preferences or things you want to avoid?' "
-        "Once they've answered both, call generate_meal_plan with for_date=[meal_date]. "
+        "Ask questions to plan {day_label}'s meals — at minimum: "
+        "what food or ingredients they have at home, and any dietary preferences or things to avoid. "
+        "Ask follow-up questions as needed until you have enough to generate a good meal plan. "
+        "Once you have what you need, call generate_meal_plan with for_date=[meal_date]. "
         "In the notes parameter combine their available ingredients and preferences. "
-        "Summarise the meal plan in 2-3 sentences — highlight the best meal and total calories. "
-        "Keep the whole exchange to 3 turns max."
+        "Summarise the meal plan — highlight the best meal and total calories."
     ),
     "update_meal_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
@@ -92,10 +90,10 @@ PROMPTS = {
         "If there is no [CURRENT_MEAL_PLAN] in this message, say 'I don't see a meal plan yet for {day_label} — let me ask a couple of questions.' then ask ingredients and preferences. "
         "Then ask what they'd like to change: 'What would you like to swap or adjust?' — "
         "they might want a different meal, lighter calories, different cuisine, fewer dishes, etc. "
+        "Ask follow-up questions as needed until you fully understand what they want. "
         "Once you understand what they want, call generate_meal_plan with for_date=[meal_date] "
         "and their requested changes in the notes parameter. "
-        "Summarise the key change in one sentence and highlight the updated total calories. "
-        "Keep it to 2-3 turns max."
+        "Summarise the key change and highlight the updated total calories."
     ),
     "plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
@@ -124,8 +122,9 @@ PROMPTS = {
         "Then immediately ask: 'What would you like to note for {day_label}?' "
         "They might say anything — drink more water, eat lighter, go for a walk, avoid sugar. "
         "IMPORTANT: Do NOT call generate_workout_plan or generate_meal_plan — this is notes only. "
-        "Once they respond, call save_tomorrow_plan_note with for_date=[note_date] and a short summary of what they said. "
-        "Confirm in one sentence saying '{day_label}'s note is saved'. Keep it to 2 turns max."
+        "If their answer is vague, ask a follow-up to clarify. "
+        "Once you have a clear note, call save_tomorrow_plan_note with for_date=[note_date] and a short summary of what they said. "
+        "Confirm in one sentence saying '{day_label}'s note is saved'."
     ),
     "scan": (
         "SPEAK OUT LOUD NOW: Say one short encouraging line to {name} — "
