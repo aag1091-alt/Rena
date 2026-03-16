@@ -76,6 +76,7 @@ Rena includes AI-generated video demonstrations for a selection of exercises, se
 | Glute Bridges | [view](https://storage.googleapis.com/rena-assets/exercise_videos/glute_bridges.mp4) |
 | Plank | [view](https://storage.googleapis.com/rena-assets/exercise_videos/plank.mp4) |
 | Walking Lunges | [view](https://storage.googleapis.com/rena-assets/exercise_videos/walking_lunges.mp4) |
+| Elliptical Trainer (Moderate Pace) | [view](https://storage.googleapis.com/rena-assets/exercise_videos/elliptical_trainer_moderate_pace.mp4) |
 
 For all other exercises the ▶ button opens a YouTube search instead.
 
@@ -88,6 +89,7 @@ For all other exercises the ▶ button opens a YouTube search instead.
    - *"Add bodyweight squats to my workout plan for today"*
    - *"Add glute bridges to my workout plan for today"*
    - *"Add walking lunges to my workout plan for today"*
+   - *"Add elliptical trainer to my workout plan for today"*
 4. After Rena responds, the Plan tab refreshes and shows the exercise
 5. Tap the **▶** button — the AI-generated video plays directly (no YouTube redirect)
 6. Any other exercise (e.g. *"Add push-ups"*) will open a YouTube search instead
