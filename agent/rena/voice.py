@@ -51,6 +51,11 @@ _nudge_said_at: dict[str, float] = {}
 _prompt_cache: dict[str, tuple[str, float]] = {}
 _PROMPT_CACHE_TTL = 60  # 1 minute (lower during development)
 
+# Per-session tool-status queues.
+# Keyed by user_id → (asyncio.Queue, asyncio.AbstractEventLoop)
+# Tools call _emit_tool_status to push a banner; status_forwarder drains it.
+_status_queues: dict[str, tuple[asyncio.Queue, asyncio.AbstractEventLoop]] = {}
+
 
 def _get_prompt(context_key: str) -> str:
     """
@@ -77,6 +82,7 @@ def _get_prompt(context_key: str) -> str:
 
 RUN_CONFIG = RunConfig(
     response_modalities=[genai_types.Modality.AUDIO],
+    output_audio_transcription=genai_types.AudioTranscriptionConfig(),
     speech_config=genai_types.SpeechConfig(
         voice_config=genai_types.VoiceConfig(
             prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name="Aoede")
@@ -110,7 +116,8 @@ _CONTEXT_PROMPTS = {
         "Keep it short and friendly — one sentence."
     ),
     "workout_plan": (
-        "SPEAK OUT LOUD NOW. Ask the user 2 quick questions to personalise today's workout: "
+        "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
+        "Ask the user 2 quick questions to personalise today's workout: "
         "First: 'Do you have access to a gym, or are you working out at home?' "
         "Then: 'Any specific muscle group or goal for today?' "
         "Once they've answered both, call generate_workout_plan. In the notes parameter combine: "
@@ -120,7 +127,8 @@ _CONTEXT_PROMPTS = {
         "Keep the whole exchange to 3-4 turns max."
     ),
     "update_workout_plan": (
-        "SPEAK OUT LOUD NOW. Ask the user what they want to change: "
+        "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
+        "Ask the user what they want to change: "
         "Say something like 'What would you like to tweak?' and listen for their answer — "
         "they might want to swap an exercise, adjust intensity, add more cardio, shorten the session, etc. "
         "Once you understand what they want, call generate_workout_plan with their request in the notes parameter "
@@ -129,7 +137,8 @@ _CONTEXT_PROMPTS = {
         "Keep it to 2-3 turns max."
     ),
     "meal_plan": (
-        "SPEAK OUT LOUD NOW. Ask the user 2 quick questions to plan today's meals: "
+        "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
+        "Ask the user 2 quick questions to plan today's meals: "
         "First: 'What food or ingredients do you have at home?' "
         "Then: 'Any dietary preferences or things you want to avoid today?' "
         "Once they've answered both, call generate_meal_plan. In the notes parameter combine their "
@@ -139,6 +148,7 @@ _CONTEXT_PROMPTS = {
     ),
     "plan_tomorrow": (
         "SPEAK OUT LOUD NOW: Say 'Let\\'s plan tomorrow, {name}!' "
+        "Speak at a calm, natural pace throughout — never rush, especially when summarising the plans. "
         "Ask ONE question at a time and wait for the answer before asking the next: "
         "1. Ask: 'Any events or commitments tomorrow I should know about?' — wait for answer. "
         "2. Ask: 'What do you want to focus on — eating well, a workout, both, or just rest?' — wait for answer. "
@@ -266,6 +276,11 @@ async def handle_voice(websocket: WebSocket, user_id: str,
 
     await websocket.accept()
 
+    # Per-session tool-status queue — tools push messages here, status_forwarder sends them.
+    loop = asyncio.get_running_loop()
+    status_q: asyncio.Queue = asyncio.Queue()
+    _status_queues[user_id] = (status_q, loop)
+
     # Reuse existing session if available (enables transparent resumption on reconnect).
     # New context (e.g. switching screens) always gets a fresh session.
     existing_session_id = _active_sessions.get(user_id) if not context else None
@@ -369,16 +384,6 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                             await websocket.send_text(
                                 json.dumps({"type": "text", "text": part.text})
                             )
-                        elif getattr(part, "function_call", None):
-                            _TOOL_LABELS = {
-                                "generate_workout_plan": "Building your workout plan…",
-                                "generate_meal_plan":    "Building your meal plan…",
-                            }
-                            label = _TOOL_LABELS.get(part.function_call.name)
-                            if label and not ws_closed:
-                                await websocket.send_text(
-                                    json.dumps({"type": "tool_status", "message": label})
-                                )
                 if event.output_transcription and event.output_transcription.text:
                     cc = event.output_transcription.text.strip()
                     if cc and not ws_closed:
@@ -445,7 +450,25 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                 asyncio.create_task(_save_session_note_async(user_id, context, name or "there"))
                 asyncio.create_task(_refresh_context_cache(user_id, name or "there"))
 
-    send_task = asyncio.create_task(send_to_client())
-    recv_task = asyncio.create_task(recv_from_client())
+    async def status_forwarder():
+        """Drain per-session tool-status queue and forward to WebSocket."""
+        nonlocal ws_closed
+        while not ws_closed:
+            try:
+                msg = await asyncio.wait_for(status_q.get(), timeout=0.3)
+                if not ws_closed:
+                    await websocket.send_text(
+                        json.dumps({"type": "tool_status", "message": msg})
+                    )
+            except asyncio.TimeoutError:
+                pass
 
-    await asyncio.gather(send_task, recv_task, return_exceptions=True)
+    send_task   = asyncio.create_task(send_to_client())
+    recv_task   = asyncio.create_task(recv_from_client())
+    status_task = asyncio.create_task(status_forwarder())
+
+    try:
+        await asyncio.gather(send_task, recv_task, return_exceptions=True)
+    finally:
+        status_task.cancel()
+        _status_queues.pop(user_id, None)

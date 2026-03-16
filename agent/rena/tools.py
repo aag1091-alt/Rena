@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import os
 import uuid
@@ -7,6 +8,19 @@ from google import genai
 from google.cloud import firestore, storage
 
 db = firestore.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
+
+
+def _emit_tool_status(user_id: str, message: str) -> None:
+    """Fire a tool-status banner to the user's active WebSocket session (thread-safe)."""
+    try:
+        from rena import voice as _voice
+        entry = _voice._status_queues.get(user_id)
+        if entry:
+            q, loop = entry
+            loop.call_soon_threadsafe(q.put_nowait, message)
+    except Exception:
+        pass
+
 
 # Vertex AI client — used ONLY for Veo 2 video generation (requires Vertex AI)
 _genai_client = None
@@ -982,6 +996,8 @@ def generate_meal_plan(user_id: str, notes: str = "", for_date: str = None) -> d
     """
     import json, re
 
+    _emit_tool_status(user_id, "Building your meal plan…")
+
     profile        = _user_ref(user_id).get().to_dict() or {}
     goal_doc       = _goal_ref(user_id).get().to_dict() or {}
     date_str       = for_date or datetime.now(timezone.utc).date().isoformat()
@@ -1093,6 +1109,8 @@ def generate_workout_plan(user_id: str, notes: str = "", for_date: str = None) -
         The generated workout plan with exercises, sets/reps or duration, and calories per exercise.
     """
     import json, re
+
+    _emit_tool_status(user_id, "Building your workout plan…")
 
     profile  = _user_ref(user_id).get().to_dict() or {}
     goal_doc = _goal_ref(user_id).get().to_dict() or {}
