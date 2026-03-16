@@ -349,7 +349,7 @@ async def _save_session_note_async(user_id: str, context: str, name: str):
         )
         client = _get_text_client()
         resp = await asyncio.to_thread(
-            client.models.generate_content, model="gemini-2.0-flash", contents=prompt
+            client.models.generate_content, model="gemini-2.5-flash", contents=prompt
         )
         note = f"[{today}] {resp.text.strip()}"
         await asyncio.to_thread(save_session_note, user_id, context, note)

@@ -2044,7 +2044,7 @@ def get_morning_nudge(user_id: str) -> dict:
         "as a focus message for today. Start with 'Today,' or 'Remember,'. No markdown, no quotes."
     )
     client = _get_text_client()
-    resp = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+    resp = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
     nudge = resp.text.strip()
 
     cache_ref.set({"nudge": nudge, "generated_at": firestore.SERVER_TIMESTAMP})
