@@ -86,11 +86,14 @@ For all other exercises the ▶ button opens a YouTube search instead.
 
 1. Open the iOS app (or web app at https://rena-490107-f0f28.web.app)
 2. Go to the **Plan** tab
-3. Tap the Rena orb and say: *"Add a plank to my workout plan for today"*
-4. After Rena responds, the Plan tab refreshes and shows the workout
-5. Tap the **▶** button next to Plank — the AI-generated video opens directly
-6. Try **Bodyweight Squats**, **Glute Bridges**, or **Walking Lunges** for their videos too
-7. Any other exercise (e.g. "Add push-ups") opens a YouTube search instead
+3. Tap the Rena orb and say one of the following — each has an AI-generated video:
+   - *"Add a plank to my workout plan for today"*
+   - *"Add bodyweight squats to my workout plan for today"*
+   - *"Add glute bridges to my workout plan for today"*
+   - *"Add walking lunges to my workout plan for today"*
+4. After Rena responds, the Plan tab refreshes and shows the exercise
+5. Tap the **▶** button — the AI-generated video plays directly (no YouTube redirect)
+6. Any other exercise (e.g. *"Add push-ups"*) will open a YouTube search instead
 
 This behaviour is identical on both iOS and the web app.
 
