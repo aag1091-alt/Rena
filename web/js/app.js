@@ -575,7 +575,7 @@ async function loadHistory() {
 
 function renderHistoryShell() {
   const d = app.histDate;
-  const isOldest = daysDiff(d, new Date()) >= 30;
+  const isOldest = daysDiff(d, new Date()) >= 90;
   const isLatest = isToday(d);
   document.getElementById("history-content").innerHTML = `
     <div class="date-nav">
@@ -589,7 +589,7 @@ function renderHistoryShell() {
       </div>
       <button class="date-nav-btn" id="hist-next" ${isLatest ? "disabled" : ""}>›</button>
     </div>
-    <div id="hist-day-content"><div class="loading-row"><div class="spinner"></div></div></div>
+    <div id="hist-day-content" class="cards-stack"><div class="loading-row"><div class="spinner"></div></div></div>
   `;
   document.getElementById("hist-prev").addEventListener("click", () => {
     app.histDate.setDate(app.histDate.getDate() - 1);
@@ -788,7 +788,7 @@ function renderPlanShell() {
       </div>
       <button class="date-nav-btn" id="plan-next" ${tmr ? "disabled" : ""}>›</button>
     </div>
-    <div id="plan-day-content"><div class="loading-row"><div class="spinner"></div></div></div>
+    <div id="plan-day-content" class="cards-stack"><div class="loading-row"><div class="spinner"></div></div></div>
   `;
   document.getElementById("plan-prev").addEventListener("click", () => {
     app.planDate.setDate(app.planDate.getDate() - 1);
@@ -807,11 +807,12 @@ function renderPlanShell() {
 async function loadPlanDay() {
   const date = fmtDateISO(app.planDate);
   try {
-    const [workout, meal, note] = await Promise.all([
+    const [workout, meal, rawNote] = await Promise.all([
       API.workoutPlan(app.user.id, date).catch(() => null),
       API.mealPlan(app.user.id, date).catch(() => null),
-      API.tomorrowPlan(app.user.id).catch(() => null),
+      API.tomorrowPlan(app.user.id, date).catch(() => null),
     ]);
+    const note = rawNote?.summary ?? (typeof rawNote === "string" ? rawNote : null);
     renderPlanDay(workout, meal, note, date);
   } catch {
     document.getElementById("plan-day-content").innerHTML =

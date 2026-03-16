@@ -1023,6 +1023,9 @@ html, body {
   font-size: 14px;
 }
 
+/* ── Cards stack (flex column with gap, for dynamically-injected content) ── */
+.cards-stack { display: flex; flex-direction: column; gap: 12px; }
+
 /* ── Utilities ─────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
 .text-coral { color: var(--coral); }
