@@ -3,56 +3,70 @@
 ## System Overview
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                      iOS App (SwiftUI)                        │
-│                                                               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────┐  │
-│  │  Voice   │  │  Camera  │  │ Workbook │  │    Goal /   │  │
-│  │   UI     │  │ Gallery  │  │  + Plan  │  │   Journey   │  │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬──────┘  │
-└───────┼─────────────┼─────────────┼────────────────┼─────────┘
-        │ WebSocket   │ REST        │ REST           │ REST
-        │ (audio)     │ (images)    │ (plan/video)   │ (goal)
-┌───────▼─────────────▼─────────────▼────────────────▼─────────┐
-│                   Rena Agent (Cloud Run)                       │
-│                                                               │
-│  ┌────────────────────────────────────────────────────────┐   │
-│  │               Gemini ADK — Agent Core                  │   │
-│  │  Tools:                                                │   │
-│  │  • set_goal              • log_meal                    │   │
-│  │  • get_progress          • scan_image                  │   │
-│  │  • log_workout           • log_water / log_weight      │   │
-│  │  • generate_workout_plan • get_recent_workouts         │   │
-│  └─────────────────────────┬──────────────────────────────┘   │
-│                             │                                  │
-│  ┌──────────────────────────┼──────────────────────────────┐   │
-│  │      REST Endpoints      │                              │   │
-│  │  GET/POST /workout-plan  │  GET /exercise/video/{name}  │   │
-│  │  PATCH …/exercise/complete  GET /exercise/video/status  │   │
-│  │  POST …/exercise/log     │  GET /workbook/insight       │   │
-│  └──────────────────────────┴──────────────────────────────┘   │
-└───────────────────────────┬───────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        iOS App (SwiftUI)                          │
+│                                                                   │
+│  ┌──────────┐  ┌──────────┐  ┌────────────┐  ┌───────────────┐  │
+│  │  Home    │  │ History  │  │    Plan    │  │  Scan/Camera  │  │
+│  │          │  │ Workbook │  │  Workout + │  │               │  │
+│  │          │  │ Insights │  │  Meal Plan │  │               │  │
+│  └────┬─────┘  └────┬─────┘  └─────┬──────┘  └──────┬────────┘  │
+└───────┼─────────────┼──────────────┼─────────────────┼───────────┘
+        │ WebSocket   │ REST         │ REST            │ REST
+        │ (audio)     │ (insights)   │ (plans/video)   │ (scan/log)
+┌───────▼─────────────▼──────────────▼─────────────────▼───────────┐
+│                      Rena Agent (Cloud Run)                        │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │                  Gemini ADK — Agent Core                     │  │
+│  │  Voice tools:                    Plan tools:                 │  │
+│  │  • log_meal / delete_meal        • generate_workout_plan     │  │
+│  │  • log_water / remove_water      • generate_meal_plan        │  │
+│  │  • log_workout / delete_workout  • get_meal_plan             │  │
+│  │  • log_weight                    • log_meal_from_plan        │  │
+│  │  • scan_image                    • log_exercise_from_plan    │  │
+│  │  • get_progress                  • save_tomorrow_plan_note   │  │
+│  │  • set_goal                      • get_recent_workouts       │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │  Context prompt system                                       │  │
+│  │  • Prompts stored in Firestore (prompts/{context_key})       │  │
+│  │  • Injected at session start with [RENA MEMORY] block        │  │
+│  │  • Per-tab contexts: home, history, scan, workout_plan,      │  │
+│  │    update_workout_plan, meal_plan, plan, goal, intro         │  │
+│  │  • tool_status WS messages → live save indicators on iOS     │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  REST Endpoints:                                                   │
+│  WS  /ws/{user_id}              POST /onboard                     │
+│  GET /progress/{user_id}        POST /scan                        │
+│  GET /goal/{user_id}            GET  /workbook/insight/{user_id}  │
+│  GET/POST/DELETE /workout-plan  GET/POST/DELETE /meal-plan        │
+│  PATCH …/exercise/complete      POST …/exercise/log               │
+│  GET /exercise/video/{name}     GET /exercise/video/status/{id}   │
+│  GET/POST/DELETE /tomorrow-plan GET /morning-nudge/{user_id}      │
+│  DELETE /dev/reset/{user_id}    POST /dev/seed/{user_id}          │
+└───────────────────────────┬────────────────────────────────────────┘
                             │
-          ┌─────────────────┼──────────────────────┐
-          ▼                 ▼                       ▼
-┌──────────────┐  ┌──────────────────────┐  ┌──────────────────┐
-│  Firestore   │  │     Gemini APIs       │  │  Cloud Storage   │
-│              │  │                      │  │  rena-assets/    │
-│ • users      │  │ • Live API (voice)   │  │                  │
-│ • logs       │  │ • 2.5 Flash (agent)  │  │ exercise_videos/ │
-│ • goals      │  │ • Flash Vision       │  │   {slug}.mp4     │
-│ • workout_   │  │ • Veo 2 (video gen)  │  │                  │
-│   plans      │  │ • Imagen (journey)   │  │ vision_journey/  │
-│ • exercise_  │  │                      │  │   images         │
-│   video_jobs │  └──────────────────────┘  └──────────────────┘
-└──────────────┘
-          │
-┌─────────▼───────────┐
-│  Google Cloud TTS   │
-│  en-US-Neural2-F    │
-│  (Rena's voice for  │
-│   exercise videos)  │
-└─────────────────────┘
+          ┌─────────────────┼─────────────────────┐
+          ▼                 ▼                      ▼
+┌──────────────────┐  ┌─────────────────────┐  ┌──────────────────┐
+│    Firestore     │  │    Gemini APIs       │  │  Cloud Storage   │
+│                  │  │                     │  │  rena-assets/    │
+│ users/           │  │ • Live API (voice)  │  │                  │
+│   logs/          │  │ • 2.5 Flash         │  │ exercise_videos/ │
+│   workout_plans/ │  │ • Flash Vision      │  │   {slug}.mp4     │
+│   meal_plans/    │  │ • Veo 2             │  │                  │
+│   tomorrow_plans │  │ • Imagen            │  │ vision_journey/  │
+│ goals/           │  └─────────────────────┘  └──────────────────┘
+│ prompts/         │
+│ workbook_insights│        ▼
+│ exercise_video_  │  ┌─────────────────────┐
+│   jobs/          │  │  Google Cloud TTS   │
+│ morning_nudges/  │  │  en-US-Neural2-F    │
+└──────────────────┘  │  (exercise videos)  │
+                      └─────────────────────┘
 ```
 
 ---
@@ -60,100 +74,93 @@
 ## Components
 
 ### 1. iOS App (SwiftUI)
-Thin client — handles UI and streams data to the agent. All AI logic lives in the backend.
 
-**Screens:**
-- **Onboarding** — form-based profile setup, then voice goal-setting with Rena
-- **Home** — goal countdown, daily progress ring, calorie/water/workout stats, voice orb
-- **Workbook** — daily hub: AI day summary, unified workout plan section, logged activity
-- **Goal / Visual Journey** — vision board that evolves as the user hits milestones
-- **Dev tab** — reset onboarding, seed 7 days of test data
+Thin client — all AI logic lives in the backend. The app streams audio and renders data.
 
-**Key iOS capabilities:**
-- `AVFoundation` / `AVAudioEngine` — real-time audio capture + playback for voice
+**Tabs:**
+- **Home** — goal countdown, daily progress ring, calorie/water/workout stats
+- **History / Workbook** — scrollable day log, AI-generated day insight + activity summary
+- **Plan** — workout plan + meal plan side by side; tomorrow planning with Rena
+- **Scan** — camera + photo library for food scanning; per-item calorie sliders
+
+**Key capabilities:**
+- `AVAudioEngine` — real-time PCM capture (16 kHz, mono) + playback, engine never stopped between sessions
 - `AVQueuePlayer` + `AVPlayerLooper` — seamless looping of exercise coaching videos
-- `AVAudioSession.setCategory(.playback)` — audio plays through silent switch
-- `PhotosUI` — gallery access for passive food photo scanning
-- `URLSessionWebSocketTask` — WebSocket connection for voice streaming
+- `URLSessionWebSocketTask` — WebSocket for voice streaming + `tool_status` messages
+- `PhotosUI` — gallery access for food photo scanning
+- Per-tab voice context — each tab opens a Rena session with a specific prompt and context
+
+**Real-time save indicators:**
+When a tool runs, the backend sends `{"type": "tool_status", "message": "Logging your meal…"}` over the WebSocket. `VoiceManager` sets `toolStatus` and the voice overlay button switches label in real time — users see `"Building your workout plan…"` or `"Saving your plan…"` rather than a silent wait.
 
 ---
 
 ### 2. Rena Agent (Python + Gemini ADK)
-Hosted on Cloud Run. The brain of the app.
 
-**Framework:** Python + Google Agent Development Kit (ADK)
-**API layer:** FastAPI
-**Real-time voice:** WebSocket → Gemini Live API (bidi-streaming)
+**Framework:** Python + Google ADK
+**API layer:** FastAPI on Cloud Run
+**Voice:** WebSocket → Gemini Live API (bidi-streaming, native audio)
+**Model:** `gemini-2.5-flash-native-audio-latest` with `thinking_budget=0`
+
+`thinking_budget=0` is injected via a monkey-patch on `Gemini.connect()` — ADK's standard config path silently drops `thinking_config` before it reaches the Live API, so the patch intercepts it directly.
 
 #### Agent Tools
 
-| Tool | Description | Services used |
-|------|-------------|---------------|
-| `set_goal` | Save user goal + deadline, generate initial vision board | Firestore, Gemini Image Gen |
-| `log_meal` | Log a meal from text description | Gemini, Firestore |
-| `log_water` | Track daily water intake | Firestore |
-| `log_workout` | Log workout + auto-calculate calories burned (MET table) | Firestore |
-| `log_weight` | Record today's weight | Firestore |
-| `scan_image` | Identify food in a photo, return nutrition estimate | Gemini Vision |
-| `get_progress` | Get today's calories, macros, water, goal % | Firestore |
-| `generate_workout_plan` | Gemini-powered personalised workout for today | Gemini, Firestore |
-| `get_recent_workouts` | Past 14 days of logged workouts for plan context | Firestore |
+| Tool | Description |
+|------|-------------|
+| `set_goal` | Save goal + deadline, generate vision board image |
+| `get_progress` | Today's calories, macros, water, workouts, goal % |
+| `log_meal` / `delete_meal` / `update_meal` | Log or correct a meal |
+| `log_water` / `remove_water` | Track water intake |
+| `log_workout` / `delete_workout` | Log workout, auto-calc calories via MET table |
+| `log_weight` | Record today's weight |
+| `scan_image` | Identify food in photo, return per-item nutrition |
+| `generate_workout_plan` | Gemini-powered plan using goal + recent history |
+| `generate_meal_plan` | Full day of meals calibrated to calorie/protein targets |
+| `get_meal_plan` | Fetch saved meal plan for a date |
+| `log_meal_from_plan` | Log a planned meal into daily log |
+| `log_exercise_from_plan` | Log a planned exercise into workout log |
+| `get_recent_workouts` | Past 14 days of workouts for plan context |
+| `save_tomorrow_plan_note` | Save planning session summary as morning nudge |
 
-#### REST Endpoints
+#### Context Prompt System
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `WS` | `/ws/{user_id}` | Real-time voice conversation (Gemini Live) |
-| `POST` | `/onboard` | Create user profile, calculate calorie target |
-| `POST` | `/scan` | Analyze food image |
-| `GET` | `/progress/{user_id}` | Daily progress summary |
-| `GET` | `/goal/{user_id}` | Goal details with visual journey image |
-| `GET` | `/workbook/insight/{user_id}` | AI-generated day-so-far summary |
-| `GET` | `/workout-plan/{user_id}` | Fetch saved plan for a date |
-| `POST` | `/workout-plan/{user_id}` | Generate + save today's plan |
-| `PATCH` | `/workout-plan/{user_id}/exercise/{id}/complete` | Toggle exercise done |
-| `POST` | `/workout-plan/{user_id}/exercise/{id}/log` | Log exercise to workouts |
-| `GET` | `/exercise/video/{name}` | Start / return cached Veo 2 video |
-| `GET` | `/exercise/video/status/{job_id}` | Poll video generation status |
-| `DELETE` | `/dev/reset/{user_id}` | DEV — wipe all user data |
-| `POST` | `/dev/seed/{user_id}` | DEV — seed 7 days of test data |
+Prompts stored in Firestore `prompts/{context_key}` — fetched with a 1-minute cache, updated without redeploy. Every session opens with a `[RENA MEMORY]` block (goal, today's stats, recent meals, workouts, weight trend, past session notes) so Rena always has full context before the user speaks.
 
 ---
 
 ### 3. Exercise Video Pipeline
 
-The most complex subsystem. Generates an AI coaching video per exercise with real voiceover, cached in GCS.
-
 ```
-1. SCRIPT GENERATION (Gemini 2.5 Flash)
-   Real trainer coaching cues — body setup, movement feel, breath cue.
-   Safety filters OFF so anatomical terms (glutes, etc.) pass through.
+1. SCRIPT (Gemini 2.5 Flash)
+   Coaching cues: setup, movement feel, breath. Safety filters BLOCK_NONE
+   so anatomical terms pass through.
 
 2. TRAINER GENDER
-   Random male/female for visual variety.
+   Random male/female per generation for visual variety.
 
-3. VEO 2 PROMPT
-   Exercise + target muscles + gender + script as movement direction.
-   "No text, subtitles, captions, or overlays on screen."
+3. VEO 2 JOB SUBMITTED
+   Prompt: exercise name + target muscles + gender + script as direction.
+   "No text, subtitles, captions or overlays on screen."
+   Returns {status: generating, job_id} immediately.
+   Job stored in Firestore exercise_video_jobs/{job_id}.
 
-4. VEO 2 JOB SUBMITTED (async)
-   Returns {status: "generating", job_id} to iOS immediately.
-   Job stored in Firestore: exercise_video_jobs/{job_id}
+4. iOS POLLS /exercise/video/status/{job_id} every 5s
 
-5. IOS POLLS /exercise/video/status/{job_id} every 5s
+5. VOICEOVER (Google Cloud TTS — en-US-Neural2-F)
+   Veo 2 generates silent video. Rather than trying to match a trainer
+   voice, we use Rena's own voice (Neural2-F) for the coaching audio —
+   the same voice the user has been talking to throughout the app.
 
-6. COACHING AUDIO (Google Cloud TTS)
-   Script → en-US-Neural2-F (Rena's voice) → MP3
-
-7. FFMPEG MUX
+6. FFMPEG MUX
    Veo video + TTS audio → single .mp4
 
-8. GCS UPLOAD
+7. GCS UPLOAD + CACHE
    gs://rena-assets/exercise_videos/{slug}.mp4
-   Public, cached forever — same exercise never regenerates.
+   Same exercise never regenerates.
 
-9. IOS PLAYBACK
-   AVQueuePlayer + AVPlayerLooper — seamless loop, no double audio.
+8. iOS PLAYBACK
+   AVQueuePlayer + AVPlayerLooper — seamless loop, no double-audio.
 ```
 
 ---
@@ -161,41 +168,46 @@ The most complex subsystem. Generates an AI coaching video per exercise with rea
 ### 4. Firestore Schema
 
 ```
-users/
-  {userId}/
-    profile:
-      name, sex, age, height_cm, weight_kg, activity_level
-      daily_calorie_target, created_at
+users/{userId}/
+  profile:        name, sex, age, height_cm, weight_kg, activity_level,
+                  daily_calorie_target, protein_target_g, timezone, created_at
 
-    logs/
-      {date}/
-        meals:    [{ name, calories, protein_g, carbs_g, fat_g, logged_at }]
-        water:    { glasses: 6 }
-        workouts: [{ type, duration_min, calories_burned, logged_at }]
-        weight:   { kg: 85.5 }
+  logs/{date}/    meals:    [{ name, calories, protein_g, carbs_g, fat_g, logged_at }]
+                  workouts: [{ type, duration_min, calories_burned, logged_at }]
+                  water_glasses: int
+                  weight_kg: float
 
-    workout_plans/
-      {date}/
-        id, name, date, total_duration_min
-        exercises: [{
-          id, name, type (strength|cardio),
-          sets?, reps?, weight_kg?, duration_min?,
-          calories_burned, target_muscles, completed
-        }]
+  workout_plans/{date}/
+                  id, name, date, total_duration_min
+                  exercises: [{ id, name, type, sets?, reps?, weight_kg?,
+                                duration_min?, calories_burned, target_muscles,
+                                completed, logged }]
 
-goals/
-  {userId}/
-    goal, goal_type, direction, unit
-    start_value, target_value, deadline
-    daily_calorie_target, image_url
+  meal_plans/{date}/
+                  id, date, total_calories, notes
+                  meals: [{ id, meal_type, name, description, cook_time_min,
+                             calories, protein_g, carbs_g, fat_g,
+                             youtube_query, logged }]
 
-exercise_video_jobs/
-  {job_id}/
-    slug, exercise_name, target_muscles
-    script, trainer_gender
-    operation_name (Veo operation)
-    status (generating | done | error)
-    attempt, created_at
+  tomorrow_plans/{date}/
+                  summary, date, created_at, updated_at
+
+  morning_nudges/{date}/
+                  nudge (cached, generated once per day)
+
+goals/{userId}/   goal, goal_type, direction, unit,
+                  start_value, target_value, deadline,
+                  daily_calorie_target, image_url
+
+prompts/{context_key}/
+                  text (editable without redeploy)
+
+workbook_insights/{userId}/days/{date}/
+                  insight, activity, generated_at
+
+exercise_video_jobs/{job_id}/
+                  slug, exercise_name, target_muscles, script, trainer_gender,
+                  operation_name, status, created_at
 ```
 
 ---
@@ -204,52 +216,54 @@ exercise_video_jobs/
 
 | Service | Role |
 |---------|------|
-| **Cloud Run** | Hosts the Rena agent — auto-scales, serverless |
-| **Firestore** | All user data — goals, logs, plans, video jobs |
+| **Cloud Run** | Hosts the Rena agent — serverless, min 1 instance to avoid cold-start voice drops |
+| **Firestore** | All user data — logs, plans, goals, prompts, insights, video jobs |
 | **Cloud Storage** (`rena-assets`) | Exercise videos + vision board images |
-| **Gemini Live API** | Real-time voice conversation (bidi-streaming) |
-| **Gemini 2.5 Flash** | Agent reasoning, workout plans, coaching scripts, day insights |
-| **Gemini Vision** | Food recognition from photos |
+| **Gemini Live API** | Real-time voice (bidi-streaming, native audio) |
+| **Gemini 2.5 Flash** | Agent reasoning, plan generation, coaching scripts, day insights |
+| **Gemini Flash Vision** | Food recognition from photos |
 | **Veo 2** | AI exercise demonstration videos |
 | **Imagen** | Visual journey goal images |
-| **Cloud TTS** | Rena's coaching voiceover (`en-US-Neural2-F`) |
+| **Cloud TTS** (`en-US-Neural2-F`) | Rena's coaching voiceover for exercise videos |
 
 ---
 
-## Data Flow — Key User Journeys
+## Key Data Flows
 
-### Voice Workout Planning
+### Voice session (any tab)
 ```
-User taps "Plan with Rena" →
-Voice session opens with workout_plan context →
-Rena calls get_recent_workouts →
-  Has history → acknowledges + calls generate_workout_plan
-  No history  → asks 2 questions → calls generate_workout_plan →
-Plan saved to Firestore workout_plans/{date} →
-iOS loadDay() fetches plan → WorkoutPlanSection renders exercises →
-User can tap "Update with Rena" + suggestion chips to refine
+User taps Rena button →
+iOS opens WebSocket /ws/{user_id}?context={tab}&name={name} →
+Backend fetches [RENA MEMORY] + prompt from Firestore →
+Injects as opening message into Gemini Live session →
+User speaks → PCM audio streamed over WS →
+ADK routes to Gemini Live → intent detected → tool called →
+Backend emits tool_status WS message → iOS shows save indicator →
+Tool writes to Firestore → Gemini responds →
+Audio chunks streamed back → iOS AVAudioEngine plays
 ```
 
-### Exercise Video
+### Tomorrow planning → morning nudge
+```
+User taps "Plan tomorrow" →
+Voice session (plan context) →
+Rena asks about commitments, workout preference, food →
+Calls generate_workout_plan and/or generate_meal_plan →
+Calls save_tomorrow_plan_note(summary) →
+Next morning: GET /morning-nudge/{user_id} →
+Gemini generates nudge from saved summary →
+Cached in morning_nudges/{today} → displayed on home screen
+```
+
+### Exercise video
 ```
 User taps ▶ on exercise →
-ExerciseVideoSheet opens →
 GET /exercise/video/{name} →
-  Cached in GCS → return {status: ready, video_url} → play immediately
-  Not cached    → generate script → pick gender → submit Veo job →
-                  return {status: generating, job_id} →
-iOS polls every 5s →
-Veo finishes → TTS coaching audio generated → ffmpeg mux →
-Upload to GCS → return {status: done, video_url} →
-AVQueuePlayer plays + loops seamlessly
-```
-
-### Morning Voice Check-in
-```
-User speaks → iOS captures PCM audio →
-WebSocket stream → Cloud Run →
-Gemini Live API (bidi) →
-Agent calls get_progress → reads Firestore →
-Responds with personalised day brief →
-Audio streamed back → iOS plays response
+  Cached → return {status: ready, video_url} → play immediately
+  Not cached → generate script → pick gender → submit Veo 2 job →
+               return {status: generating, job_id} →
+iOS polls /exercise/video/status/{job_id} every 5s →
+Veo finishes → TTS voiceover generated → ffmpeg mux →
+Upload to GCS → {status: done, video_url} →
+AVQueuePlayer + AVPlayerLooper plays seamlessly
 ```
