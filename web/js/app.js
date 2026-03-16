@@ -1456,15 +1456,15 @@ function bindVoiceEvents() {
       if (icon) icon.innerHTML = `<div class="thinking-dots"><div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div></div>`;
     }
 
-    // Transcript area: show tool status when thinking, clear on listening
+    // Transcript area: show tool status when thinking, clear on listening/speaking/connecting
     if (state === "thinking" && ts) {
       if (te) { te.textContent = ts; te.className = "voice-transcript voice-tool-status"; }
       if (tw) tw.style.display = "block";
-    } else if (state === "listening" || state === "connecting") {
+    } else if (state === "listening" || state === "connecting" || state === "speaking") {
       if (te) { te.textContent = ""; te.className = "voice-transcript"; }
       if (tw) tw.style.display = "none";
     }
-    // "speaking" state: transcript area managed by transcriptchange events
+    // "speaking" state: transcript area repopulated by transcriptchange events
   });
 
   voice.addEventListener("transcriptchange", (e) => {

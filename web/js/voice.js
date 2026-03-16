@@ -79,7 +79,10 @@ class VoiceManager extends EventTarget {
   _handleMessage(e) {
     if (e.data instanceof ArrayBuffer) {
       this._playChunk(e.data);
-      this.toolStatus = "";
+      if (this.toolStatus) {
+        this.toolStatus = "";
+        this.dispatchEvent(new CustomEvent("transcriptchange", { detail: "" }));
+      }
       this._setState("speaking");
       return;
     }
