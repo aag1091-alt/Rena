@@ -555,7 +555,13 @@ async def handle_voice(websocket: WebSocket, user_id: str,
         # Signal recv_from_client that it can now forward mic audio to Gemini.
         opening_sent.set()
 
-    asyncio.create_task(inject_opening())
+    async def _safe_inject():
+        try:
+            await inject_opening()
+        finally:
+            opening_sent.set()  # always unblock audio, even if inject_opening throws
+
+    asyncio.create_task(_safe_inject())
 
     # Exception type names that mean "iOS already closed the socket" — safe to ignore.
     _SILENT_CLOSE = {"ConnectionClosedOK", "ClientDisconnected", "WebSocketDisconnect"}

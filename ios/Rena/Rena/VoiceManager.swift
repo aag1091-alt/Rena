@@ -89,10 +89,12 @@ class VoiceManager: NSObject, ObservableObject {
             DispatchQueue.main.async {
                 // Abort if disconnect() was called while waiting for permission.
                 guard self.pendingConnectID == connectID else { return }
-                // Install tap first — accessing inputNode may reconfigure + stop the engine.
-                // Then ensure engine is running after the reconfiguration settles.
-                self.installMicTapIfNeeded()
+                // Set voiceChat mode first so the HW sample rate is 16 kHz before the tap
+                // is installed. Installing with format:nil captures the current HW format —
+                // if we set the mode after, the HW shifts to 16 kHz while the tap is still
+                // holding 48 kHz, causing an engine restart with mismatched formats (-10868).
                 self.ensureEngineRunning()
+                self.installMicTapIfNeeded()
                 self.openWebSocket(userId: userId, context: context, name: name)
                 self.state = .listening
             }
