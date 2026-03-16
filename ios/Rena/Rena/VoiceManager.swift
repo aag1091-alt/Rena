@@ -3,7 +3,7 @@ import AVFoundation
 import Combine
 import SwiftUI
 
-enum VoiceState {
+enum VoiceState: Equatable {
     case idle
     case connecting
     case listening
