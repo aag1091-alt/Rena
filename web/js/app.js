@@ -1433,6 +1433,9 @@ function bindDevSheet() {
     }
     document.getElementById("settings-name").textContent  = u.name  || "";
     document.getElementById("settings-email").textContent = u.email || "";
+    const first = (u.name || "User").split(" ")[0];
+    document.getElementById("dev-seed").textContent  = `🧪 Seed 7 Days Data for ${first}`;
+    document.getElementById("dev-reset").textContent = `↩ Reset ${first}'s Onboarding`;
     document.getElementById("dev-sheet").classList.remove("hidden");
   });
   document.getElementById("dev-close").addEventListener("click", () => {
@@ -1448,15 +1451,17 @@ function bindDevSheet() {
     } catch {}
     signOut();
   });
-  document.getElementById("dev-seed").addEventListener("click", async (btn) => {
+  document.getElementById("dev-seed").addEventListener("click", async () => {
     const el = document.getElementById("dev-seed");
+    const first = (app.user?.name || "User").split(" ")[0];
+    const label = `🧪 Seed 7 Days Data for ${first}`;
     el.textContent = "⏳ Seeding…"; el.disabled = true;
     try {
       await API.seed(app.user.id);
       el.textContent = "✓ Seeded!";
-      setTimeout(() => { el.textContent = "🧪 Seed Last 7 Days Data"; el.disabled = false; }, 2000);
+      setTimeout(() => { el.textContent = label; el.disabled = false; }, 2000);
     } catch {
-      el.textContent = "🧪 Seed Last 7 Days Data"; el.disabled = false;
+      el.textContent = label; el.disabled = false;
     }
   });
   document.getElementById("dev-signout").addEventListener("click", signOut);

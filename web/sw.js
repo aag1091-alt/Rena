@@ -1,4 +1,4 @@
-const CACHE = "rena-v5";
+const CACHE = "rena-v6";
 const STATIC = ["/", "/index.html", "/css/app.css", "/js/config.js", "/js/api.js", "/js/voice.js", "/js/app.js", "/worklet/audio-processor.js", "/manifest.json"];
 
 self.addEventListener("install", e => {
