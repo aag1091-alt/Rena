@@ -124,10 +124,10 @@ _CONTEXT_PROMPTS = {
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
         "Open with one sentence about {name}'s recent workout pattern from [RENA MEMORY] "
         "(e.g. 'You've been doing a lot of cardio lately' or 'You haven't trained since Tuesday'). "
-        "Then ask 2 quick questions to personalise today's workout: "
+        "Then ask 2 quick questions to personalise {day_label}'s workout: "
         "First: 'Do you have access to a gym, or are you working out at home?' "
-        "Then: 'Any specific muscle group or goal for today?' "
-        "Once they've answered both, call generate_workout_plan. In the notes parameter combine: "
+        "Then: 'Any specific muscle group or goal?' "
+        "Once they've answered both, call generate_workout_plan with for_date=[workout_date]. In the notes parameter combine: "
         "(1) their gym/home preference, (2) their muscle group focus, and "
         "(3) a one-sentence summary of their recent workout pattern from your memory. "
         "Describe the plan in 1-2 sentences and ask: 'Does that work for you, or want me to tweak anything?' "
@@ -135,12 +135,12 @@ _CONTEXT_PROMPTS = {
     ),
     "update_workout_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Open with one sentence referencing today's planned workout from [RENA MEMORY] "
+        "Open with one sentence referencing {day_label}'s planned workout from [RENA MEMORY] "
         "(e.g. 'You've got a 40-minute strength session lined up'). "
         "Then ask what they'd like to change: 'What would you like to tweak?' — "
         "they might want to swap an exercise, adjust intensity, add cardio, shorten the session, etc. "
-        "Once you understand what they want, call generate_workout_plan with their request in the notes parameter "
-        "along with a one-sentence summary of their recent workout history from your memory. "
+        "Once you understand what they want, call generate_workout_plan with for_date=[workout_date] "
+        "and their request in the notes parameter along with a one-sentence summary of their recent workout history. "
         "Describe the key change in one sentence and end with a short motivating line. "
         "Keep it to 2-3 turns max."
     ),
@@ -269,17 +269,15 @@ async def _save_session_note_async(user_id: str, context: str, name: str):
         progress = await asyncio.to_thread(get_progress, user_id)
         today = datetime.now(timezone.utc).date().isoformat()
 
-        if context and context.startswith("plan:"):
-            base_ctx = "plan"
-        elif context and context.startswith("meal_plan:"):
-            base_ctx = "meal_plan"
+        if context and ":" in context:
+            base_ctx = context.split(":", 1)[0]
         else:
             base_ctx = context
         context_labels = {
             "home":                "general chat / logging food or water",
-            "workout_plan":        "planning a new workout",
+            "workout_plan":        "planning a workout",
             "update_workout_plan": "updating their workout plan",
-            "meal_plan":           "planning today's meals",
+            "meal_plan":           "planning meals",
             "plan":                "planning a day's nutrition and activity",
             "scan":                "logging food by photo",
         }
@@ -376,6 +374,18 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             today_str = datetime.now(timezone.utc).date().isoformat()
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[meal_date:{plan_date}]"
+        elif context and context.startswith("workout_plan:"):
+            _, plan_date = context.split(":", 1)
+            base_context = "workout_plan"
+            today_str = datetime.now(timezone.utc).date().isoformat()
+            day_label = "today" if plan_date == today_str else "tomorrow"
+            text = f"{text}\n[workout_date:{plan_date}]"
+        elif context and context.startswith("update_workout_plan:"):
+            _, plan_date = context.split(":", 1)
+            base_context = "update_workout_plan"
+            today_str = datetime.now(timezone.utc).date().isoformat()
+            day_label = "today" if plan_date == today_str else "tomorrow"
+            text = f"{text}\n[workout_date:{plan_date}]"
 
         # For home context, inject today's plan_tomorrow nudge (once per hour max).
         if context == "home":
