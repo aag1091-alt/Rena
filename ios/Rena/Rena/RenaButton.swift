@@ -240,6 +240,13 @@ struct RenaOverlay: View {
                 isVoiceActive = false
             }
         }
+        .onChange(of: voice.state) { newState in
+            // If the WS drops unexpectedly while overlay is open, close it cleanly
+            if case .error = newState, isVoiceActive {
+                isVoiceActive = false
+                dismiss()
+            }
+        }
         .onDisappear {
             if isVoiceActive { voice.disconnect(); isVoiceActive = false }
         }

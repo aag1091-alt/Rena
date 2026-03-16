@@ -247,7 +247,13 @@ class VoiceManager: NSObject, ObservableObject {
                 }
                 self.receiveLoop()
             case .failure:
-                DispatchQueue.main.async { self.state = .error("Connection lost") }
+                DispatchQueue.main.async {
+                    self.thinkingWorkItem?.cancel()
+                    self.thinkingWorkItem = nil
+                    self.toolStatus = ""
+                    self.transcript = ""
+                    self.state = .error("Connection lost")
+                }
             }
         }
     }
