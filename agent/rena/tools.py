@@ -384,6 +384,7 @@ def get_progress(user_id: str, for_date: str = None) -> dict:
     Returns:
         Dict with goal info and today's logged activity.
     """
+    _emit_tool_status(user_id, "Checking your progress…")
     profile = _user_ref(user_id).get().to_dict() or {}
     log_date = for_date or datetime.now(timezone.utc).date().isoformat()
     log_ref = _user_ref(user_id).collection("logs").document(log_date)
@@ -664,6 +665,7 @@ def get_recent_workouts(user_id: str, days: int = 7) -> dict:
     Returns:
         Dict with workouts_by_date (date → list of workouts) and a plain-English summary.
     """
+    _emit_tool_status(user_id, "Checking your workout history…")
     from datetime import timedelta
 
     today = datetime.now(timezone.utc).date()
@@ -715,6 +717,7 @@ def scan_image(user_id: str, image_base64: str, mime_type: str = "image/jpeg") -
     Returns:
         Identified food items with calorie and macro estimates.
     """
+    _emit_tool_status(user_id, "Analysing your photo…")
     client = _get_text_client()
     image_bytes = base64.b64decode(image_base64)
 
@@ -982,6 +985,7 @@ def delete_workout_plan(user_id: str, for_date: str = None) -> dict:
 
 def get_meal_plan(user_id: str, for_date: str = None) -> dict | None:
     """Return the saved meal plan for a given date, or None if not set."""
+    _emit_tool_status(user_id, "Loading your meal plan…")
     date_str = for_date or datetime.now(timezone.utc).date().isoformat()
     doc = _meal_plan_ref(user_id, date_str).get()
     return doc.to_dict() if doc.exists else None
