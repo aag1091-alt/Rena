@@ -413,8 +413,8 @@ struct WorkoutPlanSection: View {
             }
 
             renaActionButton(
-                label: "Update with Rena",
-                subtitle: "Swap exercises, adjust intensity, or change focus",
+                label: "Update Workout Plan",
+                subtitle: "Swap exercises, change intensity or focus",
                 action: onOpenRena
             )
         }
@@ -606,10 +606,10 @@ struct DayPlanCard: View {
                                 .foregroundColor(.white)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(note.isEmpty ? "Add \(dayLabel)'s Note" : "Update \(dayLabel)'s Note")
+                            Text(note.isEmpty ? "Add a Note" : "Update Note")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(Color(hex: "3D2B1F"))
-                            Text(note.isEmpty ? "Tell Rena what to remember for you" : "Tell Rena what to update")
+                            Text(note.isEmpty ? "Tell Rena what to remember for you" : "Tell Rena what to change")
                                 .font(.system(size: 11))
                                 .foregroundColor(Color(hex: "B09880"))
                         }
@@ -716,8 +716,8 @@ struct MealPlanSection: View {
                 if isInteractive {
                     Divider().background(Color(hex: "F0E6DA"))
                     renaActionButton(
-                        label: "Update with Rena",
-                        subtitle: "Swap meals, adjust calories, or change preferences",
+                        label: "Update Meal Plan",
+                        subtitle: "Swap meals, adjust calories or preferences",
                         action: onUpdateWithRena
                     )
                 }

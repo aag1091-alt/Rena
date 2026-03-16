@@ -932,8 +932,8 @@ function renderDayPlanCard(note, interactive, date) {
     ${interactive ? `<button class="rena-action-btn" data-rena-ctx="notes:${date}">
       <div class="rena-action-circle">✦</div>
       <div class="rena-action-text">
-        <div class="rena-action-label">${note ? `Update ${dl}'s Note` : `Add ${dl}'s Note`}</div>
-        <div class="rena-action-sub">${note ? "Tell Rena what to update" : "Tell Rena what to remember for you"}</div>
+        <div class="rena-action-label">${note ? "Update Note" : "Add a Note"}</div>
+        <div class="rena-action-sub">${note ? "Tell Rena what to change" : "Tell Rena what to remember for you"}</div>
       </div>
       <span class="rena-action-chevron">›</span>
     </button>` : ""}
@@ -978,8 +978,8 @@ function renderWorkoutSection(plan, interactive, date) {
       inner += `<button class="rena-action-btn" data-rena-ctx="update_workout_plan:${date}">
         <div class="rena-action-circle">✦</div>
         <div class="rena-action-text">
-          <div class="rena-action-label">Update with Rena</div>
-          <div class="rena-action-sub">Swap exercises, adjust intensity, or change focus</div>
+          <div class="rena-action-label">Update Workout Plan</div>
+          <div class="rena-action-sub">Swap exercises, change intensity or focus</div>
         </div>
         <span class="rena-action-chevron">›</span>
       </button>`;
@@ -1052,8 +1052,8 @@ function renderMealSection(plan, interactive, date) {
       <button class="rena-action-btn" data-rena-ctx="update_meal_plan:${date}">
         <div class="rena-action-circle">✦</div>
         <div class="rena-action-text">
-          <div class="rena-action-label">Update with Rena</div>
-          <div class="rena-action-sub">Swap meals, adjust calories, or change preferences</div>
+          <div class="rena-action-label">Update Meal Plan</div>
+          <div class="rena-action-sub">Swap meals, adjust calories or preferences</div>
         </div>
         <span class="rena-action-chevron">›</span>
       </button>`;
