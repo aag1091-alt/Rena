@@ -99,10 +99,12 @@ _CONTEXT_PROMPTS = {
     ),
     "plan_tomorrow": (
         "SPEAK OUT LOUD NOW: Say 'Let's plan tomorrow, {name}!' "
-        "Briefly mention one thing that went well today (use [current_weight_kg] or calories if available). "
-        "Ask: 'Any events or schedule constraints tomorrow I should know about?' "
-        "Based on their answer, suggest a calorie target and whether to include a workout. "
-        "Keep it to 2-3 exchanges total — warm and practical."
+        "Ask 2 quick questions only — do NOT suggest anything yet: "
+        "First: 'Any events, commitments, or schedule constraints tomorrow I should know about?' "
+        "Then: 'What do you want to focus on — eating, a workout, both, or just rest?' "
+        "Once they've answered both, give a short personalised plan in 2-3 sentences: suggest a calorie target, "
+        "whether to include a workout (and what kind based on their history), and one practical tip. "
+        "Keep the whole exchange to 3-4 turns max — warm and practical."
     ),
 }
 
