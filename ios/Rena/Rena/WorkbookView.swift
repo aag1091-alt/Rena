@@ -107,7 +107,6 @@ struct WorkbookView: View {
                             sectionTitle: "WORKOUT",
                             onPlanWithRena:   { renaContext = "workout_plan:\(dateString)"; showRena = true },
                             onOpenRena:       { renaContext = "update_workout_plan:\(dateString)"; showRena = true },
-                            onRegenerate:     { Task { await generatePlan() } },
                             onDelete:         { Task { await deletePlan() } },
                             onToggleComplete: { ex in Task { await toggleComplete(ex) } },
                             onPlay:           { ex in videoSheet = ex },
@@ -283,7 +282,6 @@ struct WorkoutPlanSection: View {
     var sectionTitle: String = "TODAY'S WORKOUT"
     let onPlanWithRena: () -> Void
     let onOpenRena: () -> Void
-    let onRegenerate: () -> Void
     let onDelete: () -> Void
     let onToggleComplete: (PlannedExercise) -> Void
     let onPlay: (PlannedExercise) -> Void
@@ -310,17 +308,10 @@ struct WorkoutPlanSection: View {
                     .kerning(1.0)
                 Spacer()
                 if plan != nil && !readOnly {
-                    HStack(spacing: 12) {
-                        Button(action: onRegenerate) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 13))
-                                .foregroundColor(Color(hex: "B09880"))
-                        }
-                        Button(action: onDelete) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(Color(hex: "B09880"))
-                        }
+                    Button(action: onDelete) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Color(hex: "B09880"))
                     }
                 }
             }
