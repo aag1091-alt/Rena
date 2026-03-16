@@ -233,7 +233,12 @@ struct RenaOverlay: View {
                 isVoiceActive = true
             }
         }
-        .onChange(of: selectedTab) { dismiss() }
+        .onChange(of: selectedTab) {
+            // Disconnect cleanly on tab switch; MainTabView already sets showRena=false
+            // so we must NOT dispatch our own isShowing=false (would kill the next overlay).
+            if isVoiceActive { voice.disconnect(); isVoiceActive = false }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { cardVisible = false }
+        }
         .onChange(of: isShowing) {
             if !isShowing && isVoiceActive {
                 voice.disconnect()
