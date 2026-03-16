@@ -7,7 +7,6 @@ Flow:
 """
 
 import asyncio
-import contextlib
 import json
 import time
 import traceback
@@ -31,28 +30,6 @@ warnings.filterwarnings("ignore", message=".*Pydantic serializer warnings.*", ca
 
 load_dotenv()
 
-# ── Fix: ADK's google_llm.py copies tools from llm_request.config to live_connect_config
-# but silently drops thinking_config, so thinking_budget=0 set on the Agent is never
-# sent to the Gemini Live API. The model defaults to full thinking, producing silent
-# audio turns that hang the UI.
-# Patch GoogleLLM.connect() — the last step before the actual API call — to copy
-# thinking_config from llm_request.config into live_connect_config right before connecting.
-from google.adk.models import google_llm as _google_llm  # noqa: E402
-
-_orig_gemini_connect = _google_llm.Gemini.connect
-
-@contextlib.asynccontextmanager
-async def _patched_gemini_connect(self, llm_request):
-    tc = getattr(llm_request.config, "thinking_config", None) if llm_request.config else None
-    if llm_request.live_connect_config is not None and tc is not None:
-        llm_request.live_connect_config.thinking_config = tc
-        print(f"[PATCH] thinking_config={tc} injected into live_connect_config", flush=True)
-    else:
-        print(f"[PATCH] NOT injected — lcc={llm_request.live_connect_config is not None} tc={tc}", flush=True)
-    async with _orig_gemini_connect(self, llm_request) as conn:
-        yield conn
-
-_google_llm.Gemini.connect = _patched_gemini_connect
 
 session_service = InMemorySessionService()
 APP_NAME = "rena"
@@ -501,12 +478,7 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                     break
                 if event.content and event.content.parts:
                     for part in event.content.parts:
-                        is_thought = getattr(part, "thought", False)
-                        has_audio = bool(part.inline_data)
-                        has_text = bool(part.text)
-                        print(f"[EVENT] thought={is_thought} audio={has_audio} text={has_text}", flush=True)
-                        # Skip thought parts (thinking_budget=0 prevents most, but guard anyway)
-                        if is_thought:
+                        if getattr(part, "thought", False):
                             continue
                         if part.inline_data:
                             if not await _safe_send_bytes(part.inline_data.data):
