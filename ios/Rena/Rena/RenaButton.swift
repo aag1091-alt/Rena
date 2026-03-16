@@ -314,19 +314,22 @@ struct CustomTabBar: View {
                 Button { showRena.toggle() } label: {
                     VStack(spacing: 3) {
                         ZStack {
-                            Circle()
-                                .fill(showRena
-                                    ? AnyShapeStyle(Color(hex: "E76F51"))
-                                    : AnyShapeStyle(LinearGradient(
-                                        colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing
-                                    ))
-                                )
-                                .frame(width: 52, height: 52)
-                                .shadow(color: Color(hex: "E76F51").opacity(0.4), radius: 10, y: 4)
-                            Image(systemName: showRena ? "xmark" : "sparkles")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
+                            if showRena {
+                                Circle()
+                                    .fill(Color(hex: "E76F51"))
+                                    .frame(width: 52, height: 52)
+                                    .shadow(color: Color(hex: "E76F51").opacity(0.4), radius: 10, y: 4)
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.white)
+                            } else {
+                                Image("AppIcon")
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 52, height: 52)
+                                    .clipShape(Circle())
+                                    .shadow(color: Color(hex: "E76F51").opacity(0.4), radius: 10, y: 4)
+                            }
                         }
                         .offset(y: -12)
                         Text("Rena")
