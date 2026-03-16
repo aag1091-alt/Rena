@@ -129,13 +129,16 @@ _CONTEXT_PROMPTS = {
         "Keep it to 2-3 turns max."
     ),
     "plan_tomorrow": (
-        "SPEAK OUT LOUD NOW: Say 'Let's plan tomorrow, {name}!' "
-        "Ask 2 quick questions only — do NOT suggest anything yet: "
-        "First: 'Any events, commitments, or schedule constraints tomorrow I should know about?' "
-        "Then: 'What do you want to focus on — eating, a workout, both, or just rest?' "
-        "Once they've answered both, give a short personalised plan in 2-3 sentences: suggest a calorie target, "
-        "whether to include a workout (and what kind based on their history), and one practical tip. "
-        "Keep the whole exchange to 3-4 turns max — warm and practical."
+        "SPEAK OUT LOUD NOW: Say 'Let\\'s plan tomorrow, {name}!' "
+        "Ask 3 quick questions — do NOT suggest anything yet: "
+        "1. 'Any events, commitments, or schedule constraints tomorrow?' "
+        "2. 'What do you want to focus on — eating, a workout, both, or just rest?' "
+        "3. 'What food or ingredients do you have at home?' "
+        "Once you have all three answers, do both of these: "
+        "Call generate_workout_plan(user_id, notes=<their workout preference + recent history>, for_date=<tomorrow_date from [tomorrow_date:] tag>). "
+        "Call generate_meal_plan(user_id, notes=<their ingredients + calorie focus>, for_date=<tomorrow_date from [tomorrow_date:] tag>). "
+        "Then summarise both plans in 3-4 sentences — workout first, then meals. "
+        "Keep the whole exchange to 4-5 turns max — warm and practical."
     ),
 }
 
@@ -296,6 +299,12 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             rich = await _get_context_for_user(user_id, name or "there")
             if rich:
                 text = f"{text}\n{rich}"
+
+        # For plan_tomorrow context, inject tomorrow's date so the agent can pass it to tools.
+        if context == "plan_tomorrow":
+            from datetime import timedelta
+            tomorrow = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+            text = f"{text}\n[tomorrow_date:{tomorrow}]"
 
         # For home context, inject today's plan_tomorrow nudge (once per hour max).
         if context == "home":

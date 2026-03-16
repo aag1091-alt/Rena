@@ -9,6 +9,7 @@ from rena.tools import (
     scan_image, log_meal, log_water, log_weight, get_progress, get_goal, create_profile, reset_user,
     get_workout_plan, generate_workout_plan, delete_workout_plan, toggle_exercise_complete, log_exercise_from_plan,
     get_exercise_video, get_exercise_video_status, get_morning_nudge,
+    get_meal_plan, delete_meal_plan, log_meal_from_plan,
 )
 
 load_dotenv()
@@ -310,6 +311,38 @@ async def exercise_video_status_endpoint(job_id: str):
         return get_exercise_video_status(job_id)
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/meal-plan/{user_id}")
+async def get_meal_plan_endpoint(user_id: str, date: str = None):
+    """Get the saved meal plan for a user on a given date (defaults to today)."""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    plan = get_meal_plan(user_id, for_date=date)
+    if plan is None:
+        return {}
+    return plan
+
+
+@app.delete("/meal-plan/{user_id}")
+async def delete_meal_plan_endpoint(user_id: str, date: str = None):
+    """Delete the saved meal plan for a given date."""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    return delete_meal_plan(user_id, for_date=date)
+
+
+class LogMealFromPlanRequest(BaseModel):
+    date: str = None
+
+
+@app.post("/meal-plan/{user_id}/meal/{meal_id}/log")
+async def log_meal_from_plan_endpoint(user_id: str, meal_id: str, req: LogMealFromPlanRequest = None):
+    """Log a planned meal into the meal log."""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    r = req or LogMealFromPlanRequest()
+    return await asyncio.to_thread(log_meal_from_plan, user_id, meal_id, r.date)
 
 
 @app.get("/morning-nudge/{user_id}")

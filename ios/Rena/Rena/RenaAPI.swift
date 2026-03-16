@@ -223,10 +223,11 @@ struct PlannedExercise: Codable, Identifiable {
     let caloriesBurned: Int
     let targetMuscles: String?
     var completed: Bool
+    var logged: Bool
     var videoUrl: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, type, sets, reps, completed
+        case id, name, type, sets, reps, completed, logged
         case weightKg      = "weight_kg"
         case durationMin   = "duration_min"
         case caloriesBurned = "calories_burned"
@@ -246,9 +247,76 @@ struct PlannedExercise: Codable, Identifiable {
         targetMuscles  = try? c.decode(String.self, forKey: .targetMuscles)
         videoUrl       = try? c.decode(String.self, forKey: .videoUrl)
         completed      = (try? c.decode(Bool.self, forKey: .completed)) ?? false
+        logged         = (try? c.decode(Bool.self, forKey: .logged)) ?? false
         if let i = try? c.decode(Int.self, forKey: .caloriesBurned) { caloriesBurned = i }
         else if let d = try? c.decode(Double.self, forKey: .caloriesBurned) { caloriesBurned = Int(d) }
         else { caloriesBurned = 0 }
+    }
+}
+
+struct PlannedMeal: Codable, Identifiable {
+    let id: String
+    let mealType: String
+    let name: String
+    let description: String
+    let cookTimeMin: Int
+    let calories: Int
+    let proteinG: Int
+    let carbsG: Int
+    let fatG: Int
+    let youtubeQuery: String
+    var logged: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, logged
+        case mealType    = "meal_type"
+        case cookTimeMin = "cook_time_min"
+        case calories, proteinG = "protein_g", carbsG = "carbs_g", fatG = "fat_g"
+        case youtubeQuery = "youtube_query"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id          = try c.decode(String.self, forKey: .id)
+        mealType    = (try? c.decode(String.self, forKey: .mealType)) ?? "meal"
+        name        = try c.decode(String.self, forKey: .name)
+        description = (try? c.decode(String.self, forKey: .description)) ?? ""
+        logged      = (try? c.decode(Bool.self,   forKey: .logged))      ?? false
+        youtubeQuery = (try? c.decode(String.self, forKey: .youtubeQuery)) ?? "\(name) recipe"
+        func intOrDouble(_ key: CodingKeys) -> Int {
+            if let i = try? c.decode(Int.self,    forKey: key) { return i }
+            if let d = try? c.decode(Double.self, forKey: key) { return Int(d) }
+            return 0
+        }
+        cookTimeMin = intOrDouble(.cookTimeMin)
+        calories    = intOrDouble(.calories)
+        proteinG    = intOrDouble(.proteinG)
+        carbsG      = intOrDouble(.carbsG)
+        fatG        = intOrDouble(.fatG)
+    }
+}
+
+struct PlannedMealPlan: Codable {
+    let id: String
+    let date: String
+    let totalCalories: Int
+    let meals: [PlannedMeal]
+    let notes: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, date, meals, notes
+        case totalCalories = "total_calories"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id    = (try? c.decode(String.self,        forKey: .id))    ?? ""
+        date  = try  c.decode(String.self,         forKey: .date)
+        meals = try  c.decode([PlannedMeal].self,  forKey: .meals)
+        notes = (try? c.decode(String.self,        forKey: .notes)) ?? ""
+        if let i = try? c.decode(Int.self,    forKey: .totalCalories) { totalCalories = i }
+        else if let d = try? c.decode(Double.self, forKey: .totalCalories) { totalCalories = Int(d) }
+        else { totalCalories = 0 }
     }
 }
 
@@ -381,6 +449,31 @@ class RenaAPI {
             )
         }
         return ("", "")
+    }
+
+    // MARK: - Meal Plan
+
+    func getMealPlan(userId: String, date: String? = nil) async throws -> PlannedMealPlan? {
+        var urlString = "\(kBaseURL)/meal-plan/\(userId)"
+        if let date { urlString += "?date=\(date)" }
+        let req = try request(urlString)
+        let (data, _) = try await session.data(for: req)
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], json.isEmpty { return nil }
+        return try? JSONDecoder().decode(PlannedMealPlan.self, from: data)
+    }
+
+    func deleteMealPlan(userId: String, date: String? = nil) async throws {
+        var urlString = "\(kBaseURL)/meal-plan/\(userId)"
+        if let date { urlString += "?date=\(date)" }
+        let req = try request(urlString, method: "DELETE")
+        _ = try await session.data(for: req)
+    }
+
+    func logMealFromPlan(userId: String, mealId: String, date: String? = nil) async throws {
+        var urlString = "\(kBaseURL)/meal-plan/\(userId)/meal/\(mealId)/log"
+        if let date { urlString += "?date=\(date)" }
+        let req = try request(urlString, method: "POST")
+        _ = try await session.data(for: req)
     }
 
     func getMorningNudge(userId: String) async throws -> String? {

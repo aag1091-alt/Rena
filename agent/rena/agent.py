@@ -73,5 +73,8 @@ TOOL CALLS — CRITICAL:
         tools.update_meal,
         tools.remove_water,
         tools.delete_workout,
+        tools.generate_meal_plan,
+        tools.get_meal_plan,
+        tools.log_meal_from_plan,
     ],
 )

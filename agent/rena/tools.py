@@ -925,6 +925,10 @@ def _workout_plan_ref(user_id: str, date_str: str):
     return _user_ref(user_id).collection("workout_plans").document(date_str)
 
 
+def _meal_plan_ref(user_id: str, date_str: str):
+    return _user_ref(user_id).collection("meal_plans").document(date_str)
+
+
 def get_workout_plan(user_id: str, for_date: str = None) -> dict | None:
     """Return the saved workout plan for a given date, or None if not set."""
     date_str = for_date or datetime.now(timezone.utc).date().isoformat()
@@ -949,15 +953,141 @@ def delete_workout_plan(user_id: str, for_date: str = None) -> dict:
     return {"status": "deleted", "date": date_str}
 
 
-def generate_workout_plan(user_id: str, notes: str = "") -> dict:
+def get_meal_plan(user_id: str, for_date: str = None) -> dict | None:
+    """Return the saved meal plan for a given date, or None if not set."""
+    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    doc = _meal_plan_ref(user_id, date_str).get()
+    return doc.to_dict() if doc.exists else None
+
+
+def delete_meal_plan(user_id: str, for_date: str = None) -> dict:
+    """Delete the saved meal plan for a given date (defaults to today)."""
+    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    _meal_plan_ref(user_id, date_str).delete()
+    return {"status": "deleted", "date": date_str}
+
+
+def generate_meal_plan(user_id: str, notes: str = "", for_date: str = None) -> dict:
     """
-    Generate and save a personalised workout plan for today using Gemini.
+    Generate and save a personalised meal plan for a given date using Gemini.
+
+    Args:
+        user_id: The user's unique ID.
+        notes: Free-text user preferences (e.g. "have eggs, chicken, oats at home").
+        for_date: ISO date string (YYYY-MM-DD). Defaults to today.
+
+    Returns:
+        The generated meal plan with 4 meals (breakfast, lunch, dinner, snack),
+        cook times, macros, calories, and a YouTube search query for each meal.
+    """
+    import json, re
+
+    profile        = _user_ref(user_id).get().to_dict() or {}
+    goal_doc       = _goal_ref(user_id).get().to_dict() or {}
+    date_str       = for_date or datetime.now(timezone.utc).date().isoformat()
+    calorie_target = goal_doc.get("daily_calorie_target", profile.get("daily_calorie_target", 2000))
+    protein_target = profile.get("protein_target_g", 120)
+    goal_type      = goal_doc.get("goal_type", "fitness")
+    goal_text      = goal_doc.get("goal", "general fitness")
+
+    notes_block = f"\nUser preferences / available ingredients: {notes}" if notes and notes.strip() else ""
+
+    prompt = f"""Generate a meal plan for {date_str} for someone with:
+- Goal: {goal_text} ({goal_type})
+- Daily calorie target: {calorie_target} kcal
+- Protein target: {protein_target}g{notes_block}
+
+Create exactly 4 meals: breakfast, lunch, dinner, snack.
+Each meal must be practical and easy to cook at home.
+For youtube_query: write a short specific search query (e.g. "chicken stir fry quick recipe") that would find a good cooking video on YouTube.
+Total calories across all meals should be close to {calorie_target} kcal.
+
+Return ONLY valid JSON, no markdown, no explanation:
+{{
+  "total_calories": {calorie_target},
+  "notes": "Brief note about the plan",
+  "meals": [
+    {{
+      "id": "UUID_PLACEHOLDER",
+      "meal_type": "breakfast",
+      "name": "Scrambled Eggs on Toast",
+      "description": "2 scrambled eggs with 2 slices of wholegrain toast and half an avocado",
+      "cook_time_min": 10,
+      "calories": 420,
+      "protein_g": 18,
+      "carbs_g": 35,
+      "fat_g": 14,
+      "youtube_query": "scrambled eggs avocado toast healthy breakfast recipe",
+      "logged": false
+    }}
+  ]
+}}"""
+
+    client    = _get_text_client()
+    response  = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    raw       = response.text.strip()
+    raw       = re.sub(r"^```(?:json)?\n?", "", raw)
+    raw       = re.sub(r"\n?```$", "", raw)
+    plan_data = json.loads(raw)
+
+    for meal in plan_data.get("meals", []):
+        if not meal.get("id") or "PLACEHOLDER" in meal.get("id", ""):
+            meal["id"] = str(uuid.uuid4())
+        meal["logged"] = False
+
+    plan_data["date"] = date_str
+    plan_data["id"]   = str(uuid.uuid4())
+
+    _meal_plan_ref(user_id, date_str).set(plan_data)
+    return plan_data
+
+
+def log_meal_from_plan(user_id: str, meal_id: str, for_date: str = None) -> dict:
+    """
+    Log a meal from the meal plan into the meal log. Marks the meal as logged so it cannot be logged again.
+
+    Args:
+        user_id: The user's unique ID.
+        meal_id: The ID of the meal to log.
+        for_date: ISO date string (YYYY-MM-DD). Defaults to today.
+    """
+    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    ref      = _meal_plan_ref(user_id, date_str)
+    plan     = ref.get().to_dict()
+    if not plan:
+        return {"status": "error", "message": "Meal plan not found"}
+
+    meals = plan.get("meals", [])
+    meal  = next((m for m in meals if m.get("id") == meal_id), None)
+    if not meal:
+        return {"status": "error", "message": "Meal not found"}
+    if meal.get("logged"):
+        return {"status": "already_logged", "message": "Meal already logged"}
+
+    result = log_meal(
+        user_id, meal["name"], meal.get("calories", 0),
+        meal.get("protein_g", 0), meal.get("carbs_g", 0), meal.get("fat_g", 0)
+    )
+
+    for m in meals:
+        if m.get("id") == meal_id:
+            m["logged"] = True
+            break
+    ref.update({"meals": meals})
+
+    return {**result, "meal_name": meal["name"]}
+
+
+def generate_workout_plan(user_id: str, notes: str = "", for_date: str = None) -> dict:
+    """
+    Generate and save a personalised workout plan for a given date using Gemini.
     Reads the user's goal, body weight, and remaining calories from Firestore.
     Returns the saved plan dict.
 
     Args:
         user_id: The user's unique ID.
         notes: Optional free-text preferences from the user (e.g. "home workout, focus on legs").
+        for_date: ISO date string (YYYY-MM-DD). Defaults to today.
 
     Returns:
         The generated workout plan with exercises, sets/reps or duration, and calories per exercise.
@@ -966,8 +1096,8 @@ def generate_workout_plan(user_id: str, notes: str = "") -> dict:
 
     profile  = _user_ref(user_id).get().to_dict() or {}
     goal_doc = _goal_ref(user_id).get().to_dict() or {}
-    today    = datetime.now(timezone.utc).date().isoformat()
-    log      = _user_ref(user_id).collection("logs").document(today).get().to_dict() or {}
+    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    log      = _user_ref(user_id).collection("logs").document(date_str).get().to_dict() or {}
 
     calorie_target     = goal_doc.get("daily_calorie_target", profile.get("daily_calorie_target", 2000))
     weight_kg          = float(profile.get("weight_kg", 75.0))
@@ -1033,8 +1163,9 @@ Return ONLY valid JSON, no markdown, no explanation:
     for ex in plan_data.get("exercises", []):
         if not ex.get("id") or "PLACEHOLDER" in ex.get("id", ""):
             ex["id"] = str(uuid.uuid4())
+        ex.setdefault("logged", False)
 
-    plan_data["date"] = today
+    plan_data["date"] = date_str
     plan_data["id"]   = str(uuid.uuid4())
 
     return save_workout_plan(user_id, plan_data)
@@ -1059,20 +1190,32 @@ def toggle_exercise_complete(user_id: str, exercise_id: str, for_date: str = Non
 def log_exercise_from_plan(user_id: str, exercise_id: str, for_date: str = None, calories_override: int = None) -> dict:
     """Log a completed exercise from the workout plan into the workout log."""
     date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    ref      = _workout_plan_ref(user_id, date_str)
     plan     = get_workout_plan(user_id, date_str)
     if not plan:
         return {"status": "error", "message": "Plan not found"}
     exercise = next((e for e in plan.get("exercises", []) if e.get("id") == exercise_id), None)
     if not exercise:
         return {"status": "error", "message": "Exercise not found"}
+    if exercise.get("logged"):
+        return {"status": "already_logged", "message": "Exercise already logged"}
 
     calories = calories_override if calories_override is not None else exercise.get("calories_burned", 0)
     duration = exercise.get("duration_min") or 0
     if not duration and exercise.get("sets"):
-        # Rough estimate: 3 min per set for strength
         duration = max(10, exercise.get("sets", 3) * 3)
 
-    return log_workout(user_id, exercise["name"], duration or 30, calories)
+    result = log_workout(user_id, exercise["name"], duration or 30, calories)
+
+    # Mark as logged in the plan
+    exercises = plan.get("exercises", [])
+    for ex in exercises:
+        if ex.get("id") == exercise_id:
+            ex["logged"] = True
+            break
+    ref.update({"exercises": exercises})
+
+    return result
 
 
 # ──────────────────────────────────────────────────────────────────────────────

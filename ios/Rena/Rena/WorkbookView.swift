@@ -13,11 +13,14 @@ struct WorkbookView: View {
     @State private var activity: String = ""
     @State private var isLoading = false
     @State private var workoutPlan: PlannedWorkout? = nil
+    @State private var mealPlan: PlannedMealPlan? = nil
     @State private var isGeneratingPlan = false
     @State private var logSheet: PlannedExercise? = nil
     @State private var videoSheet: PlannedExercise? = nil
+    @State private var logMealSheet: PlannedMeal? = nil
 
-    private var isToday: Bool { Calendar.current.isDateInToday(selectedDate) }
+    private var isToday:    Bool { Calendar.current.isDateInToday(selectedDate) }
+    private var isTomorrow: Bool { Calendar.current.isDateInTomorrow(selectedDate) }
 
     private var displayMeals: [MealEntry]       { dayData?.mealsLogged    ?? (isToday ? appState.mealsLogged    : []) }
     private var displayWorkouts: [WorkoutEntry] { dayData?.workoutsLogged ?? (isToday ? appState.workoutsLogged : []) }
@@ -35,7 +38,8 @@ struct WorkbookView: View {
         return fmt.string(from: selectedDate)
     }
     private var dateLabel: String {
-        if isToday { return "Today" }
+        if isToday     { return "Today" }
+        if isTomorrow  { return "Tomorrow" }
         if Calendar.current.isDateInYesterday(selectedDate) { return "Yesterday" }
         let fmt = DateFormatter(); fmt.dateFormat = "EEE, MMM d"
         return fmt.string(from: selectedDate)
@@ -88,14 +92,14 @@ struct WorkbookView: View {
                         } label: {
                             ZStack {
                                 Circle()
-                                    .fill(isToday ? Color(hex: "B09880").opacity(0.08) : Color(hex: "E76F51").opacity(0.10))
+                                    .fill(isTomorrow ? Color(hex: "B09880").opacity(0.08) : Color(hex: "E76F51").opacity(0.10))
                                     .frame(width: 36, height: 36)
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(isToday ? Color(hex: "C4A882") : Color(hex: "E76F51"))
+                                    .foregroundColor(isTomorrow ? Color(hex: "C4A882") : Color(hex: "E76F51"))
                             }
                         }
-                        .disabled(isToday)
+                        .disabled(isTomorrow)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
@@ -118,12 +122,14 @@ struct WorkbookView: View {
                         DaySoFarCard(insight: insight, isLoading: isLoading, isToday: false)
                     }
 
-                    // ── Workout plan — today only ───────────────────
-                    if isToday {
+                    // ── Workout plan — today + tomorrow ─────────────
+                    if isToday || isTomorrow {
                         WorkoutPlanSection(
                             plan: workoutPlan,
                             isGenerating: isGeneratingPlan,
-                            onPlanWithRena:   { renaContext = "workout_plan";        showRena = true },
+                            isInteractive: isToday,
+                            sectionTitle: isTomorrow ? "TOMORROW'S WORKOUT" : "TODAY'S WORKOUT",
+                            onPlanWithRena:   { renaContext = isTomorrow ? "plan_tomorrow" : "workout_plan"; showRena = true },
                             onOpenRena:       { renaContext = "update_workout_plan"; showRena = true },
                             onRegenerate:     { Task { await generatePlan() } },
                             onDelete:         { Task { await deletePlan() } },
@@ -133,8 +139,21 @@ struct WorkbookView: View {
                         )
                     }
 
-                    // ── Plan Tomorrow — evening only ────────────────
-                    if isToday && isEvening {
+                    // ── Meal plan — today + tomorrow ─────────────────
+                    if isToday || isTomorrow {
+                        MealPlanSection(
+                            plan: mealPlan,
+                            isInteractive: isToday,
+                            sectionTitle: isTomorrow ? "TOMORROW'S MEALS" : "TODAY'S MEALS",
+                            onPlanWithRena: { renaContext = "plan_tomorrow"; showRena = true },
+                            onDelete:       { Task { await deleteMealPlanAction() } },
+                            onWatch:        { meal in logMealSheet = meal },
+                            onLog:          { meal in Task { await logMeal(meal) } }
+                        )
+                    }
+
+                    // ── Plan Tomorrow — always visible on today ──────
+                    if isToday {
                         WorkbookVoiceCard(
                             icon: "moon.stars.fill",
                             iconColor: Color(hex: "9B7EC8"),
@@ -168,6 +187,9 @@ struct WorkbookView: View {
             .sheet(item: $videoSheet) { ex in
                 ExerciseVideoSheet(exercise: ex)
             }
+            .sheet(item: $logMealSheet) { meal in
+                MealYouTubeSheet(meal: meal)
+            }
                 } // VStack
             } // ZStack
             .navigationBarHidden(true)
@@ -187,6 +209,23 @@ struct WorkbookView: View {
         await MainActor.run { workoutPlan = nil }
     }
 
+    private func deleteMealPlanAction() async {
+        try? await RenaAPI.shared.deleteMealPlan(userId: appState.userId, date: isTomorrow ? tomorrowDateString : nil)
+        await MainActor.run { mealPlan = nil }
+    }
+
+    private func logMeal(_ meal: PlannedMeal) async {
+        try? await RenaAPI.shared.logMealFromPlan(userId: appState.userId, mealId: meal.id, date: isToday ? nil : dateString)
+        let plan = try? await RenaAPI.shared.getMealPlan(userId: appState.userId, date: isToday ? nil : dateString)
+        await MainActor.run { mealPlan = plan }
+    }
+
+    private var tomorrowDateString: String {
+        let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd"
+        fmt.timeZone = TimeZone(identifier: "UTC")
+        return fmt.string(from: Calendar.current.date(byAdding: .day, value: 1, to: Date())!)
+    }
+
     private func toggleComplete(_ exercise: PlannedExercise) async {
         try? await RenaAPI.shared.toggleExerciseComplete(
             userId: appState.userId, exerciseId: exercise.id, date: dateString)
@@ -198,16 +237,19 @@ struct WorkbookView: View {
 
     private func loadDay() async {
         await MainActor.run { isLoading = true; insight = ""; activity = "" }
-        let date = isToday ? nil : dateString
-        async let progressTask = RenaAPI.shared.getProgress(userId: appState.userId, date: dateString)
-        async let insightTask  = RenaAPI.shared.getWorkbookInsight(userId: appState.userId, date: date)
-        async let planTask     = RenaAPI.shared.getWorkoutPlan(userId: appState.userId, date: isToday ? nil : dateString)
+        let date = (isToday || isTomorrow) ? nil : dateString
+        async let progressTask  = RenaAPI.shared.getProgress(userId: appState.userId, date: dateString)
+        async let insightTask   = RenaAPI.shared.getWorkbookInsight(userId: appState.userId, date: date)
+        async let planTask      = RenaAPI.shared.getWorkoutPlan(userId: appState.userId, date: dateString)
+        async let mealPlanTask  = RenaAPI.shared.getMealPlan(userId: appState.userId, date: dateString)
         let progress = try? await progressTask
         let result   = try? await insightTask
         let plan     = try? await planTask
+        let mPlan    = try? await mealPlanTask
         await MainActor.run {
             dayData     = progress
             workoutPlan = plan
+            mealPlan    = mPlan
             if let r = result { insight = r.insight; activity = r.activity }
             isLoading = false
         }
@@ -482,6 +524,8 @@ struct TodayActivityCard: View {
 struct WorkoutPlanSection: View {
     let plan: PlannedWorkout?
     let isGenerating: Bool
+    var isInteractive: Bool = true
+    var sectionTitle: String = "TODAY'S WORKOUT"
     let onPlanWithRena: () -> Void
     let onOpenRena: () -> Void
     let onRegenerate: () -> Void
@@ -505,7 +549,7 @@ struct WorkoutPlanSection: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(Color(hex: "2A9D8F"))
                 }
-                Text("TODAY'S WORKOUT")
+                Text(sectionTitle)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
@@ -562,6 +606,7 @@ struct WorkoutPlanSection: View {
                     ForEach(plan.exercises) { exercise in
                         ExerciseRow(
                             exercise: exercise,
+                            isInteractive: isInteractive,
                             onToggleComplete: { onToggleComplete(exercise) },
                             onPlay: { onPlay(exercise) },
                             onLog: { onLog(exercise) }
@@ -574,19 +619,19 @@ struct WorkoutPlanSection: View {
 
                 Divider().background(Color(hex: "F0E6DA"))
 
-                updateSection
+                if isInteractive { updateSection }
 
             } else {
                 // No plan yet
                 VStack(spacing: 12) {
-                    Text("Let Rena build a workout based on your recent activity and goals.")
+                    Text("No workout plan yet.")
                         .font(.system(size: 14))
                         .foregroundColor(Color(hex: "B09880"))
                         .fixedSize(horizontal: false, vertical: true)
 
                     renaActionButton(
                         label: "Plan with Rena",
-                        subtitle: "Rena will build today's workout for you",
+                        subtitle: isInteractive ? "Rena will build today's workout for you" : "Rena will plan tomorrow's workout",
                         action: onPlanWithRena
                     )
                 }
@@ -667,6 +712,7 @@ struct WorkoutPlanSection: View {
 
 struct ExerciseRow: View {
     let exercise: PlannedExercise
+    var isInteractive: Bool = true
     let onToggleComplete: () -> Void
     let onPlay: () -> Void
     let onLog: () -> Void
@@ -679,12 +725,14 @@ struct ExerciseRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Button(action: onToggleComplete) {
+            Button(action: isInteractive ? onToggleComplete : {}) {
                 Image(systemName: exercise.completed ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))
                     .foregroundColor(exercise.completed ? Color(hex: "2A9D8F") : Color(hex: "D4B8A0"))
+                    .opacity(isInteractive ? 1.0 : 0.4)
             }
             .buttonStyle(.plain)
+            .disabled(!isInteractive)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.name)
@@ -722,16 +770,19 @@ struct ExerciseRow: View {
             }
             .buttonStyle(.plain)
 
-            Button(action: onLog) {
-                Text("Log")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color(hex: "E76F51"))
-                    .cornerRadius(8)
+            if isInteractive {
+                Button(action: exercise.logged ? {} : onLog) {
+                    Text(exercise.logged ? "Logged" : "Log")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(exercise.logged ? Color(hex: "B09880") : .white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(exercise.logged ? Color(hex: "F0E6DA") : Color(hex: "E76F51"))
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .disabled(exercise.logged)
             }
-            .buttonStyle(.plain)
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())
@@ -807,5 +858,329 @@ struct WorkbookVoiceCard: View {
         .background(Color.white)
         .cornerRadius(18)
         .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+}
+
+// MARK: - Meal Plan Section
+
+struct MealPlanSection: View {
+    let plan: PlannedMealPlan?
+    var isInteractive: Bool = true
+    var sectionTitle: String = "TODAY'S MEALS"
+    let onPlanWithRena: () -> Void
+    let onDelete: () -> Void
+    let onWatch: (PlannedMeal) -> Void
+    let onLog: (PlannedMeal) -> Void
+
+    private let mealColor = Color(hex: "F4A261")
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+
+            // Header
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(mealColor.opacity(0.12))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(mealColor)
+                }
+                Text(sectionTitle)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color(hex: "B09880"))
+                    .kerning(1.0)
+                Spacer()
+                if plan != nil {
+                    Button(action: onDelete) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Color(hex: "B09880"))
+                    }
+                }
+            }
+
+            if let plan {
+                // Summary
+                HStack(spacing: 8) {
+                    Label("\(plan.meals.count) meals", systemImage: "list.bullet")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color(hex: "3D2B1F"))
+                    Spacer()
+                    Text("\(plan.totalCalories) kcal")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: "B09880"))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color(hex: "F0E6DA"))
+                        .cornerRadius(10)
+                }
+
+                if !plan.notes.isEmpty {
+                    Text(plan.notes)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(hex: "B09880"))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Divider().background(Color(hex: "F0E6DA"))
+
+                VStack(spacing: 0) {
+                    ForEach(plan.meals) { meal in
+                        MealRow(
+                            meal: meal,
+                            isInteractive: isInteractive,
+                            onWatch: { onWatch(meal) },
+                            onLog:   { onLog(meal) }
+                        )
+                        if meal.id != plan.meals.last?.id {
+                            Divider().background(Color(hex: "F5EEE8")).padding(.leading, 40)
+                        }
+                    }
+                }
+
+            } else {
+                VStack(spacing: 12) {
+                    Text("No meal plan yet.")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "B09880"))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    mealPlanButton
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(Color.white)
+        .cornerRadius(18)
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+    }
+
+    private var mealPlanButton: some View {
+        Button(action: onPlanWithRena) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ))
+                        .frame(width: 40, height: 40)
+                        .shadow(color: Color(hex: "E76F51").opacity(0.3), radius: 8, y: 3)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Plan with Rena")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color(hex: "3D2B1F"))
+                    Text(isInteractive ? "Rena will plan today's meals" : "Rena will plan tomorrow's meals")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: "B09880"))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(hex: "C4A882"))
+            }
+            .padding(14)
+            .background(Color(hex: "FFF8F2"))
+            .cornerRadius(14)
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: "F4C9A8"), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Meal Row
+
+struct MealRow: View {
+    let meal: PlannedMeal
+    var isInteractive: Bool = true
+    let onWatch: () -> Void
+    let onLog: () -> Void
+
+    private var mealTypeColor: Color {
+        switch meal.mealType {
+        case "breakfast": return Color(hex: "F4A261")
+        case "lunch":     return Color(hex: "2A9D8F")
+        case "dinner":    return Color(hex: "457B9D")
+        default:          return Color(hex: "9B7EC8")
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                // Meal type badge
+                Text(meal.mealType.capitalized)
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(mealTypeColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(mealTypeColor.opacity(0.12))
+                    .cornerRadius(6)
+
+                Text(meal.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(hex: "3D2B1F"))
+                    .lineLimit(1)
+
+                Spacer()
+
+                Text("\(meal.calories) kcal")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: "B09880"))
+            }
+
+            if !meal.description.isEmpty {
+                Text(meal.description)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(hex: "7A6055"))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
+            }
+
+            // Cook time + macros
+            HStack(spacing: 8) {
+                HStack(spacing: 3) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(hex: "B09880"))
+                    Text("\(meal.cookTimeMin) min")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: "B09880"))
+                }
+
+                Spacer()
+
+                macroPill(value: meal.proteinG, label: "P", color: Color(hex: "2A9D8F"))
+                macroPill(value: meal.carbsG,   label: "C", color: Color(hex: "E9C46A"))
+                macroPill(value: meal.fatG,     label: "F", color: Color(hex: "E76F51"))
+            }
+
+            // Action buttons
+            HStack(spacing: 8) {
+                // Watch button — always active
+                Button(action: onWatch) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 13))
+                        Text("Watch")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(Color(hex: "457B9D"))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(hex: "457B9D").opacity(0.10))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // Log button — today only, once per meal
+                if isInteractive {
+                    Button(action: meal.logged ? {} : onLog) {
+                        Text(meal.logged ? "Logged" : "Log")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(meal.logged ? Color(hex: "B09880") : .white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(meal.logged ? Color(hex: "F0E6DA") : Color(hex: "E76F51"))
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(meal.logged)
+                }
+            }
+        }
+        .padding(.vertical, 10)
+    }
+
+    private func macroPill(value: Int, label: String, color: Color) -> some View {
+        HStack(spacing: 2) {
+            Text(label)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(color)
+            Text("\(value)g")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Color(hex: "5C3D2E"))
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.10))
+        .cornerRadius(6)
+    }
+}
+
+// MARK: - Meal YouTube Sheet
+
+struct MealYouTubeSheet: View {
+    let meal: PlannedMeal
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Text(meal.name)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Color(hex: "3D2B1F"))
+                Spacer()
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(Color(hex: "C4A882"))
+                }
+            }
+            .padding(.top, 4)
+
+            VStack(spacing: 10) {
+                Image(systemName: "play.rectangle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(Color(hex: "FF0000").opacity(0.85))
+
+                Text("Watch on YouTube")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(Color(hex: "3D2B1F"))
+
+                Text("Find a cooking guide for \"\(meal.name)\"")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(hex: "B09880"))
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(24)
+            .background(Color(hex: "F7F3EE"))
+            .cornerRadius(16)
+
+            Button(action: openYouTube) {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.up.right.square.fill")
+                    Text("Open YouTube")
+                }
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color(hex: "FF0000").opacity(0.85))
+                .cornerRadius(14)
+            }
+
+            Spacer()
+        }
+        .padding(20)
+        .background(Color.white)
+    }
+
+    private func openYouTube() {
+        let encoded = meal.youtubeQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? meal.name
+        let urlStr = "https://www.youtube.com/results?search_query=\(encoded)"
+        if let url = URL(string: urlStr) {
+            UIApplication.shared.open(url)
+        }
+        dismiss()
     }
 }
