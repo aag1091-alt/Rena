@@ -12,6 +12,8 @@ struct ScanView: View {
     @State private var logState: LogState = .idle
     // Adjustable calories per item: keyed by item name
     @State private var adjustedCalories: [String: Int] = [:]
+    // Items the user has removed before logging
+    @State private var removedItemNames: Set<String> = []
 
     enum LogState { case idle, logging, logged }
 
@@ -82,24 +84,34 @@ struct ScanView: View {
                             .padding(.horizontal)
 
                         if let result = scanResult, !isScanning {
-                            let items = resolvedItems(from: result)
-                            if !items.isEmpty {
-                                // One card per food item
-                                ForEach(items) { item in
-                                    ScanItemCard(
-                                        item: item,
-                                        adjustedCalories: Binding(
-                                            get: { adjustedCalories[item.name] ?? item.calories },
-                                            set: { adjustedCalories[item.name] = $0 }
+                            let allItems = resolvedItems(from: result)
+                            let items = allItems.filter { !removedItemNames.contains($0.name) }
+                            if !allItems.isEmpty {
+                                if items.isEmpty {
+                                    // All removed
+                                    Text("All items removed. Take another photo to scan again.")
+                                        .font(.subheadline)
+                                        .foregroundColor(Color(hex: "7C5C45"))
+                                        .multilineTextAlignment(.center)
+                                        .padding()
+                                } else {
+                                    // One card per food item
+                                    ForEach(items) { item in
+                                        ScanItemCard(
+                                            item: item,
+                                            adjustedCalories: Binding(
+                                                get: { adjustedCalories[item.name] ?? item.calories },
+                                                set: { adjustedCalories[item.name] = $0 }
+                                            ),
+                                            onRemove: { removedItemNames.insert(item.name) }
                                         )
-                                    )
-                                    .padding(.horizontal)
+                                        .padding(.horizontal)
+                                    }
+
+                                    // Total + log button
+                                    logFooter(items: items)
+                                        .padding(.horizontal)
                                 }
-
-                                // Total + log button
-                                logFooter(items: items)
-                                    .padding(.horizontal)
-
                             } else {
                                 Text("Couldn't identify any food in this photo. Try a clearer shot.")
                                     .font(.subheadline)
@@ -199,7 +211,7 @@ struct ScanView: View {
                         if logState == .logging {
                             ProgressView().tint(.white).scaleEffect(0.8)
                         }
-                        Text(logState == .logging ? "Logging..." : "Add all to log")
+                        Text(logState == .logging ? "Logging..." : "Log \(items.count) item\(items.count == 1 ? "" : "s")")
                             .font(.subheadline.weight(.semibold))
                     }
                     .foregroundColor(.white)
@@ -243,6 +255,7 @@ struct ScanView: View {
         logState = .idle
         isScanning = false
         adjustedCalories = [:]
+        removedItemNames = []
     }
 
     private func loadAndScan(_ item: PhotosPickerItem?) async {
@@ -254,6 +267,7 @@ struct ScanView: View {
             scanResult = nil; scanFailed = false
             logState = .idle
             adjustedCalories = [:]
+            removedItemNames = []
         }
         await scanCurrentImage()
     }
@@ -302,6 +316,7 @@ struct ScanView: View {
 struct ScanItemCard: View {
     let item: ScanItem
     @Binding var adjustedCalories: Int
+    var onRemove: (() -> Void)? = nil
 
     private var sliderMin: Double { 50 }
     private var sliderMax: Double { Double(max(500, item.calories * 3)) }
@@ -325,11 +340,26 @@ struct ScanItemCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
 
-            // Name + calories + estimated grams
-            VStack(alignment: .leading, spacing: 4) {
+            // Name row with remove button
+            HStack(alignment: .top) {
                 Text(item.name)
                     .font(.headline)
                     .foregroundColor(Color(hex: "3D2B1F"))
+                Spacer()
+                if let onRemove {
+                    Button(action: onRemove) {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(Color(hex: "B09880"))
+                            .padding(6)
+                            .background(Color(hex: "F0EBE5"))
+                            .clipShape(Circle())
+                    }
+                }
+            }
+
+            // Calories + estimated grams
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text("\(adjustedCalories) kcal")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
