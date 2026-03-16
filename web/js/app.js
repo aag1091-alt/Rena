@@ -921,18 +921,18 @@ function renderPlanDay(workout, meal, note, date) {
 function renderDayPlanCard(note, interactive, date) {
   return `<div class="day-plan-card">
     <div class="day-plan-header">
-      <div class="day-plan-icon">${note ? "📝" : "🌙"}</div>
+      <div class="day-plan-icon">📝</div>
       <div>
-        <div class="day-plan-title">${note ? "Plan, Summarised by Rena" : "Plan"}</div>
-        <div class="day-plan-sub">${note ? "Tap below to update with Rena" : "Talk to Rena to set your focus"}</div>
+        <div class="day-plan-title">Notes</div>
+        <div class="day-plan-sub">${note ? "Your note for this day" : "Remind yourself of anything — drink water, eat light, go for a walk…"}</div>
       </div>
     </div>
     ${note ? `<div class="day-plan-note">${note}</div>` : ""}
-    ${interactive ? `<button class="rena-action-btn" data-rena-ctx="plan:${date}">
+    ${interactive ? `<button class="rena-action-btn" data-rena-ctx="notes:${date}">
       <div class="rena-action-circle">✦</div>
       <div class="rena-action-text">
-        <div class="rena-action-label">${note ? "Update Plan" : "Plan with Rena"}</div>
-        <div class="rena-action-sub">${note ? "Chat with Rena to refine your plan" : "Set your focus for the day"}</div>
+        <div class="rena-action-label">${note ? "Update Note" : "Add a Note"}</div>
+        <div class="rena-action-sub">${note ? "Tell Rena what to update" : "Tell Rena what to remember for you"}</div>
       </div>
       <span class="rena-action-chevron">›</span>
     </button>` : ""}
@@ -1304,13 +1304,13 @@ function openVoiceOverlay(pendingCtx) {
   const hints = app.tab === "plan" ? [
     { icon: "🏋", label: "Plan my workout", color: "#2A9D8F", ctx: `workout_plan:${planDate}` },
     { icon: "🍴", label: "Plan my meals",   color: "#F4A261", ctx: `meal_plan:${planDate}` },
-    { icon: "🌙", label: "Plan tomorrow",   color: "#9B7EC8", ctx: `plan:${planDate}` },
-    { icon: "🍴", label: "Log food",        color: "#E76F51", ctx: "home" },
+    { icon: "📝", label: "Add a note",      color: "#9B7EC8", ctx: `notes:${planDate}` },
+    { icon: "🍴", label: "Log food",        color: "#E76F51", ctx: "log_food" },
   ] : (HINTS[app.tab] || HINTS.home);
   const defCtx = {
     home:    "home",
     history: "history",
-    plan:    `update_workout_plan:${planDate}`,
+    plan:    `notes:${planDate}`,
     scan:    "scan",
   }[app.tab] || "home";
   const ctx = pendingCtx || defCtx;

@@ -117,6 +117,16 @@ PROMPTS = {
         "Always end by calling save_tomorrow_plan_note(user_id, summary=<1-2 sentences of what was discussed>, for_date=[plan_date]). "
         "Summarise any generated plans warmly in 3-4 sentences — workout first, then meals."
     ),
+    "notes": (
+        "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
+        "If [CURRENT_NOTE] is in this message, open by reading it back in one sentence: "
+        "'Your note for {day_label} says: <note>. Want to change anything?' "
+        "Otherwise ask: 'What would you like to note for {day_label}?' "
+        "They might say anything — drink more water, eat under 1800 calories, go for a walk, avoid sugar, call someone. "
+        "IMPORTANT: Do NOT call generate_workout_plan or generate_meal_plan — this is notes only. "
+        "Once they've responded, call save_tomorrow_plan_note with for_date=[note_date] and their note as the summary. "
+        "Confirm in one friendly sentence. Keep it to 1-2 turns max."
+    ),
     "scan": (
         "SPEAK OUT LOUD NOW: Say one short encouraging line to {name} — "
         "e.g. 'Go ahead, take a photo of your food and I'll log it for you!' "

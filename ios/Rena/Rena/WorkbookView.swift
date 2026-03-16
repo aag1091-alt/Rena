@@ -95,7 +95,7 @@ struct WorkbookView: View {
                             note: planNote,
                             isReadOnly: isPast,
                             onDelete: planNote.isEmpty ? nil : { Task { await deletePlanNote() } },
-                            onTap: { renaContext = "plan:\(dateString)"; showRena = true }
+                            onTap: { renaContext = "notes:\(dateString)"; showRena = true }
                         )
                     }
 
@@ -554,15 +554,15 @@ struct DayPlanCard: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(accent.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: note.isEmpty ? "moon.stars.fill" : "text.quote")
+                    Image(systemName: "note.text")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(accent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(note.isEmpty ? "Plan" : "Plan, Summarised by Rena")
+                    Text("Notes")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(Color(hex: "3D2B1F"))
-                    Text(note.isEmpty ? "Talk to Rena to set your focus" : "Tap below to update with Rena")
+                    Text(note.isEmpty ? "Remind yourself — drink water, eat light, go for a walk…" : "Your note for this day")
                         .font(.system(size: 12))
                         .foregroundColor(Color(hex: "B09880"))
                 }
@@ -604,10 +604,10 @@ struct DayPlanCard: View {
                                 .foregroundColor(.white)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(note.isEmpty ? "Plan with Rena" : "Update Plan")
+                            Text(note.isEmpty ? "Add a Note" : "Update Note")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(Color(hex: "3D2B1F"))
-                            Text(note.isEmpty ? "Set your focus for the day" : "Chat with Rena to refine your plan")
+                            Text(note.isEmpty ? "Tell Rena what to remember for you" : "Tell Rena what to update")
                                 .font(.system(size: 11))
                                 .foregroundColor(Color(hex: "B09880"))
                         }
