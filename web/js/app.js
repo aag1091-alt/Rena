@@ -1180,7 +1180,7 @@ function renderScanResult(result) {
       <span class="scan-footer-total-label">Total</span>
       <span class="scan-footer-total-kcal" id="scan-total-kcal">${totalAdjusted()} kcal</span>
     </div>
-    <button class="btn-log-all" id="btn-log-all" onclick="logAllItems()">Add all to log</button>
+    <button class="btn-log-all" id="btn-log-all" onclick="logAllItems()">Log ${items.length} item${items.length !== 1 ? "s" : ""}</button>
   </div>`;
 
   document.getElementById("scan-result").innerHTML = html;
@@ -1204,8 +1204,11 @@ function renderScanResult(result) {
 function renderScanItemCard(item, i) {
   const min = 50;
   const max = Math.max(500, item.calories * 3);
-  return `<div class="scan-item-card">
-    <div class="scan-item-name">${item.name}</div>
+  return `<div class="scan-item-card" id="scan-item-card-${i}">
+    <div class="scan-item-header">
+      <div class="scan-item-name">${item.name}</div>
+      <button class="scan-item-remove" onclick="removeScanItem(${i})" title="Remove">✕</button>
+    </div>
     <div class="scan-item-kcal-row">
       <span class="scan-item-kcal" id="scan-kcal-${i}">${item.calories} kcal</span>
       ${item.weight_g ? `<span class="scan-item-grams">· ~${item.weight_g}g</span>` : ""}
@@ -1223,6 +1226,43 @@ function renderScanItemCard(item, i) {
       ${macroTag(item.fat_g,     "Fat",     "#F4A261")}
     </div>
   </div>`;
+}
+
+function removeScanItem(i) {
+  const item = app.scanItems[i];
+  if (!item) return;
+  delete app.scanAdjusted[item.name];
+  app.scanItems.splice(i, 1);
+  // Re-render result area preserving the preview/close button
+  const resultEl = document.getElementById("scan-result");
+  if (!resultEl) return;
+  if (!app.scanItems.length) {
+    resultEl.innerHTML = `<div class="scan-empty-removed">All items removed. Take another photo to scan again.</div>`;
+    return;
+  }
+  let html = app.scanItems.map((it, idx) => renderScanItemCard(it, idx)).join("");
+  html += `<div class="scan-footer" id="scan-footer">
+    <div class="scan-footer-total">
+      <span class="scan-footer-total-label">Total</span>
+      <span class="scan-footer-total-kcal" id="scan-total-kcal">${totalAdjusted()} kcal</span>
+    </div>
+    <button class="btn-log-all" id="btn-log-all" onclick="logAllItems()">Log ${app.scanItems.length} item${app.scanItems.length !== 1 ? "s" : ""}</button>
+  </div>`;
+  resultEl.innerHTML = html;
+  // Re-attach slider listeners
+  app.scanItems.forEach((item, idx) => {
+    const slider = document.getElementById(`scan-slider-${idx}`);
+    const kcalEl = document.getElementById(`scan-kcal-${idx}`);
+    if (slider) {
+      slider.addEventListener("input", () => {
+        const val = Math.round(parseInt(slider.value) / 10) * 10;
+        app.scanAdjusted[item.name] = val;
+        if (kcalEl) kcalEl.textContent = `${val} kcal`;
+        const totalEl = document.getElementById("scan-total-kcal");
+        if (totalEl) totalEl.textContent = `${totalAdjusted()} kcal`;
+      });
+    }
+  });
 }
 
 function macroTag(val, label, color) {
@@ -1515,4 +1555,5 @@ function signOut() {
 // expose for inline handlers
 window.resetScan = resetScan;
 window.logAllItems = logAllItems;
+window.removeScanItem = removeScanItem;
 window.switchVoiceCtx = switchVoiceCtx;

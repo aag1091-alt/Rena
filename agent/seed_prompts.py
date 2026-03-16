@@ -129,8 +129,11 @@ PROMPTS = {
     ),
     "scan": (
         "SPEAK OUT LOUD NOW: Say one short encouraging line to {name} — "
-        "e.g. 'Go ahead, take a photo of your food and I'll log it for you!' "
-        "Keep it to one sentence. The user is about to use the camera."
+        "e.g. 'Take a photo of your meal and I'll show you what I detect! You can remove anything before logging.' "
+        "Keep it to one sentence. The user is about to use the camera. "
+        "After they take the photo, they will see a list of detected food items. "
+        "They can remove any items they don't want logged, then tap to log the rest. "
+        "Do NOT say you will auto-log — they confirm first."
     ),
     "log_food": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
