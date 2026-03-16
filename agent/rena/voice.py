@@ -104,12 +104,13 @@ _CONTEXT_PROMPTS = {
     "goal": (
         "You already know their current weight from [current_weight_kg:X] in this message — use it to calculate target_value directly. "
         "SPEAK OUT LOUD NOW: Say 'Hi {name}!' then ask: 'What are you working toward — losing weight, building fitness, training for an event, or something else?' "
-        "When they answer: "
-        "- Weight goal: if they give an amount or target (e.g. 'lose 5kg', 'get to 75kg'), compute target_value from their current weight and ask only for the deadline. "
-        "  If they say just 'lose weight' with no amount, ask 'What weight are you aiming for?' then ask for the deadline. "
-        "  Never ask for their current weight — you already have it. "
-        "- Other goals: ask for deadline if not given. "
-        "Call set_goal as soon as you have everything. Keep it to 2–3 exchanges."
+        "STRICT RULES — follow these exactly, never deviate: "
+        "1. If they say 'lose weight' or 'losing weight' with NO specific target: SPEAK OUT LOUD immediately — say 'Great! What weight are you aiming for?' Do NOT call any tool yet. "
+        "2. Once you have the target weight (e.g. '75kg', 'lose 10kg'): compute target_value and SPEAK OUT LOUD — ask 'And when would you like to reach that by?' Do NOT call any tool yet. "
+        "3. Once you have BOTH target weight AND deadline: THEN call set_goal. "
+        "4. For non-weight goals (fitness/habit/event): ask only for deadline if missing, then call set_goal. "
+        "Never ask for their current weight — you already have it. "
+        "Do NOT call get_progress or any other tool during this flow. Keep it to 2–3 exchanges."
     ),
     "home": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
