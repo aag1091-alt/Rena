@@ -6,27 +6,9 @@ AI-powered health companion. Log meals, track workouts, plan your days, and stay
 
 ## Ways to experience the app
 
-### Option 1 — Web App (easiest, no install required)
+### Option 1 — Xcode Simulator ★ Recommended for judging
 
-A full Progressive Web App (PWA) is live and ready to use — no Xcode, no install needed.
-
-**URL:** https://rena-490107-f0f28.web.app
-
-Features available in the web app:
-- Voice conversation with Rena (log meals, workouts, weight)
-- Home dashboard — daily progress, food log, workout log
-- History view — scroll back through past days
-- Plan / Workbook — view and manage workout and meal plans, with delete buttons
-- Food scan — upload a photo to identify food and estimate calories
-- Settings — profile, log out, developer seed/reset tools
-
-> **Voice:** Tap the Rena orb and allow microphone access when prompted. Works in Chrome and Safari on desktop and mobile.
-
----
-
-### Option 2 — Xcode Simulator (recommended for full native experience)
-
-The full app runs on the iOS Simulator in Xcode. Voice, camera, and all features work.
+The primary client is the native iOS app — this is the intended experience and the best way to evaluate the product. Voice quality, animations, camera, and the exercise video player are all significantly better than the web companion.
 
 **Requirements**
 - macOS 13 or later
@@ -57,7 +39,7 @@ The full app runs on the iOS Simulator in Xcode. Voice, camera, and all features
 
 ---
 
-### Option 3 — Physical iPhone
+### Option 2 — Physical iPhone
 
 If you have an Apple Developer account:
 
@@ -70,37 +52,38 @@ This gives the full native experience including real camera and microphone.
 
 ---
 
+### Option 3 — Web App (quick preview, no install)
+
+A PWA companion is live at https://rena-490107-f0f28.web.app — it mirrors the iOS app's screens and was built rapidly as a secondary access point. **It has not been thoroughly tested** and is provided for convenience rather than as a primary evaluation surface. Use the iOS app for judging.
+
+Features available: voice, home dashboard, history, plan/workbook, food scan, settings.
+
+> **Voice:** Tap the Rena orb and allow microphone access. Works in Chrome and Safari.
+
+---
+
 ### Option 4 — REST API (no client required)
 
-The backend is live and fully accessible. You can hit any endpoint directly:
+The backend is live and fully accessible:
 
 ```
 Base URL: https://rena-agent-879054433521.us-central1.run.app
 ```
 
-Key endpoints to explore:
+Key endpoints:
 ```bash
-# Seed 7 days of test data for a user
-POST /dev/seed/{user_id}
-
-# Get today's progress
-GET /progress/{user_id}
-
-# Get a workout plan
-GET /workout-plan/{user_id}
-
-# Get a meal plan
-GET /meal-plan/{user_id}
-
-# Get workbook insight
-GET /workbook/insight/{user_id}
+POST /dev/seed/{user_id}       # Seed 7 days of test data
+GET  /progress/{user_id}       # Today's progress
+GET  /workout-plan/{user_id}   # Workout plan
+GET  /meal-plan/{user_id}      # Meal plan
+GET  /workbook/insight/{user_id}  # Workbook insight
 ```
 
 ---
 
 ## AI-generated exercise videos
 
-Rena includes AI-generated video demonstrations for a selection of exercises. These videos are pre-generated and served directly from Google Cloud Storage — no cost is incurred on playback.
+Rena includes AI-generated video demonstrations for a selection of exercises, served directly from Google Cloud Storage.
 
 **Exercises with AI-generated videos:**
 
@@ -115,15 +98,15 @@ For all other exercises the ▶ button opens a YouTube search instead.
 
 ### How to test the video feature
 
-1. Open the web app at https://rena-490107-f0f28.web.app (or run the iOS app)
+1. Open the iOS app (or web app at https://rena-490107-f0f28.web.app)
 2. Go to the **Plan** tab
 3. Tap the Rena orb and say: *"Add a plank to my workout plan for today"*
-4. After Rena responds, the Plan tab will refresh and show the workout
-5. Tap the **▶** button next to Plank — the AI-generated video will open directly
-6. Try adding **Bodyweight Squats**, **Glute Bridges**, or **Walking Lunges** to see their videos too
-7. Any other exercise (e.g. "Add push-ups") will show a YouTube search link instead
+4. After Rena responds, the Plan tab refreshes and shows the workout
+5. Tap the **▶** button next to Plank — the AI-generated video opens directly
+6. Try **Bodyweight Squats**, **Glute Bridges**, or **Walking Lunges** for their videos too
+7. Any other exercise (e.g. "Add push-ups") opens a YouTube search instead
 
-This behaviour is identical on both the **web app** and **iOS app**.
+This behaviour is identical on both iOS and the web app.
 
 ---
 
@@ -139,17 +122,17 @@ rena/
 │   │   └── tools.py    # All agent tools (log, plan, scan, etc.)
 │   └── seed_prompts.py # Push voice context prompts to Firestore
 │
-├── ios/Rena/       # SwiftUI iOS app
+├── ios/Rena/       # SwiftUI iOS app (primary client)
 │   └── Rena/
 │       ├── VoiceManager.swift   # WebSocket + AVAudioEngine
 │       ├── RenaButton.swift     # Voice overlay + tab bar
 │       └── ...
 │
-├── web/            # Progressive Web App (PWA)
+├── web/            # PWA companion (secondary)
 │   ├── index.html
 │   ├── js/         # app.js, api.js, voice.js, config.js
 │   ├── css/        # app.css
-│   └── sw.js       # Service worker (offline + cache)
+│   └── sw.js       # Service worker
 │
 └── architecture.md  # Full system architecture
 ```
@@ -163,8 +146,7 @@ cd agent
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Copy and fill in your credentials
-cp .env.example .env
+cp .env.example .env  # fill in credentials
 
 uvicorn main:app --reload --port 8080
 ```
