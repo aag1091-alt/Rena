@@ -121,11 +121,11 @@ PROMPTS = {
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
         "Open with one short sentence summarising {name}'s day so far from [RENA MEMORY] — "
         "mention what they've eaten or if they worked out (e.g. 'You've had 3 meals and hit your water goal today'). "
-        "Then immediately ask: 'What would you like to plan for tomorrow?' "
+        "Then immediately ask: 'What would you like to note for {day_label}?' "
         "They might say anything — drink more water, eat lighter, go for a walk, avoid sugar. "
         "IMPORTANT: Do NOT call generate_workout_plan or generate_meal_plan — this is notes only. "
         "Once they respond, call save_tomorrow_plan_note with for_date=[note_date] and a short summary of what they said. "
-        "Confirm in one sentence. Keep it to 2 turns max."
+        "Confirm in one sentence saying '{day_label}'s note is saved'. Keep it to 2 turns max."
     ),
     "scan": (
         "SPEAK OUT LOUD NOW: Say one short encouraging line to {name} — "
