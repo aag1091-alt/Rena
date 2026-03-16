@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WorkbookView: View {
     @Binding var showRena: Bool
+    @Binding var renaContext: String?
 
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var voice: VoiceManager
@@ -11,8 +12,6 @@ struct WorkbookView: View {
     @State private var insight: String = ""
     @State private var activity: String = ""
     @State private var isLoading = false
-    @State private var activeContext: String? = nil
-    @State private var isVoiceConnected = false
     @State private var workoutPlan: PlannedWorkout? = nil
     @State private var isGeneratingPlan = false
     @State private var logSheet: PlannedExercise? = nil
@@ -124,10 +123,8 @@ struct WorkbookView: View {
                         WorkoutPlanSection(
                             plan: workoutPlan,
                             isGenerating: isGeneratingPlan,
-                            voiceState: voice.state,
-                            isPlanningActive: activeContext == "workout_plan" && isVoiceConnected,
-                            onPlanWithRena:   { toggleVoice(context: "workout_plan") },
-                            onOpenRena:       { showRena = true },
+                            onPlanWithRena:   { renaContext = "workout_plan";        showRena = true },
+                            onOpenRena:       { renaContext = "update_workout_plan"; showRena = true },
                             onRegenerate:     { Task { await generatePlan() } },
                             onToggleComplete: { ex in Task { await toggleComplete(ex) } },
                             onPlay:           { ex in videoSheet = ex },
@@ -142,10 +139,7 @@ struct WorkbookView: View {
                             iconColor: Color(hex: "9B7EC8"),
                             title: "Plan Tomorrow",
                             subtitle: "Review today with Rena and set tomorrow's targets",
-                            buttonLabel: "Plan with Rena",
-                            isActive: activeContext == "plan_tomorrow" && isVoiceConnected,
-                            voiceState: activeContext == "plan_tomorrow" ? voice.state : .idle,
-                            onTap: { toggleVoice(context: "plan_tomorrow") }
+                            onTap: { renaContext = "plan_tomorrow"; showRena = true }
                         )
                     }
 
@@ -166,7 +160,6 @@ struct WorkbookView: View {
             .scrollBounceBehavior(.always)
             .refreshable { await loadDay() }
             .onAppear { Task { await loadDay() } }
-            .onDisappear { if isVoiceConnected { endVoice() } }
             .onChange(of: voice.turnCount) { if isToday { Task { await loadDay() } } }
             .sheet(item: $logSheet) { ex in
                 LogExerciseSheet(exercise: ex, userId: appState.userId, dateString: dateString)
@@ -178,26 +171,6 @@ struct WorkbookView: View {
             } // ZStack
             .navigationBarHidden(true)
         }
-    }
-
-    // MARK: - Voice
-
-    private func toggleVoice(context: String) {
-        if isVoiceConnected && activeContext == context {
-            endVoice()
-        } else {
-            if isVoiceConnected { endVoice() }
-            activeContext = context
-            let name = appState.name.components(separatedBy: " ").first ?? appState.name
-            voice.connect(userId: appState.userId, context: context, name: name)
-            isVoiceConnected = true
-        }
-    }
-
-    private func endVoice() {
-        voice.disconnect()
-        isVoiceConnected = false
-        activeContext = nil
     }
 
     // MARK: - Workout plan
@@ -503,8 +476,6 @@ struct TodayActivityCard: View {
 struct WorkoutPlanSection: View {
     let plan: PlannedWorkout?
     let isGenerating: Bool
-    let voiceState: VoiceState
-    let isPlanningActive: Bool
     let onPlanWithRena: () -> Void
     let onOpenRena: () -> Void
     let onRegenerate: () -> Void
@@ -532,7 +503,7 @@ struct WorkoutPlanSection: View {
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
                 Spacer()
-                if plan != nil && !isPlanningActive {
+                if plan != nil {
                     Button(action: onRegenerate) {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 13))
@@ -549,9 +520,6 @@ struct WorkoutPlanSection: View {
                         .foregroundColor(Color(hex: "B09880"))
                 }
                 .padding(.vertical, 4)
-
-            } else if isPlanningActive {
-                voiceActiveView(label: voiceLabel, color: Color(hex: "2A9D8F"), onEnd: onPlanWithRena)
 
             } else if let plan {
                 // Plan meta
@@ -602,22 +570,11 @@ struct WorkoutPlanSection: View {
                         .foregroundColor(Color(hex: "B09880"))
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Button(action: onPlanWithRena) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "waveform").font(.system(size: 13))
-                            Text("Plan with Rena").font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
-                        .background(
-                            LinearGradient(
-                                colors: [Color(hex: "2A9D8F"), Color(hex: "3ABCAD")],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                        )
-                        .cornerRadius(12)
-                    }
+                    renaActionButton(
+                        label: "Plan with Rena",
+                        subtitle: "Rena will build today's workout for you",
+                        action: onPlanWithRena
+                    )
                 }
             }
         }
@@ -647,48 +604,48 @@ struct WorkoutPlanSection: View {
                 }
             }
 
-            Button(action: onOpenRena) {
-                HStack(spacing: 8) {
-                    Image(systemName: "waveform").font(.system(size: 13))
-                    Text("Update with Rena").font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundColor(Color(hex: "9B7EC8"))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color(hex: "9B7EC8").opacity(0.10))
-                .cornerRadius(12)
-            }
+            renaActionButton(
+                label: "Update with Rena",
+                subtitle: "Swap exercises, adjust intensity, or change focus",
+                action: onOpenRena
+            )
         }
     }
 
-    private func voiceActiveView(label: String, color: Color, onEnd: @escaping () -> Void) -> some View {
-        Button(action: onEnd) {
-            HStack(spacing: 8) {
-                Circle().fill(color).frame(width: 8, height: 8)
-                Text(label).font(.system(size: 14, weight: .semibold))
+    private func renaActionButton(label: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ))
+                        .frame(width: 40, height: 40)
+                        .shadow(color: Color(hex: "E76F51").opacity(0.3), radius: 8, y: 3)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color(hex: "3D2B1F"))
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: "B09880"))
+                }
                 Spacer()
-                Text("Tap to end")
-                    .font(.system(size: 12))
-                    .foregroundColor(color.opacity(0.7))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(hex: "C4A882"))
             }
-            .foregroundColor(color)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 14)
-            .background(color.opacity(0.10))
-            .cornerRadius(12)
+            .padding(14)
+            .background(Color(hex: "FFF8F2"))
+            .cornerRadius(14)
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: "F4C9A8"), lineWidth: 1))
         }
         .buttonStyle(.plain)
-    }
-
-    private var voiceLabel: String {
-        switch voiceState {
-        case .connecting: return "Connecting…"
-        case .listening:  return "Listening…"
-        case .thinking:   return "Thinking…"
-        case .speaking:   return "Rena is speaking…"
-        case .error(let m): return "Error: \(m)"
-        default: return "Planning your workout…"
-        }
     }
 }
 
@@ -774,21 +731,7 @@ struct WorkbookVoiceCard: View {
     let iconColor: Color
     let title: String
     let subtitle: String
-    let buttonLabel: String
-    let isActive: Bool
-    let voiceState: VoiceState
     let onTap: () -> Void
-
-    private var stateLabel: String {
-        switch voiceState {
-        case .connecting:   return "Connecting…"
-        case .listening:    return "Listening…"
-        case .thinking:     return "Thinking…"
-        case .speaking:     return "Rena is speaking…"
-        case .error(let m): return "Error: \(m)"
-        default:            return isActive ? "Tap to end" : buttonLabel
-        }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -813,21 +756,38 @@ struct WorkbookVoiceCard: View {
             }
 
             Button(action: onTap) {
-                HStack(spacing: 8) {
-                    if isActive {
-                        Circle().fill(iconColor).frame(width: 8, height: 8)
-                    } else {
-                        Image(systemName: "waveform").font(.system(size: 13))
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(
+                                colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            ))
+                            .frame(width: 40, height: 40)
+                            .shadow(color: Color(hex: "E76F51").opacity(0.3), radius: 8, y: 3)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
                     }
-                    Text(stateLabel).font(.system(size: 14, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Plan with Rena")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Color(hex: "3D2B1F"))
+                        Text("Rena will review today and plan tomorrow")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(hex: "B09880"))
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(hex: "C4A882"))
                 }
-                .foregroundColor(isActive ? .white : iconColor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(isActive ? iconColor : iconColor.opacity(0.10))
-                .cornerRadius(12)
-                .animation(.easeInOut(duration: 0.2), value: isActive)
+                .padding(14)
+                .background(Color(hex: "FFF8F2"))
+                .cornerRadius(14)
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: "F4C9A8"), lineWidth: 1))
             }
+            .buttonStyle(.plain)
         }
         .padding(18)
         .background(Color.white)

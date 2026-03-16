@@ -96,6 +96,7 @@ struct RenaHintChip: View {
 struct RenaOverlay: View {
     let selectedTab: Int
     @Binding var isShowing: Bool
+    var pendingContext: String? = nil   // set by callers that want a specific context
 
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var voice: VoiceManager
@@ -104,6 +105,7 @@ struct RenaOverlay: View {
     @State private var cardVisible = false
 
     private var hints: [RenaHint] { renaHints(for: selectedTab) }
+    private var openingContext: String { pendingContext ?? voiceContext(for: selectedTab) }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -223,7 +225,7 @@ struct RenaOverlay: View {
             // Auto-start voice as soon as overlay opens
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                 let name = appState.name.components(separatedBy: " ").first ?? appState.name
-                voice.connect(userId: appState.userId, context: voiceContext(for: selectedTab), name: name)
+                voice.connect(userId: appState.userId, context: openingContext, name: name)
                 isVoiceActive = true
             }
         }
@@ -257,7 +259,7 @@ struct RenaOverlay: View {
             isVoiceActive = false
         } else {
             let name = appState.name.components(separatedBy: " ").first ?? appState.name
-            voice.connect(userId: appState.userId, context: voiceContext(for: selectedTab), name: name)
+            voice.connect(userId: appState.userId, context: openingContext, name: name)
             isVoiceActive = true
         }
     }

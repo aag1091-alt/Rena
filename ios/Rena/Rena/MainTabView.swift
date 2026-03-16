@@ -5,6 +5,7 @@ struct MainTabView: View {
 
     @State private var selectedTab = 0
     @State private var showRena = false
+    @State private var renaContext: String? = nil
     @State private var devTapCount = 0
 
     var body: some View {
@@ -14,7 +15,7 @@ ZStack(alignment: .bottom) {
             TabView(selection: $selectedTab) {
                 HomeView().tag(0)
                 DataView().tag(1)
-                WorkbookView(showRena: $showRena).tag(2)
+                WorkbookView(showRena: $showRena, renaContext: $renaContext).tag(2)
                 ScanView().tag(3)
                 devView.tag(4)
             }
@@ -28,9 +29,10 @@ ZStack(alignment: .bottom) {
 
             // ── Rena overlay ──────────────────────────────────────
             if showRena {
-                RenaOverlay(selectedTab: selectedTab, isShowing: $showRena)
+                RenaOverlay(selectedTab: selectedTab, isShowing: $showRena, pendingContext: renaContext)
                     .transition(.opacity)
                     .zIndex(1)
+                    .onChange(of: showRena) { if !showRena { renaContext = nil } }
             }
 
             // ── Custom tab bar ────────────────────────────────────
