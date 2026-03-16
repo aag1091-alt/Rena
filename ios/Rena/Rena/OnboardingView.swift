@@ -326,7 +326,8 @@ struct OnboardingView: View {
                     age: Int(age),
                     heightCm: h,
                     weightKg: w,
-                    activityLevel: activity.rawValue
+                    activityLevel: activity.rawValue,
+                    timezone: TimeZone.current.identifier
                 )
                 appState.completeOnboarding(name: result.name, caloriesTarget: result.dailyCalorieTarget)
             } catch {

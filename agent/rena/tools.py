@@ -76,9 +76,45 @@ def _goal_ref(user_id: str):
     return db.collection("goals").document(user_id)
 
 
+# Per-user timezone cache (populated on first log, cleared on reset/re-onboard).
+_tz_cache: dict[str, str] = {}
+
+
+def _get_user_timezone(user_id: str) -> str:
+    """Return the user's IANA timezone string. Defaults to 'UTC' if not set."""
+    if user_id not in _tz_cache:
+        try:
+            profile = _user_ref(user_id).get().to_dict() or {}
+            _tz_cache[user_id] = profile.get("timezone", "UTC")
+        except Exception:
+            _tz_cache[user_id] = "UTC"
+    return _tz_cache[user_id]
+
+
+def _local_today(user_id: str) -> str:
+    """Return the user's current local date as YYYY-MM-DD."""
+    import zoneinfo
+    tz_str = _get_user_timezone(user_id)
+    try:
+        tz = zoneinfo.ZoneInfo(tz_str)
+    except Exception:
+        tz = timezone.utc
+    return datetime.now(tz).date().isoformat()
+
+
+def _local_today_date(user_id: str) -> date:
+    """Return the user's current local date as a date object (for arithmetic)."""
+    import zoneinfo
+    tz_str = _get_user_timezone(user_id)
+    try:
+        tz = zoneinfo.ZoneInfo(tz_str)
+    except Exception:
+        tz = timezone.utc
+    return datetime.now(tz).date()
+
+
 def _today_log_ref(user_id: str):
-    today = datetime.now(timezone.utc).date().isoformat()
-    return _user_ref(user_id).collection("logs").document(today)
+    return _user_ref(user_id).collection("logs").document(_local_today(user_id))
 
 
 _ACTIVITY_MULTIPLIERS = {
@@ -97,6 +133,7 @@ def create_profile(
     height_cm: float,
     weight_kg: float,
     activity_level: str,
+    timezone_id: str = "UTC",
 ) -> dict:
     """
     Create or update a user profile and calculate their daily calorie target.
@@ -132,8 +169,10 @@ def create_profile(
         "weight_kg": weight_kg,
         "activity_level": activity_level,
         "tdee": tdee,
+        "timezone": timezone_id,
         "created_at": firestore.SERVER_TIMESTAMP,
     }
+    _tz_cache[user_id] = timezone_id  # update cache immediately
     _user_ref(user_id).set(profile, merge=True)
 
     return {
@@ -386,7 +425,7 @@ def get_progress(user_id: str, for_date: str = None) -> dict:
     """
     _emit_tool_status(user_id, "Listening…")
     profile = _user_ref(user_id).get().to_dict() or {}
-    log_date = for_date or datetime.now(timezone.utc).date().isoformat()
+    log_date = for_date or _local_today(user_id)
     log_ref = _user_ref(user_id).collection("logs").document(log_date)
     today_log = log_ref.get().to_dict() or {}
     goal_doc = _goal_ref(user_id).get().to_dict() or {}
@@ -659,7 +698,7 @@ def get_recent_meals_summary(user_id: str, days: int = 7) -> str:
     (excluding today, which is already in the progress snapshot).
     """
     from datetime import timedelta
-    today = datetime.now(timezone.utc).date()
+    today = _local_today_date(user_id)
     meal_names: list[str] = []
     daily_calories: list[int] = []
 
@@ -702,7 +741,7 @@ def get_recent_workouts(user_id: str, days: int = 7) -> dict:
     _emit_tool_status(user_id, "Checking your workout history…")
     from datetime import timedelta
 
-    today = datetime.now(timezone.utc).date()
+    today = _local_today_date(user_id)
     workouts_by_date = {}
     for i in range(days):
         d = (today - timedelta(days=i)).isoformat()
@@ -995,7 +1034,7 @@ def _tomorrow_plan_ref(user_id: str, date_str: str):
 
 def get_workout_plan(user_id: str, for_date: str = None) -> dict | None:
     """Return the saved workout plan for a given date, or None if not set."""
-    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    date_str = for_date or _local_today(user_id)
     doc = _workout_plan_ref(user_id, date_str).get()
     return doc.to_dict() if doc.exists else None
 
@@ -1012,7 +1051,7 @@ def save_workout_plan(user_id: str, plan: dict) -> dict:
 
 def delete_workout_plan(user_id: str, for_date: str = None) -> dict:
     """Delete the saved workout plan for a given date (defaults to today)."""
-    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    date_str = for_date or _local_today(user_id)
     _workout_plan_ref(user_id, date_str).delete()
     return {"status": "deleted", "date": date_str}
 
@@ -1020,14 +1059,14 @@ def delete_workout_plan(user_id: str, for_date: str = None) -> dict:
 def get_meal_plan(user_id: str, for_date: str = None) -> dict | None:
     """Return the saved meal plan for a given date, or None if not set."""
     _emit_tool_status(user_id, "Loading your meal plan…")
-    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    date_str = for_date or _local_today(user_id)
     doc = _meal_plan_ref(user_id, date_str).get()
     return doc.to_dict() if doc.exists else None
 
 
 def delete_meal_plan(user_id: str, for_date: str = None) -> dict:
     """Delete the saved meal plan for a given date (defaults to today)."""
-    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    date_str = for_date or _local_today(user_id)
     _meal_plan_ref(user_id, date_str).delete()
     return {"status": "deleted", "date": date_str}
 
@@ -1051,7 +1090,7 @@ def generate_meal_plan(user_id: str, notes: str = "", for_date: str = None) -> d
 
     profile        = _user_ref(user_id).get().to_dict() or {}
     goal_doc       = _goal_ref(user_id).get().to_dict() or {}
-    date_str       = for_date or datetime.now(timezone.utc).date().isoformat()
+    date_str       = for_date or _local_today(user_id)
     calorie_target = goal_doc.get("daily_calorie_target", profile.get("daily_calorie_target", 2000))
     protein_target = profile.get("protein_target_g", 120)
     goal_type      = goal_doc.get("goal_type", "fitness")
@@ -1119,7 +1158,7 @@ def log_meal_from_plan(user_id: str, meal_id: str, for_date: str = None) -> dict
         for_date: ISO date string (YYYY-MM-DD). Defaults to today.
     """
     _emit_tool_status(user_id, "Logging meal…")
-    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    date_str = for_date or _local_today(user_id)
     ref      = _meal_plan_ref(user_id, date_str)
     plan     = ref.get().to_dict()
     if not plan:
@@ -1166,7 +1205,7 @@ def generate_workout_plan(user_id: str, notes: str = "", for_date: str = None) -
 
     profile  = _user_ref(user_id).get().to_dict() or {}
     goal_doc = _goal_ref(user_id).get().to_dict() or {}
-    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    date_str = for_date or _local_today(user_id)
     log      = _user_ref(user_id).collection("logs").document(date_str).get().to_dict() or {}
 
     calorie_target     = goal_doc.get("daily_calorie_target", profile.get("daily_calorie_target", 2000))
@@ -1244,7 +1283,7 @@ Return ONLY valid JSON, no markdown, no explanation:
 def toggle_exercise_complete(user_id: str, exercise_id: str, for_date: str = None) -> dict:
     """Toggle the completed flag on a planned exercise (does not log the workout)."""
     _emit_tool_status(user_id, "Updating exercise…")
-    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    date_str = for_date or _local_today(user_id)
     ref      = _workout_plan_ref(user_id, date_str)
     plan     = ref.get().to_dict()
     if not plan:
@@ -1261,7 +1300,7 @@ def toggle_exercise_complete(user_id: str, exercise_id: str, for_date: str = Non
 def log_exercise_from_plan(user_id: str, exercise_id: str, for_date: str = None, calories_override: int = None) -> dict:
     """Log a completed exercise from the workout plan into the workout log."""
     _emit_tool_status(user_id, "Logging exercise…")
-    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    date_str = for_date or _local_today(user_id)
     ref      = _workout_plan_ref(user_id, date_str)
     plan     = get_workout_plan(user_id, date_str)
     if not plan:
@@ -1560,7 +1599,7 @@ def get_rich_context(user_id: str) -> dict:
     Returns today's progress, recent workout summary, goal, and session notes.
     """
     from datetime import timedelta
-    today = datetime.now(timezone.utc).date()
+    today = _local_today_date(user_id)
 
     # Today's progress
     progress = get_progress(user_id)
@@ -1632,7 +1671,7 @@ def save_tomorrow_plan_note(
         data["created_at"] = now
     ref.set(data)
     # Invalidate today's morning-nudge cache so it reflects the new plan
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = _local_today(user_id)
     _user_ref(user_id).collection("morning_nudges").document(today).delete()
     return {"saved": True, "date": date_str}
 
@@ -1653,7 +1692,7 @@ def get_morning_nudge(user_id: str) -> dict:
     """
     from datetime import timedelta
 
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = _local_today(user_id)
 
     # Return cached nudge if already generated today
     cache_ref = _user_ref(user_id).collection("morning_nudges").document(today)
@@ -1713,12 +1752,18 @@ def reset_user(user_id: str) -> dict:
         if deleted >= batch_size:
             delete_collection(col_ref, batch_size)
 
+    _tz_cache.pop(user_id, None)
     user_ref = _user_ref(user_id)
-    for sub in ["logs", "progress", "visual_journey", "workout_plans", "session_notes"]:
+    for sub in ["logs", "progress", "visual_journey", "workout_plans", "session_notes", "morning_nudges"]:
         delete_collection(user_ref.collection(sub))
     user_ref.delete()
 
-    # Also delete goals doc
+    # Goals doc (separate top-level collection)
     _goal_ref(user_id).delete()
+
+    # Workbook insights (separate top-level collection)
+    insights_ref = db.collection("workbook_insights").document(user_id)
+    delete_collection(insights_ref.collection("days"))
+    insights_ref.delete()
 
     return {"status": "reset", "user_id": user_id}

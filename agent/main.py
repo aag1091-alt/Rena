@@ -39,6 +39,7 @@ class OnboardRequest(BaseModel):
     height_cm: float
     weight_kg: float
     activity_level: str  # sedentary | lightly_active | moderately_active | very_active
+    timezone: str = "UTC"  # IANA timezone e.g. "Asia/Kolkata"
 
 
 @app.post("/onboard")
@@ -54,6 +55,7 @@ async def onboard(req: OnboardRequest):
         height_cm=req.height_cm,
         weight_kg=req.weight_kg,
         activity_level=req.activity_level,
+        timezone_id=req.timezone,
     )
 
 
@@ -164,7 +166,8 @@ async def workbook_insight(user_id: str, date: str = None):
     if not user_id or user_id.strip() == "":
         raise HTTPException(status_code=400, detail="user_id is required")
 
-    today_str = datetime.now(timezone.utc).date().isoformat()
+    from rena.tools import _local_today
+    today_str = _local_today(user_id)
     target_date = date or today_str
     is_today = (target_date == today_str)
 
@@ -185,7 +188,14 @@ async def workbook_insight(user_id: str, date: str = None):
 
     # ── Generate ─────────────────────────────────────────────────────────────
     p = get_progress(user_id, for_date=date)
-    hour = datetime.now(timezone.utc).hour
+    from rena.tools import _get_user_timezone
+    import zoneinfo as _zi
+    _tz_str = _get_user_timezone(user_id)
+    try:
+        _tz = _zi.ZoneInfo(_tz_str)
+    except Exception:
+        _tz = timezone.utc
+    hour = datetime.now(_tz).hour
     time_of_day = "morning" if hour < 12 else ("evening" if hour >= 17 else "afternoon")
 
     meals = p.get("meals_logged") or []
@@ -261,11 +271,11 @@ async def get_workout_plan_endpoint(user_id: str, date: str = None):
 
 
 @app.post("/workout-plan/{user_id}")
-async def generate_workout_plan_endpoint(user_id: str):
-    """Generate and save a Gemini-powered workout plan for today."""
+async def generate_workout_plan_endpoint(user_id: str, date: str = None):
+    """Generate and save a Gemini-powered workout plan for the given date (defaults to today)."""
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id is required")
-    return generate_workout_plan(user_id)
+    return generate_workout_plan(user_id, for_date=date)
 
 
 @app.delete("/workout-plan/{user_id}")

@@ -430,7 +430,8 @@ class RenaAPI {
         age: Int,
         heightCm: Double,
         weightKg: Double,
-        activityLevel: String
+        activityLevel: String,
+        timezone: String = TimeZone.current.identifier
     ) async throws -> OnboardResponse {
         var req = try request("\(kBaseURL)/onboard", method: "POST")
         let body: [String: Any] = [
@@ -441,6 +442,7 @@ class RenaAPI {
             "height_cm": heightCm,
             "weight_kg": weightKg,
             "activity_level": activityLevel,
+            "timezone": timezone,
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, _) = try await session.data(for: req)

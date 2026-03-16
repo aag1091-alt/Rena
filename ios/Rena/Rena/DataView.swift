@@ -22,7 +22,7 @@ struct DataView: View {
     private var dateString: String {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
-        fmt.timeZone = TimeZone(identifier: "UTC")
+        fmt.timeZone = TimeZone.current
         return fmt.string(from: selectedDate)
     }
 
