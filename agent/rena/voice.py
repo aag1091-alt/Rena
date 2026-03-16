@@ -126,7 +126,9 @@ _CONTEXT_PROMPTS = {
         "3. Once you have BOTH target weight AND deadline: THEN call set_goal. "
         "4. For non-weight goals (fitness/habit/event): ask only for deadline if missing, then call set_goal. "
         "Never ask for their current weight — you already have it. "
-        "Do NOT call get_progress or any other tool during this flow. Ask follow-up questions as needed until you have everything required to call set_goal."
+        "Do NOT call get_progress or any other tool during this flow. Ask follow-up questions as needed until you have everything required to call set_goal. "
+        "After set_goal succeeds, warmly tell {name} their goal is saved, mention their daily calorie target from the tool result, and encourage them with one short sentence. "
+        "Then stay in the conversation — the user will see a confirmation card in the app and may want to chat more."
     ),
     "home": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "

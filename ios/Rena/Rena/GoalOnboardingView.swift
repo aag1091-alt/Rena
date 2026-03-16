@@ -143,9 +143,21 @@ struct GoalOnboardingView: View {
             }
         }
         .onAppear {
-            // Short delay so view is fully on screen, then auto-connect
+            // Short delay so view is fully on screen, then auto-connect.
+            // Guard both here and inside the async block — SwiftUI can fire
+            // onAppear more than once if the hierarchy shifts while connected.
+            guard !isConnected else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard !isConnected else { return }
                 toggleConnection()
+            }
+        }
+        .onChange(of: voice.state) {
+            // Sync local flag if WS drops unexpectedly.
+            // Do NOT stop polling — set_goal may have run just before the disconnect
+            // and the progress poll will catch the saved goal.
+            if case .error = voice.state, isConnected {
+                isConnected = false
             }
         }
         .onDisappear {
@@ -196,6 +208,7 @@ struct GoalOnboardingView: View {
     // MARK: - Poll /progress for goal detection
 
     private func startPolling() {
+        stopPolling()   // avoid duplicate timers if called while one is already running
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
             Task { await checkForGoal() }
         }

@@ -240,7 +240,7 @@ struct RenaOverlay: View {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { cardVisible = false }
         }
         .onChange(of: isShowing) {
-            if !isShowing && isVoiceActive {
+                if !isShowing && isVoiceActive {
                 voice.disconnect()
                 isVoiceActive = false
             }
