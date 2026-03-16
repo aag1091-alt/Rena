@@ -31,7 +31,6 @@ ZStack(alignment: .bottom) {
                 RenaOverlay(selectedTab: selectedTab, isShowing: $showRena, pendingContext: renaContext)
                     .transition(.opacity)
                     .zIndex(1)
-                    .onChange(of: showRena) { if !showRena { renaContext = nil } }
                     .onChange(of: selectedTab) { showRena = false }
             }
 
@@ -41,6 +40,10 @@ ZStack(alignment: .bottom) {
                 .zIndex(2)
         }
         .ignoresSafeArea(edges: .bottom)
+        // Clear renaContext on the container — always in the tree, so these fire
+        // even if the overlay was never rendered or was removed in the same frame.
+        .onChange(of: showRena) { if !showRena { renaContext = nil } }
+        .onChange(of: selectedTab) { renaContext = nil }
     }
 
     // MARK: - Dev tab (hidden — access by tapping app version 5× in Settings)
