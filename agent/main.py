@@ -409,6 +409,7 @@ async def delete_tomorrow_plan_endpoint(user_id: str, date: str = None):
 
 @app.websocket("/ws/{user_id}")
 async def voice_endpoint(websocket: WebSocket, user_id: str,
-                         context: str | None = None, name: str | None = None):
+                         context: str | None = None, name: str | None = None,
+                         tz: str | None = None):
     """Real-time voice conversation with Rena via Gemini Live API."""
-    await handle_voice(websocket, user_id, context=context, name=name)
+    await handle_voice(websocket, user_id, context=context, name=name, tz=tz)

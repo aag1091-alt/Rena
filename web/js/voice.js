@@ -37,7 +37,8 @@ class VoiceManager extends EventTarget {
       };
 
       // Open WebSocket
-      const url = `${CONFIG.WS_BASE}/ws/${encodeURIComponent(userId)}?context=${encodeURIComponent(context)}&name=${encodeURIComponent(name)}`;
+      const tz  = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const url = `${CONFIG.WS_BASE}/ws/${encodeURIComponent(userId)}?context=${encodeURIComponent(context)}&name=${encodeURIComponent(name)}&tz=${encodeURIComponent(tz)}`;
       this.ws = new WebSocket(url);
       this.ws.binaryType = "arraybuffer";
 

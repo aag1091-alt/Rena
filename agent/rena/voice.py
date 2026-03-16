@@ -357,8 +357,19 @@ async def _save_session_note_async(user_id: str, context: str, name: str):
 
 
 async def handle_voice(websocket: WebSocket, user_id: str,
-                       context: str | None = None, name: str | None = None):
+                       context: str | None = None, name: str | None = None,
+                       tz: str | None = None):
     from .agent import root_agent
+    # If the client sent a timezone, update the in-memory cache immediately
+    # so _get_user_timezone / _local_today use the right value this session.
+    if tz:
+        try:
+            import zoneinfo
+            zoneinfo.ZoneInfo(tz)  # validate — raises if unknown
+            from rena.tools import _tz_cache
+            _tz_cache[user_id] = tz
+        except Exception:
+            pass
 
     await websocket.accept()
 

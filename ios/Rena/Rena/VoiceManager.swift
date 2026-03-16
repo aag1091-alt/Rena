@@ -125,10 +125,11 @@ class VoiceManager: NSObject, ObservableObject {
     private func openWebSocket(userId: String, context: String?, name: String?) {
         let wsBase = kBaseURL.replacingOccurrences(of: "http", with: "ws")
         var components = URLComponents(string: "\(wsBase)/ws/\(userId)")!
-        var queryItems: [URLQueryItem] = []
+        let tz = TimeZone.current.identifier
+        var queryItems: [URLQueryItem] = [URLQueryItem(name: "tz", value: tz)]
         if let context { queryItems.append(URLQueryItem(name: "context", value: context)) }
         if let name    { queryItems.append(URLQueryItem(name: "name",    value: name))    }
-        if !queryItems.isEmpty { components.queryItems = queryItems }
+        components.queryItems = queryItems
 
         guard let wsURL = components.url else {
             DispatchQueue.main.async { self.state = .error("Invalid server URL") }
