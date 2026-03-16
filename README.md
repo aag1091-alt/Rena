@@ -40,9 +40,11 @@ The primary client is the native iOS app on a real device — this is the intend
 
 ### Option 2 — Web App (quick preview, no install)
 
-A PWA companion is live at https://rena-490107-f0f28.web.app — it mirrors the iOS app's screens and was built rapidly as a secondary access point. **It has not been thoroughly tested** and is provided for convenience rather than as a primary evaluation surface. Use the iOS app for judging.
+A PWA companion is live at https://rena-490107-f0f28.web.app — it mirrors the iOS app's screens and was built rapidly as a secondary access point. Use the iOS app for the best experience.
 
 Features available: voice, home dashboard, history, plan/workbook, food scan, settings.
+
+> **Note:** The web app is optimised for mobile screen sizes. For the best experience, open it on a phone or use your browser's DevTools to emulate an iPhone screen size (e.g. iPhone 14 in Chrome DevTools → Network throttling → Mobile).
 
 > **Voice:** Tap the Rena orb and allow microphone access. Works in Chrome and Safari.
 
