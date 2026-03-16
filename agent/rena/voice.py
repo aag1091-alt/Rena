@@ -7,6 +7,7 @@ Flow:
 """
 
 import asyncio
+import contextlib
 import json
 import time
 import traceback
@@ -30,26 +31,28 @@ warnings.filterwarnings("ignore", message=".*Pydantic serializer warnings.*", ca
 
 load_dotenv()
 
-# ── Fix: ADK's basic.py does not copy thinking_config from Agent.generate_content_config
-# into LiveConnectConfig, so thinking_budget=0 on the Agent is silently ignored for
-# Live sessions — the model defaults to full thinking and produces silent audio turns.
-# Monkeypatching _build_basic_request to propagate thinking_config fixes this.
-from google.adk.flows.llm_flows import basic as _adk_basic  # noqa: E402
+# ── Fix: ADK's google_llm.py copies tools from llm_request.config to live_connect_config
+# but silently drops thinking_config, so thinking_budget=0 set on the Agent is never
+# sent to the Gemini Live API. The model defaults to full thinking, producing silent
+# audio turns that hang the UI.
+# Patch GoogleLLM.connect() — the last step before the actual API call — to copy
+# thinking_config from llm_request.config into live_connect_config right before connecting.
+from google.adk.models import google_llm as _google_llm  # noqa: E402
 
-_orig_build_basic = _adk_basic._build_basic_request
+_orig_google_llm_connect = _google_llm.GoogleLLM.connect
 
-def _patched_build_basic(invocation_context, llm_request):
-    _orig_build_basic(invocation_context, llm_request)
-    agent = invocation_context.agent
+@contextlib.asynccontextmanager
+async def _patched_google_llm_connect(self, llm_request):
     if (
-        getattr(agent, "generate_content_config", None)
-        and getattr(agent.generate_content_config, "thinking_config", None)
+        llm_request.live_connect_config is not None
+        and llm_request.config is not None
+        and getattr(llm_request.config, "thinking_config", None) is not None
     ):
-        llm_request.live_connect_config.thinking_config = (
-            agent.generate_content_config.thinking_config
-        )
+        llm_request.live_connect_config.thinking_config = llm_request.config.thinking_config
+    async with _orig_google_llm_connect(self, llm_request) as conn:
+        yield conn
 
-_adk_basic._build_basic_request = _patched_build_basic
+_google_llm.GoogleLLM.connect = _patched_google_llm_connect
 
 session_service = InMemorySessionService()
 APP_NAME = "rena"
