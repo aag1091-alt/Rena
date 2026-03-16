@@ -395,39 +395,54 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             if rich:
                 text = f"{text}\n{rich}"
 
+        # Inject user's current local time so Rena never references UTC time.
+        try:
+            import zoneinfo
+            from rena.tools import _get_user_timezone
+            tz_str = _get_user_timezone(user_id)
+            tz = zoneinfo.ZoneInfo(tz_str)
+            local_now = datetime.now(tz)
+            local_time_str = local_now.strftime("%-I:%M %p %Z, %A %B %-d")  # e.g. "12:15 PM PST, Monday March 16"
+            text = f"{text}\n[CURRENT_LOCAL_TIME: {local_time_str}]"
+        except Exception:
+            pass
+
         # Parse dated context formats: "plan:<date>" and "meal_plan:<date>".
         # base_context is used for prompt lookup; the date / day_label are injected into the prompt.
         base_context = context
         plan_date = None
         day_label = None
+
+        # Use user's local date for today/tomorrow comparisons, not UTC.
+        try:
+            from rena.tools import _local_today
+            today_str = _local_today(user_id)
+        except Exception:
+            today_str = datetime.now(timezone.utc).date().isoformat()
+
         if context and context.startswith("plan:"):
             _, plan_date = context.split(":", 1)
             base_context = "plan"
-            today_str = datetime.now(timezone.utc).date().isoformat()
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[plan_date:{plan_date}]"
         elif context and context.startswith("meal_plan:"):
             _, plan_date = context.split(":", 1)
             base_context = "meal_plan"
-            today_str = datetime.now(timezone.utc).date().isoformat()
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[meal_date:{plan_date}]"
         elif context and context.startswith("update_meal_plan:"):
             _, plan_date = context.split(":", 1)
             base_context = "update_meal_plan"
-            today_str = datetime.now(timezone.utc).date().isoformat()
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[meal_date:{plan_date}]"
         elif context and context.startswith("workout_plan:"):
             _, plan_date = context.split(":", 1)
             base_context = "workout_plan"
-            today_str = datetime.now(timezone.utc).date().isoformat()
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[workout_date:{plan_date}]"
         elif context and context.startswith("update_workout_plan:"):
             _, plan_date = context.split(":", 1)
             base_context = "update_workout_plan"
-            today_str = datetime.now(timezone.utc).date().isoformat()
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[workout_date:{plan_date}]"
 
@@ -449,6 +464,10 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             if day_label:
                 prompt = prompt.replace("{day_label}", day_label)
             if prompt:
+                prompt = (
+                    "IMPORTANT: Always use [CURRENT_LOCAL_TIME] from this message when referencing time — never use UTC. "
+                    + prompt
+                )
                 # For home context with a nudge, add instruction to mention it briefly
                 if context == "home" and user_id in _nudge_said_at and time.time() - _nudge_said_at[user_id] < 5:
                     prompt = (
