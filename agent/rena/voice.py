@@ -30,6 +30,27 @@ warnings.filterwarnings("ignore", message=".*Pydantic serializer warnings.*", ca
 
 load_dotenv()
 
+# ── Fix: ADK's basic.py does not copy thinking_config from Agent.generate_content_config
+# into LiveConnectConfig, so thinking_budget=0 on the Agent is silently ignored for
+# Live sessions — the model defaults to full thinking and produces silent audio turns.
+# Monkeypatching _build_basic_request to propagate thinking_config fixes this.
+from google.adk.flows.llm_flows import basic as _adk_basic  # noqa: E402
+
+_orig_build_basic = _adk_basic._build_basic_request
+
+def _patched_build_basic(invocation_context, llm_request):
+    _orig_build_basic(invocation_context, llm_request)
+    agent = invocation_context.agent
+    if (
+        getattr(agent, "generate_content_config", None)
+        and getattr(agent.generate_content_config, "thinking_config", None)
+    ):
+        llm_request.live_connect_config.thinking_config = (
+            agent.generate_content_config.thinking_config
+        )
+
+_adk_basic._build_basic_request = _patched_build_basic
+
 session_service = InMemorySessionService()
 APP_NAME = "rena"
 
