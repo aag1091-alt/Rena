@@ -160,7 +160,6 @@ struct ProgressResponse: Codable {
     let caloriesConsumed: Int
     let caloriesBurned: Int
     let caloriesTarget: Int
-    let caloriesRemaining: Int
     let burnRequired: Int
     let proteinConsumedG: Int
     let proteinTargetG: Int
@@ -174,7 +173,6 @@ struct ProgressResponse: Codable {
         case caloriesConsumed  = "calories_consumed"
         case caloriesBurned    = "calories_burned"
         case caloriesTarget    = "calories_target"
-        case caloriesRemaining = "calories_remaining"
         case burnRequired      = "burn_required"
         case proteinConsumedG  = "protein_consumed_g"
         case proteinTargetG    = "protein_target_g"

@@ -6,7 +6,6 @@ struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var showRena = false
     @State private var renaContext: String? = nil
-    @State private var devTapCount = 0
 
     var body: some View {
 ZStack(alignment: .bottom) {
