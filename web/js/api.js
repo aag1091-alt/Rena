@@ -31,6 +31,17 @@ const API = {
     return this._fetch("/log/meal", { method: "POST", body: JSON.stringify({ user_id: userId, name, calories }) });
   },
 
+  exerciseVideo(name, muscles) {
+    const enc = encodeURIComponent(name);
+    const q   = muscles ? `?target_muscles=${encodeURIComponent(muscles)}` : "";
+    return this._fetch(`/exercise/video/${enc}${q}`);
+  },
+  exerciseVideoStatus(jobId) { return this._fetch(`/exercise/video/status/${jobId}`); },
+
+  deleteWorkoutPlan(userId, date) { return this._fetch(`/workout-plan/${userId}?date=${date}`, { method: "DELETE" }); },
+  deleteMealPlan(userId, date)    { return this._fetch(`/meal-plan/${userId}?date=${date}`, { method: "DELETE" }); },
+  deletePlanNote(userId, date)    { return this._fetch(`/tomorrow-plan/${userId}?date=${date}`, { method: "DELETE" }); },
+
   seed(userId)   { return this._fetch(`/dev/seed/${userId}`, { method: "POST" }); },
   reset(userId)  { return this._fetch(`/dev/reset/${userId}`, { method: "DELETE" }); },
 };

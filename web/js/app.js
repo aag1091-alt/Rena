@@ -807,11 +807,13 @@ function renderPlanShell() {
 async function loadPlanDay() {
   const date = fmtDateISO(app.planDate);
   try {
-    const [workout, meal, rawNote] = await Promise.all([
+    const [rawWorkout, rawMeal, rawNote] = await Promise.all([
       API.workoutPlan(app.user.id, date).catch(() => null),
       API.mealPlan(app.user.id, date).catch(() => null),
       API.tomorrowPlan(app.user.id, date).catch(() => null),
     ]);
+    const workout = Array.isArray(rawWorkout) ? rawWorkout[0] : rawWorkout;
+    const meal    = Array.isArray(rawMeal)    ? rawMeal[0]    : rawMeal;
     const note = rawNote?.summary ?? (typeof rawNote === "string" ? rawNote : null);
     renderPlanDay(workout, meal, note, date);
   } catch {
@@ -871,6 +873,43 @@ function renderPlanDay(workout, meal, note, date) {
       }
     });
   });
+  document.querySelectorAll("[data-delete-workout]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const d = btn.dataset.deleteWorkout;
+      btn.disabled = true;
+      try { await API.deleteWorkoutPlan(app.user.id, d); loadPlanDay(); } catch { btn.disabled = false; }
+    });
+  });
+  document.querySelectorAll("[data-delete-meal]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const d = btn.dataset.deleteMeal;
+      btn.disabled = true;
+      try { await API.deleteMealPlan(app.user.id, d); loadPlanDay(); } catch { btn.disabled = false; }
+    });
+  });
+  document.querySelectorAll(".ex-play-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const name    = btn.dataset.exName;
+      const muscles = btn.dataset.exMuscles;
+      try {
+        const res = await API.exerciseVideo(name, muscles);
+        if (res.video_url) {
+          window.open(res.video_url, "_blank");
+        } else if (res.job_id) {
+          btn.textContent = "⏳";
+          const poll = setInterval(async () => {
+            try {
+              const s = await API.exerciseVideoStatus(res.job_id);
+              if (s.video_url) { clearInterval(poll); btn.textContent = "▶"; window.open(s.video_url, "_blank"); }
+              else if (s.status !== "generating") { clearInterval(poll); btn.textContent = "▶"; }
+            } catch { clearInterval(poll); btn.textContent = "▶"; }
+          }, 5000);
+        }
+      } catch {
+        window.open(`https://m.youtube.com/results?search_query=${encodeURIComponent(name + " exercise tutorial")}`, "_blank");
+      }
+    });
+  });
 }
 
 function renderDayPlanCard(note, interactive, date) {
@@ -899,10 +938,11 @@ function renderWorkoutSection(plan, interactive, date) {
   let inner = "";
 
   if (plan) {
+    const totalCalories = (plan.exercises || []).reduce((s, ex) => s + (ex.calories_burned || 0), 0);
     inner += `<div class="plan-meta">
-      <div class="plan-meta-name">🏋 ${plan.name}</div>
-      <div class="plan-badge">${plan.total_duration_min} min</div>
-      <div class="plan-badge">${plan.total_calories} kcal</div>
+      <div class="plan-meta-name">🏋 ${plan.name || "Workout"}</div>
+      <div class="plan-badge">${plan.total_duration_min || 0} min</div>
+      <div class="plan-badge">${totalCalories} kcal</div>
     </div>
     <div class="plan-divider"></div>`;
     inner += (plan.exercises || []).map(ex => {
@@ -918,8 +958,8 @@ function renderWorkoutSection(plan, interactive, date) {
           <div class="ex-name${ex.completed ? " done" : ""}">${ex.name}</div>
           <div class="ex-sub">${[vol, muscles].filter(Boolean).join(" · ")}</div>
         </div>
-        <span class="ex-kcal">${ex.calories_burned} kcal</span>
-        <button class="ex-play-btn" onclick="window.open('https://m.youtube.com/results?search_query=${encodeURIComponent(ex.name + " exercise tutorial")}','_blank')">▶</button>
+        <span class="ex-kcal">${ex.calories_burned || 0} kcal</span>
+        <button class="ex-play-btn" data-ex-name="${ex.name}" data-ex-muscles="${ex.target_muscles || ""}">▶</button>
         ${interactive ? `<button class="log-btn ${ex.logged ? "logged" : ""}" data-log-ex="${ex.id}" ${ex.logged ? "disabled" : ""}>${ex.logged ? "Logged" : "Log"}</button>` : ""}
       </div>`;
     }).join("");
@@ -951,10 +991,15 @@ function renderWorkoutSection(plan, interactive, date) {
     }
   }
 
+  const deleteBtn = (plan && interactive)
+    ? `<button class="plan-delete-btn" data-delete-workout="${date}" title="Delete workout plan">✕</button>`
+    : "";
+
   return `<div class="plan-section">
     <div class="plan-section-header">
       <div class="plan-section-icon" style="background:rgba(42,157,143,0.12);color:#2A9D8F">🏋</div>
       <div class="plan-section-key">WORKOUT</div>
+      ${deleteBtn}
     </div>
     ${inner}
   </div>`;
@@ -964,9 +1009,10 @@ function renderMealSection(plan, interactive, date) {
   let inner = "";
 
   if (plan) {
+    const totalCalories = plan.total_calories ?? (plan.meals || []).reduce((s, m) => s + (m.calories || 0), 0);
     inner += `<div class="plan-meta">
       <div class="plan-meta-name">🍽 ${plan.meals?.length || 0} meals</div>
-      <div class="plan-badge">${plan.total_calories} kcal</div>
+      <div class="plan-badge">${totalCalories} kcal</div>
     </div>`;
     if (plan.notes) inner += `<div class="plan-notes">${plan.notes}</div>`;
     inner += `<div class="plan-divider"></div>`;
@@ -1019,10 +1065,15 @@ function renderMealSection(plan, interactive, date) {
     }
   }
 
+  const deleteMealBtn = (plan && interactive)
+    ? `<button class="plan-delete-btn" data-delete-meal="${date}" title="Delete meal plan">✕</button>`
+    : "";
+
   return `<div class="plan-section">
     <div class="plan-section-header">
       <div class="plan-section-icon" style="background:rgba(244,162,97,0.12);color:#F4A261">🍴</div>
       <div class="plan-section-key">MEALS</div>
+      ${deleteMealBtn}
     </div>
     ${inner}
   </div>`;
@@ -1360,9 +1411,11 @@ function bindVoiceEvents() {
   });
 
   voice.addEventListener("turncomplete", () => {
-    if (app.tab === "home")    loadHome();
-    if (app.tab === "history") loadHistory();
-    if (app.tab === "plan")    loadPlan();
+    setTimeout(() => {
+      if (app.tab === "home")    loadHome();
+      if (app.tab === "history") loadHistory();
+      if (app.tab === "plan")    loadPlan();
+    }, 500);
   });
 }
 
