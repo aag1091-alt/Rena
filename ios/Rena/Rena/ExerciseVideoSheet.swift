@@ -130,7 +130,6 @@ struct ExerciseVideoSheet: View {
     // Known pre-generated videos in GCS — add new keys as more are generated
     private static let knownVideos: [String: String] = [
         "bodyweight_squats":               "https://storage.googleapis.com/rena-assets/exercise_videos/bodyweight_squats.mp4",
-        "glute_bridges":                   "https://storage.googleapis.com/rena-assets/exercise_videos/glute_bridges.mp4",
         "plank":                           "https://storage.googleapis.com/rena-assets/exercise_videos/plank.mp4",
         "walking_lunges":                  "https://storage.googleapis.com/rena-assets/exercise_videos/walking_lunges.mp4",
         "elliptical_trainer_moderate_pace":"https://storage.googleapis.com/rena-assets/exercise_videos/elliptical_trainer_moderate_pace.mp4",
