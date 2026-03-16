@@ -218,13 +218,13 @@ _CONTEXT_PROMPTS = {
     ),
     "notes": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
-        "If [CURRENT_NOTE] is in this message, open by reading it back in one sentence: "
-        "'Your note for {day_label} says: <note>. Want to change anything?' "
-        "Otherwise ask: 'What would you like to note for {day_label}?' "
-        "They might say anything — drink more water, eat under 1800 calories, go for a walk, avoid sugar, call someone. "
+        "Open with one short sentence summarising {name}'s day so far from [RENA MEMORY] — "
+        "mention what they've eaten or if they worked out (e.g. 'You've had 3 meals and hit your water goal today'). "
+        "Then immediately ask: 'What would you like to plan for tomorrow?' "
+        "They might say anything — drink more water, eat lighter, go for a walk, avoid sugar. "
         "IMPORTANT: Do NOT call generate_workout_plan or generate_meal_plan — this is notes only. "
-        "Once they've responded, call save_tomorrow_plan_note with for_date=[note_date] and their note as the summary. "
-        "Confirm in one friendly sentence. Keep it to 1-2 turns max."
+        "Once they respond, call save_tomorrow_plan_note with for_date=[note_date] and a short summary of what they said. "
+        "Confirm in one sentence. Keep it to 2 turns max."
     ),
     "scan": (
         "SPEAK OUT LOUD NOW: Say one short encouraging line to {name} — "
