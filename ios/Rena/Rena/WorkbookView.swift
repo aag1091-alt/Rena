@@ -117,8 +117,8 @@ struct WorkbookView: View {
                         isToday: isToday
                     )
 
-                    // ── Day Recap (AI) — past dates only; today's version lives on home screen ──
-                    if !isToday {
+                    // ── Day Recap (AI) — past dates only (not today, not tomorrow) ──
+                    if !isToday && !isTomorrow {
                         DaySoFarCard(insight: insight, isLoading: isLoading, isToday: false)
                     }
 
@@ -163,14 +163,16 @@ struct WorkbookView: View {
                         )
                     }
 
-                    // ── Activity summary ────────────────────────────
-                    TodayActivityCard(
-                        aiSummary: activity,
-                        isLoading: isLoading,
-                        meals: displayMeals,
-                        workouts: displayWorkouts,
-                        isToday: isToday
-                    )
+                    // ── Activity summary — not shown for tomorrow ────
+                    if !isTomorrow {
+                        TodayActivityCard(
+                            aiSummary: activity,
+                            isLoading: isLoading,
+                            meals: displayMeals,
+                            workouts: displayWorkouts,
+                            isToday: isToday
+                        )
+                    }
 
                     Spacer(minLength: 40)
                 }
