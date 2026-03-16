@@ -19,6 +19,7 @@ class VoiceManager: NSObject, ObservableObject {
     @Published var state: VoiceState = .idle
     @Published var transcript: String = ""
     @Published var lastResponse: String = ""
+    @Published var toolStatus: String = ""
     /// Increments on every turn_complete — observe to refresh data after Rena logs something.
     @Published var turnCount: Int = 0
 
@@ -202,15 +203,22 @@ class VoiceManager: NSObject, ObservableObject {
                     DispatchQueue.main.async {
                         self.thinkingWorkItem?.cancel()
                         self.thinkingWorkItem = nil
+                        self.toolStatus = ""
                         self.state = .speaking
                     }
                 case .string(let text):
                     if let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
                         let msgType = json["type"] as? String
-                        if msgType == "turn_complete" {
+                        if msgType == "tool_status", let message = json["message"] as? String {
+                            DispatchQueue.main.async {
+                                self.toolStatus = message
+                                self.state = .thinking
+                            }
+                        } else if msgType == "turn_complete" {
                             DispatchQueue.main.async {
                                 self.thinkingWorkItem?.cancel()
                                 self.thinkingWorkItem = nil
+                                self.toolStatus = ""
                                 self.state = .listening
                                 self.turnCount += 1
                                 // Fade out CC captions after a short pause

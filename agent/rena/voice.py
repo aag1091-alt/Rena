@@ -370,6 +370,16 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                             await websocket.send_text(
                                 json.dumps({"type": "text", "text": part.text})
                             )
+                        elif getattr(part, "function_call", None):
+                            _TOOL_LABELS = {
+                                "generate_workout_plan": "Building your workout plan…",
+                                "generate_meal_plan":    "Building your meal plan…",
+                            }
+                            label = _TOOL_LABELS.get(part.function_call.name)
+                            if label and not ws_closed:
+                                await websocket.send_text(
+                                    json.dumps({"type": "tool_status", "message": label})
+                                )
                 if event.output_transcription and event.output_transcription.text:
                     cc = event.output_transcription.text.strip()
                     if cc and not ws_closed:

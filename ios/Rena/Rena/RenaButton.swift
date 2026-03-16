@@ -244,6 +244,7 @@ struct RenaOverlay: View {
     // MARK: - Helpers
 
     private var voiceStateLabel: String {
+        if !voice.toolStatus.isEmpty { return voice.toolStatus }
         switch voice.state {
         case .connecting: return "Connecting…"
         case .listening:  return "Listening…"
