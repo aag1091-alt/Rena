@@ -126,6 +126,7 @@ struct WorkbookView: View {
                             onPlanWithRena:   { renaContext = "workout_plan";        showRena = true },
                             onOpenRena:       { renaContext = "update_workout_plan"; showRena = true },
                             onRegenerate:     { Task { await generatePlan() } },
+                            onDelete:         { Task { await deletePlan() } },
                             onToggleComplete: { ex in Task { await toggleComplete(ex) } },
                             onPlay:           { ex in videoSheet = ex },
                             onLog:            { ex in logSheet = ex }
@@ -179,6 +180,11 @@ struct WorkbookView: View {
         await MainActor.run { isGeneratingPlan = true }
         let plan = try? await RenaAPI.shared.generateWorkoutPlan(userId: appState.userId)
         await MainActor.run { workoutPlan = plan; isGeneratingPlan = false }
+    }
+
+    private func deletePlan() async {
+        try? await RenaAPI.shared.deleteWorkoutPlan(userId: appState.userId)
+        await MainActor.run { workoutPlan = nil }
     }
 
     private func toggleComplete(_ exercise: PlannedExercise) async {
@@ -479,6 +485,7 @@ struct WorkoutPlanSection: View {
     let onPlanWithRena: () -> Void
     let onOpenRena: () -> Void
     let onRegenerate: () -> Void
+    let onDelete: () -> Void
     let onToggleComplete: (PlannedExercise) -> Void
     let onPlay: (PlannedExercise) -> Void
     let onLog: (PlannedExercise) -> Void
@@ -504,10 +511,17 @@ struct WorkoutPlanSection: View {
                     .kerning(1.0)
                 Spacer()
                 if plan != nil {
-                    Button(action: onRegenerate) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 13))
-                            .foregroundColor(Color(hex: "B09880"))
+                    HStack(spacing: 12) {
+                        Button(action: onRegenerate) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 13))
+                                .foregroundColor(Color(hex: "B09880"))
+                        }
+                        Button(action: onDelete) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Color(hex: "B09880"))
+                        }
                     }
                 }
             }

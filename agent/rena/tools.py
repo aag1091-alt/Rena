@@ -942,6 +942,13 @@ def save_workout_plan(user_id: str, plan: dict) -> dict:
     return plan
 
 
+def delete_workout_plan(user_id: str, for_date: str = None) -> dict:
+    """Delete the saved workout plan for a given date (defaults to today)."""
+    date_str = for_date or datetime.now(timezone.utc).date().isoformat()
+    _workout_plan_ref(user_id, date_str).delete()
+    return {"status": "deleted", "date": date_str}
+
+
 def generate_workout_plan(user_id: str) -> dict:
     """
     Generate and save a personalised workout plan for today using Gemini.

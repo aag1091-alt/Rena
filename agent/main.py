@@ -6,8 +6,8 @@ from fastapi import FastAPI, WebSocket, HTTPException
 from pydantic import BaseModel
 from rena.voice import handle_voice
 from rena.tools import (
-    scan_image, log_meal, log_weight, get_progress, get_goal, create_profile, reset_user,
-    get_workout_plan, generate_workout_plan, toggle_exercise_complete, log_exercise_from_plan,
+    scan_image, log_meal, log_water, log_weight, get_progress, get_goal, create_profile, reset_user,
+    get_workout_plan, generate_workout_plan, delete_workout_plan, toggle_exercise_complete, log_exercise_from_plan,
     get_exercise_video, get_exercise_video_status,
 )
 
@@ -149,7 +149,6 @@ async def log_water_endpoint(req: LogWaterRequest):
     """Log glasses of water directly from the app."""
     if not req.user_id:
         raise HTTPException(status_code=400, detail="user_id is required")
-    from rena.tools import log_water
     return log_water(req.user_id, req.glasses)
 
 
@@ -265,6 +264,14 @@ async def generate_workout_plan_endpoint(user_id: str):
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id is required")
     return generate_workout_plan(user_id)
+
+
+@app.delete("/workout-plan/{user_id}")
+async def delete_workout_plan_endpoint(user_id: str, date: str = None):
+    """Delete the saved workout plan for today (or a given date)."""
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    return delete_workout_plan(user_id, for_date=date)
 
 
 @app.patch("/workout-plan/{user_id}/exercise/{exercise_id}/complete")

@@ -431,6 +431,13 @@ class RenaAPI {
         return try JSONDecoder().decode(PlannedWorkout.self, from: data)
     }
 
+    func deleteWorkoutPlan(userId: String, date: String? = nil) async throws {
+        var urlString = "\(kBaseURL)/workout-plan/\(userId)"
+        if let date { urlString += "?date=\(date)" }
+        let req = try request(urlString, method: "DELETE")
+        _ = try await session.data(for: req)
+    }
+
     func generateWorkoutPlan(userId: String) async throws -> PlannedWorkout {
         let req = try request("\(kBaseURL)/workout-plan/\(userId)", method: "POST")
         let (data, _) = try await session.data(for: req)
