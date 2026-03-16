@@ -118,7 +118,11 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Private helpers
 
     private func disconnectWebSocket() {
-        webSocket?.cancel(with: .normalClosure, reason: nil)
+        if let ws = webSocket {
+            let msg = URLSessionWebSocketTask.Message.string(#"{"type":"end_session"}"#)
+            ws.send(msg) { _ in }
+            ws.cancel(with: .normalClosure, reason: nil)
+        }
         webSocket = nil
     }
 

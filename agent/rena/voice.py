@@ -645,7 +645,12 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                         data = json.loads(message["text"])
                     except json.JSONDecodeError:
                         continue
-                    if data.get("type") == "text_input":
+                    if data.get("type") == "end_session":
+                        # Client explicitly ended the conversation — clear session cache
+                        # so the next connect always starts fresh, then stop cleanly.
+                        _active_sessions.pop(user_id, None)
+                        break
+                    elif data.get("type") == "text_input":
                         # Text input fallback for testing without mic
                         live_queue.send_content(
                             genai_types.Content(

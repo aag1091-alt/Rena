@@ -54,6 +54,9 @@ class VoiceManager extends EventTarget {
   }
 
   disconnect() {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "end_session" }));
+    }
     this.ws?.close();
     this.ws = null;
     this.workletNode?.disconnect();
