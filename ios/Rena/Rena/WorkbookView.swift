@@ -120,10 +120,11 @@ struct WorkbookView: View {
                         MealPlanSection(
                             plan: mealPlan, isInteractive: isInteractive,
                             readOnly: isPast, sectionTitle: "MEALS",
-                            onPlanWithRena: { renaContext = isToday ? "meal_plan" : "plan:\(dateString)"; showRena = true },
-                            onDelete:       { Task { await deleteMealPlanAction() } },
-                            onWatch:        { meal in logMealSheet = meal },
-                            onLog:          { meal in Task { await logMeal(meal) } }
+                            onPlanWithRena:   { renaContext = isToday ? "meal_plan" : "plan:\(dateString)"; showRena = true },
+                            onUpdateWithRena: { renaContext = isToday ? "meal_plan" : "plan:\(dateString)"; showRena = true },
+                            onDelete:         { Task { await deleteMealPlanAction() } },
+                            onWatch:          { meal in logMealSheet = meal },
+                            onLog:            { meal in Task { await logMeal(meal) } }
                         )
                     }
 
@@ -647,6 +648,7 @@ struct MealPlanSection: View {
     var readOnly: Bool = false
     var sectionTitle: String = "TODAY'S MEALS"
     let onPlanWithRena: () -> Void
+    let onUpdateWithRena: () -> Void
     let onDelete: () -> Void
     let onWatch: (PlannedMeal) -> Void
     let onLog: (PlannedMeal) -> Void
@@ -718,6 +720,15 @@ struct MealPlanSection: View {
                     }
                 }
 
+                if isInteractive {
+                    Divider().background(Color(hex: "F0E6DA"))
+                    renaActionButton(
+                        label: "Update with Rena",
+                        subtitle: "Swap meals, adjust calories, or change preferences",
+                        action: onUpdateWithRena
+                    )
+                }
+
             } else {
                 VStack(spacing: 12) {
                     Text("No meal plan yet.")
@@ -737,7 +748,15 @@ struct MealPlanSection: View {
     }
 
     private var mealPlanButton: some View {
-        Button(action: onPlanWithRena) {
+        renaActionButton(
+            label: "Plan with Rena",
+            subtitle: isInteractive ? "Rena will plan today's meals" : "Rena will plan for this day",
+            action: onPlanWithRena
+        )
+    }
+
+    private func renaActionButton(label: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
@@ -752,10 +771,10 @@ struct MealPlanSection: View {
                         .foregroundColor(.white)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Plan with Rena")
+                    Text(label)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(Color(hex: "3D2B1F"))
-                    Text(isInteractive ? "Rena will plan today's meals" : "Rena will plan tomorrow's meals")
+                    Text(subtitle)
                         .font(.system(size: 11))
                         .foregroundColor(Color(hex: "B09880"))
                 }
