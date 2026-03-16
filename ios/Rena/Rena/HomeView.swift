@@ -338,7 +338,7 @@ struct GoalCard: View {
     }
 }
 
-// MARK: - Calorie card (unused but kept for reference)
+// MARK: - Calorie card
 
 struct CalorieCard: View {
     @EnvironmentObject var appState: AppState

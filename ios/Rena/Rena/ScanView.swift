@@ -7,6 +7,7 @@ struct ScanView: View {
     @State private var selectedImage: UIImage?
     @State private var scanResult: ScanResponse?
     @State private var isScanning = false
+    @State private var scanFailed = false
     @State private var showCamera = false
     @State private var logState: LogState = .idle
     // Adjustable calories per item: keyed by item name
@@ -119,6 +120,21 @@ struct ScanView: View {
                                     .padding()
                             }
                         }
+                    } else if scanFailed {
+                        // Error state
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(Color(hex: "E76F51"))
+                            Text("Couldn't scan this photo")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(Color(hex: "3D2B1F"))
+                            Text("Check your connection and try again.")
+                                .font(.subheadline)
+                                .foregroundColor(Color(hex: "7C5C45"))
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 60)
                     } else {
                         // Empty state
                         VStack(spacing: 16) {
@@ -139,7 +155,7 @@ struct ScanView: View {
             .onDisappear { resetScan() }
             .sheet(isPresented: $showCamera, onDismiss: {
                 guard selectedImage != nil else { return }
-                scanResult = nil
+                scanResult = nil; scanFailed = false
                 logState = .idle
                 Task { await scanCurrentImage() }
             }) {
@@ -224,7 +240,7 @@ struct ScanView: View {
     private func resetScan() {
         selectedImage = nil
         selectedPhoto = nil
-        scanResult = nil
+        scanResult = nil; scanFailed = false
         logState = .idle
         isScanning = false
         adjustedCalories = [:]
@@ -236,7 +252,7 @@ struct ScanView: View {
               let image = UIImage(data: data) else { return }
         await MainActor.run {
             selectedImage = image
-            scanResult = nil
+            scanResult = nil; scanFailed = false
             logState = .idle
             adjustedCalories = [:]
         }
@@ -245,10 +261,11 @@ struct ScanView: View {
 
     private func scanCurrentImage() async {
         guard let image = selectedImage else { return }
-        await MainActor.run { isScanning = true }
+        await MainActor.run { isScanning = true; scanFailed = false }
         let result = try? await RenaAPI.shared.scanImage(userId: appState.userId, image: image)
         await MainActor.run {
             scanResult = result
+            scanFailed = result == nil
             isScanning = false
             // Seed adjusted calories from scan items
             if let items = result?.items {

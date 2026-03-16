@@ -152,8 +152,7 @@ async def _build_rich_context_text(user_id: str, name: str) -> str:
                 lines.append(f"  • {n['note']}")
 
         return "\n".join(lines)
-    except Exception as e:
-        print(f"[voice] rich context failed: {e}")
+    except Exception:
         return ""
 
 
@@ -174,9 +173,8 @@ async def _refresh_context_cache(user_id: str, name: str):
     try:
         text = await _build_rich_context_text(user_id, name)
         _context_cache[user_id] = (text, time.time())
-        print(f"[voice] context cache refreshed for {user_id}")
-    except Exception as e:
-        print(f"[voice] context cache refresh failed: {e}")
+    except Exception:
+        pass
 
 
 async def _save_session_note_async(user_id: str, context: str, name: str):
@@ -211,9 +209,8 @@ async def _save_session_note_async(user_id: str, context: str, name: str):
         )
         note = f"[{today}] {resp.text.strip()}"
         await asyncio.to_thread(save_session_note, user_id, context, note)
-        print(f"[voice] session note saved: {note[:80]}")
-    except Exception as e:
-        print(f"[voice] session note save failed: {e}")
+    except Exception:
+        pass
 
 
 async def handle_voice(websocket: WebSocket, user_id: str,
@@ -221,7 +218,6 @@ async def handle_voice(websocket: WebSocket, user_id: str,
     from .agent import root_agent
 
     await websocket.accept()
-    print(f"[voice] connected: {user_id} context={context}")
 
     # Reuse existing session if available (enables transparent resumption on reconnect).
     # New context (e.g. switching screens) always gets a fresh session.
@@ -232,8 +228,6 @@ async def handle_voice(websocket: WebSocket, user_id: str,
         )
         if session is None:
             session = await session_service.create_session(app_name=APP_NAME, user_id=user_id)
-        else:
-            print(f"[voice] resuming session {session.id} for {user_id}")
     else:
         session = await session_service.create_session(app_name=APP_NAME, user_id=user_id)
 
@@ -288,9 +282,8 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                     "Describe it warmly in 1-2 sentences and ask: 'Does that work for you, or want me to tweak anything?' "
                     "Do NOT call generate_workout_plan — the plan is already saved."
                 )
-                print(f"[voice] pre-generated workout plan for {user_id}: {plan.get('name')}")
             except Exception as e:
-                print(f"[voice] workout plan pre-gen failed, falling back to agent: {e}")
+                sentry_sdk.capture_exception(e)
                 prompt = _CONTEXT_PROMPTS["workout_plan"].replace("{name}", name or "there")
             text = f"{text}\n{prompt}"
         elif context and context in _CONTEXT_PROMPTS:
@@ -323,22 +316,18 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                         if getattr(part, "thought", False):
                             continue
                         if part.inline_data:
-                            print(f"[voice] sending audio: {len(part.inline_data.data)} bytes → {user_id}")
                             await websocket.send_bytes(part.inline_data.data)
                         elif part.text:
-                            print(f"[voice] sending text: {part.text[:80]!r} → {user_id}")
                             await websocket.send_text(
                                 json.dumps({"type": "text", "text": part.text})
                             )
                 if event.output_transcription and event.output_transcription.text:
                     cc = event.output_transcription.text.strip()
                     if cc and not ws_closed:
-                        print(f"[voice] cc: {cc[:60]!r} → {user_id}")
                         await websocket.send_text(
                             json.dumps({"type": "transcript", "text": cc})
                         )
                 if event.turn_complete and not ws_closed:
-                    print(f"[voice] turn_complete → {user_id}")
                     await websocket.send_text(json.dumps({"type": "turn_complete"}))
         except genai_errors.APIError as e:
             # 1000 = Gemini closed cleanly because we closed live_queue after iOS disconnect
@@ -360,12 +349,10 @@ async def handle_voice(websocket: WebSocket, user_id: str,
 
                 # Starlette sends a disconnect dict instead of raising WebSocketDisconnect
                 if message.get("type") == "websocket.disconnect":
-                    print(f"[voice] disconnected: {user_id}")
                     break
 
                 if "bytes" in message:
                     # Raw PCM audio from iOS — use send_realtime for audio chunks
-                    print(f"[voice] recv audio: {len(message['bytes'])} bytes ← {user_id}")
                     live_queue.send_realtime(
                         genai_types.Blob(
                             data=message["bytes"],
@@ -376,8 +363,7 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                 elif "text" in message:
                     try:
                         data = json.loads(message["text"])
-                    except json.JSONDecodeError as e:
-                        print(f"[voice] invalid JSON from client: {e}")
+                    except json.JSONDecodeError:
                         continue
                     if data.get("type") == "text_input":
                         # Text input fallback for testing without mic
@@ -388,7 +374,7 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                             )
                         )
         except WebSocketDisconnect:
-            print(f"[voice] disconnected: {user_id}")
+            pass
         except Exception as e:
             traceback.print_exc()
             sentry_sdk.capture_exception(e)
@@ -405,4 +391,3 @@ async def handle_voice(websocket: WebSocket, user_id: str,
     recv_task = asyncio.create_task(recv_from_client())
 
     await asyncio.gather(send_task, recv_task, return_exceptions=True)
-    print(f"[voice] session ended: {user_id}")

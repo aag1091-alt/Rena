@@ -56,9 +56,8 @@ class VoiceManager: NSObject, ObservableObject {
         audioEngine.prepare()
         do {
             try audioEngine.start()
-            print("[audio] engine started")
         } catch {
-            print("[audio] engine start failed: \(error)")
+            // engine start failure is non-fatal; will retry on playback
         }
     }
 
@@ -153,11 +152,9 @@ class VoiceManager: NSObject, ObservableObject {
             if converter == nil {
                 guard buffer.format.sampleRate > 0,
                       let c = AVAudioConverter(from: buffer.format, to: targetFormat) else {
-                    print("[audio] mic converter failed for format \(buffer.format.sampleRate)Hz")
-                    return
+                            return
                 }
                 converter = c
-                print("[audio] mic converter ready: \(buffer.format.sampleRate)Hz → 16kHz")
             }
             guard let converter else { return }
 
@@ -172,7 +169,6 @@ class VoiceManager: NSObject, ObservableObject {
             }
             guard error == nil, let data = converted.toData() else { return }
             micChunkCount += 1
-            if micChunkCount % 50 == 1 { print("[audio] mic chunk \(micChunkCount) ws=\(self.webSocket != nil)") }
             self.webSocket?.send(.data(data)) { _ in }
 
             // After 500 ms of silence from the server, assume Gemini is processing → show thinking
@@ -187,7 +183,6 @@ class VoiceManager: NSObject, ObservableObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
             }
         }
-        print("[audio] mic tap installed")
     }
 
     // MARK: - Receive loop
@@ -253,12 +248,10 @@ class VoiceManager: NSObject, ObservableObject {
             }
         }
         if !audioEngine.isRunning {
-            print("[audio] engine not running — restarting before playback")
             try? AVAudioSession.sharedInstance().setActive(true)
             do {
                 try audioEngine.start()
             } catch {
-                print("[audio] engine restart failed: \(error) — dropping chunk")
                 return
             }
         }

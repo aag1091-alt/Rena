@@ -160,7 +160,6 @@ struct DataView: View {
             }
         } catch {
             await MainActor.run { isLoading = false }
-            print("[DataView] loadData error: \(error)")
         }
     }
 }

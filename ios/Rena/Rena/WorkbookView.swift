@@ -41,13 +41,6 @@ struct WorkbookView: View {
         let fmt = DateFormatter(); fmt.dateFormat = "EEE, MMM d"
         return fmt.string(from: selectedDate)
     }
-    private var greeting: String {
-        if !isToday { return dateLabel }
-        if isMorning { return "Good morning" }
-        if isEvening { return "Good evening" }
-        return "Good afternoon"
-    }
-
     var body: some View {
         NavigationView {
             ZStack {
@@ -113,8 +106,6 @@ struct WorkbookView: View {
 
                     // ── Header card ─────────────────────────────────
                     WorkbookHeader(
-                        greeting: greeting,
-                        name: appState.name.components(separatedBy: " ").first ?? appState.name,
                         isMorning: isMorning,
                         isEvening: isEvening,
                         caloriesConsumed: displayConsumed,
@@ -247,8 +238,6 @@ struct WorkbookView: View {
 // MARK: - Header card
 
 struct WorkbookHeader: View {
-    let greeting: String
-    let name: String
     let isMorning: Bool
     let isEvening: Bool
     let caloriesConsumed: Int

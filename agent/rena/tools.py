@@ -501,7 +501,6 @@ def _estimate_macros(meal_name: str, calories: int) -> dict:
             "fat_g":     int(data.get("fat_g", 0)),
         }
     except Exception as e:
-        print(f"[_estimate_macros] failed for '{meal_name}': {e}")
         return {"protein_g": 0, "carbs_g": 0, "fat_g": 0}
 
 
@@ -736,19 +735,17 @@ If no food is visible return {"identified": false}."""
         result = json.loads(raw)
     except json.JSONDecodeError:
         # Gemini sometimes includes extra text — extract the first JSON object
-        print(f"[scan_image] JSON parse failed, raw response:\n{raw}")
         match = re.search(r"\{[\s\S]*\}", raw)
         if match:
             try:
                 result = json.loads(match.group())
             except json.JSONDecodeError:
-                print("[scan_image] Fallback JSON parse also failed")
+                pass
                 return {"identified": False}
         else:
             return {"identified": False}
 
     result["user_id"] = user_id
-    print(f"[scan_image] identified={result.get('identified')} items={len(result.get('items') or [])} total_cal={result.get('total_calories')}")
     return result
 
 
@@ -1105,9 +1102,7 @@ def _generate_coaching_script(exercise_name: str, target_muscles: str = "") -> s
         contents=prompt,
         config=genai_types.GenerateContentConfig(safety_settings=safety_off),
     )
-    script = response.text.strip()
-    print(f"[script] '{exercise_name}': {script}")
-    return script
+    return response.text.strip()
 
 
 def _add_coaching_audio(video_bytes: bytes, script: str) -> bytes:
@@ -1130,7 +1125,6 @@ def _add_coaching_audio(video_bytes: bytes, script: str) -> bytes:
         input=synthesis_input, voice=voice, audio_config=audio_config
     )
     audio_bytes = tts_response.audio_content
-    print(f"[tts] generated {len(audio_bytes)} bytes of coaching audio")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         video_path  = _os.path.join(tmpdir, "video.mp4")
@@ -1207,7 +1201,6 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
 
         # 2. Randomly pick trainer gender for the video
         gender = random.choice(["male", "female"])
-        print(f"[veo] trainer gender={gender} for '{exercise_name}'")
 
         # 3. Build Veo prompt informed by the script
         prompt = _veo_prompt(exercise_name, target_muscles, gender=gender, script=script)
@@ -1234,11 +1227,9 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
             "created_at":     firestore.SERVER_TIMESTAMP,
         })
 
-        print(f"[veo] started job {job_id} for '{exercise_name}' op={op_name}")
         return {"status": "generating", "job_id": job_id}
 
     except Exception as e:
-        print(f"[veo] failed to start job for '{exercise_name}': {e}")
         return {"status": "error", "message": str(e)}
 
 
@@ -1282,8 +1273,8 @@ def get_exercise_video_status(job_id: str) -> dict:
                 job["exercise_name"], job.get("target_muscles", "")
             )
             video_bytes = _add_coaching_audio(video_bytes, script)
-        except Exception as e:
-            print(f"[veo] audio mux failed (uploading silent video): {e}")
+        except Exception:
+            pass  # upload silent video if audio mux fails
 
         gcs_client  = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
         dest_bucket = gcs_client.bucket(bucket_name)

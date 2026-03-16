@@ -211,7 +211,6 @@ struct GoalOnboardingView: View {
         guard !goalDetected else { return }
         do {
             let progress = try await RenaAPI.shared.getProgress(userId: appState.userId)
-            print("[GoalOnboarding] poll → goal: \(progress.goal), deadline: \(progress.deadline)")
             if progress.goal != "Not set" && !progress.goal.isEmpty {
                 detectedGoal = progress.goal
                 detectedDeadline = progress.deadline
