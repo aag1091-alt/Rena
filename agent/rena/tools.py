@@ -463,73 +463,309 @@ def get_progress(user_id: str, for_date: str = None) -> dict:
 
 
 def seed_test_data(user_id: str) -> dict:
-    """Seed 7 days of realistic test data tailored to the user's actual profile."""
-    import json, re
+    """Seed 7 days of rich test data: daily logs, workout plans, meal plans, and tomorrow notes."""
+    import random
     from datetime import timedelta
 
-    # ── Read the user's actual profile ──────────────────────────────────────
-    profile = _user_ref(user_id).get().to_dict() or {}
+    profile  = _user_ref(user_id).get().to_dict() or {}
     goal_doc = _goal_ref(user_id).get().to_dict() or {}
 
     calorie_target = int(profile.get("daily_calorie_target", 2000))
     weight_kg      = float(profile.get("weight_kg", 75.0))
-    goal_type      = goal_doc.get("goal_type", "fitness")
-    direction      = goal_doc.get("direction", "decrease")  # "decrease" | "increase"
-    protein_target = int(weight_kg * 1.6)
+    direction      = goal_doc.get("direction", "decrease")
 
-    # ── Ask Gemini to generate 7 realistic days of data ─────────────────────
-    prompt = f"""Generate 7 days of realistic health tracking data for someone with:
-- Daily calorie target: {calorie_target} kcal
-- Current weight: {weight_kg} kg
-- Goal: {goal_type} (weight {direction})
-- Protein target: {protein_target}g/day
+    rng = random.Random(user_id)  # deterministic per user so re-seeding is idempotent
 
-Rules:
-- Each day has 2-4 meals. Total daily calories should vary realistically: some days 100-200 under target, some days on target, 1-2 days slightly over.
-- Meals should be varied and realistic (mix of home cooking and common takeout/cafe items).
-- Workouts on 4-5 of the 7 days. Types should match the goal: weight loss = cardio + some strength, fitness/habit = mixed, weight gain = strength focus.
-- Water glasses between 5-8 per day.
-- Weight should show a realistic {direction} trend over the 7 days (small daily changes, not linear).
+    # ── Food library ─────────────────────────────────────────────────────────
+    BREAKFASTS = [
+        {"name": "Oats with banana and honey",            "calories": 320, "protein_g": 9,  "carbs_g": 58, "fat_g": 5},
+        {"name": "Scrambled eggs on wholegrain toast",    "calories": 380, "protein_g": 22, "carbs_g": 32, "fat_g": 14},
+        {"name": "Idli sambar (3 pieces)",                "calories": 280, "protein_g": 10, "carbs_g": 50, "fat_g": 4},
+        {"name": "Avocado toast with poached egg",        "calories": 420, "protein_g": 16, "carbs_g": 34, "fat_g": 22},
+        {"name": "Masala omelette with paratha",          "calories": 450, "protein_g": 18, "carbs_g": 42, "fat_g": 19},
+        {"name": "Greek yogurt with granola and berries", "calories": 310, "protein_g": 15, "carbs_g": 42, "fat_g": 7},
+        {"name": "Banana protein smoothie",               "calories": 290, "protein_g": 24, "carbs_g": 32, "fat_g": 5},
+        {"name": "Poha with peanuts",                     "calories": 260, "protein_g": 7,  "carbs_g": 44, "fat_g": 7},
+    ]
+    LUNCHES = [
+        {"name": "Dal rice with pickle",             "calories": 480, "protein_g": 16, "carbs_g": 85, "fat_g": 8},
+        {"name": "Grilled chicken salad",            "calories": 420, "protein_g": 38, "carbs_g": 22, "fat_g": 18},
+        {"name": "Chicken wrap with hummus",         "calories": 510, "protein_g": 32, "carbs_g": 48, "fat_g": 16},
+        {"name": "Palak paneer with 2 rotis",        "calories": 540, "protein_g": 24, "carbs_g": 52, "fat_g": 22},
+        {"name": "Quinoa bowl with roasted veggies", "calories": 390, "protein_g": 14, "carbs_g": 52, "fat_g": 12},
+        {"name": "Rajma with rice",                  "calories": 520, "protein_g": 20, "carbs_g": 88, "fat_g": 9},
+        {"name": "Tuna pasta salad",                 "calories": 460, "protein_g": 28, "carbs_g": 55, "fat_g": 12},
+        {"name": "Chole with bhature",               "calories": 620, "protein_g": 18, "carbs_g": 82, "fat_g": 22},
+        {"name": "Grilled paneer with salad",        "calories": 380, "protein_g": 22, "carbs_g": 18, "fat_g": 24},
+        {"name": "Subway footlong veggie",           "calories": 500, "protein_g": 18, "carbs_g": 72, "fat_g": 11},
+    ]
+    DINNERS = [
+        {"name": "Grilled salmon with sweet potato",   "calories": 520, "protein_g": 42, "carbs_g": 38, "fat_g": 16},
+        {"name": "Chicken tikka masala with rice",     "calories": 650, "protein_g": 38, "carbs_g": 72, "fat_g": 18},
+        {"name": "Stir-fried tofu with brown rice",    "calories": 430, "protein_g": 18, "carbs_g": 58, "fat_g": 14},
+        {"name": "Fish curry with rice",               "calories": 580, "protein_g": 35, "carbs_g": 65, "fat_g": 14},
+        {"name": "Pasta arrabiata",                    "calories": 490, "protein_g": 14, "carbs_g": 78, "fat_g": 12},
+        {"name": "Chicken stir fry with vegetables",   "calories": 480, "protein_g": 36, "carbs_g": 34, "fat_g": 18},
+        {"name": "Dal tadka with 2 rotis",             "calories": 460, "protein_g": 18, "carbs_g": 68, "fat_g": 10},
+        {"name": "Egg fried rice",                     "calories": 510, "protein_g": 20, "carbs_g": 72, "fat_g": 14},
+        {"name": "Baked chicken breast with broccoli", "calories": 390, "protein_g": 44, "carbs_g": 18, "fat_g": 10},
+        {"name": "Homemade pizza (2 slices)",           "calories": 580, "protein_g": 22, "carbs_g": 72, "fat_g": 20},
+    ]
+    SNACKS = [
+        {"name": "Chai with 2 biscuits",      "calories": 120, "protein_g": 3,  "carbs_g": 20, "fat_g": 4},
+        {"name": "Apple",                     "calories": 80,  "protein_g": 0,  "carbs_g": 21, "fat_g": 0},
+        {"name": "Protein bar",               "calories": 200, "protein_g": 20, "carbs_g": 22, "fat_g": 6},
+        {"name": "Mixed nuts (30g)",          "calories": 180, "protein_g": 6,  "carbs_g": 6,  "fat_g": 15},
+        {"name": "Banana",                    "calories": 100, "protein_g": 1,  "carbs_g": 26, "fat_g": 0},
+        {"name": "Samosa (2 pieces)",         "calories": 250, "protein_g": 5,  "carbs_g": 32, "fat_g": 12},
+        {"name": "Greek yogurt",              "calories": 130, "protein_g": 12, "carbs_g": 10, "fat_g": 4},
+        {"name": "Hummus with carrot sticks", "calories": 160, "protein_g": 6,  "carbs_g": 18, "fat_g": 7},
+        {"name": "Coconut water",             "calories": 60,  "protein_g": 1,  "carbs_g": 15, "fat_g": 0},
+        {"name": "Dark chocolate (2 squares)","calories": 110, "protein_g": 1,  "carbs_g": 12, "fat_g": 6},
+    ]
+    WORKOUTS = [
+        {"type": "Morning Run",        "duration_min": 30, "calories_burned": 280},
+        {"type": "HIIT",               "duration_min": 25, "calories_burned": 290},
+        {"type": "Strength Training",  "duration_min": 45, "calories_burned": 240},
+        {"type": "Cycling",            "duration_min": 40, "calories_burned": 310},
+        {"type": "Yoga",               "duration_min": 45, "calories_burned": 130},
+        {"type": "Evening Walk",       "duration_min": 45, "calories_burned": 160},
+        {"type": "Swimming",           "duration_min": 35, "calories_burned": 280},
+        {"type": "Upper Body Weights", "duration_min": 40, "calories_burned": 200},
+        {"type": "Leg Day",            "duration_min": 50, "calories_burned": 260},
+        {"type": "Cardio Circuit",     "duration_min": 30, "calories_burned": 320},
+    ]
 
-Return ONLY a JSON array of 7 objects (day 0 = 6 days ago, day 6 = yesterday). No markdown.
-Each object:
-{{
-  "meals": [{{"name": str, "calories": int, "protein_g": int, "carbs_g": int, "fat_g": int}}],
-  "workouts": [{{"type": str, "duration_min": int, "calories_burned": int}}],
-  "water_glasses": int,
-  "weight_kg": float
-}}"""
-
-    client = _get_text_client()
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    raw = response.text.strip()
-    raw = re.sub(r"^```(?:json)?\n?", "", raw)
-    raw = re.sub(r"\n?```$", "", raw)
-    days_data = json.loads(raw)
-
-    # ── Write to Firestore ───────────────────────────────────────────────────
     today = datetime.now(timezone.utc).date()
     written = []
-    for i, day_obj in enumerate(days_data[:7]):
-        day = today - timedelta(days=6 - i)
+
+    # ── 7 days of daily logs ─────────────────────────────────────────────────
+    # Spread workouts across 5 of 7 days; vary water; realistic weight trend
+    workout_day_indices = sorted(rng.sample(range(7), 5))
+
+    for i in range(7):
+        day     = today - timedelta(days=6 - i)
         day_str = day.isoformat()
-        meals = [
-            {**m, "logged_at": f"{day_str}T08:00:00Z"}
-            for m in day_obj.get("meals", [])
-        ]
-        workouts = [
-            {**w, "logged_at": f"{day_str}T17:00:00Z"}
-            for w in day_obj.get("workouts", [])
-        ]
+
+        b = dict(rng.choice(BREAKFASTS)); b["logged_at"] = f"{day_str}T07:45:00Z"
+        l = dict(rng.choice(LUNCHES));    l["logged_at"] = f"{day_str}T12:30:00Z"
+        d = dict(rng.choice(DINNERS));    d["logged_at"] = f"{day_str}T19:30:00Z"
+        meals = [b, l, d]
+
+        # ~65% chance of an afternoon snack
+        if rng.random() > 0.35:
+            s = dict(rng.choice(SNACKS)); s["logged_at"] = f"{day_str}T16:00:00Z"
+            meals.insert(2, s)  # between lunch and dinner
+
+        workouts = []
+        if i in workout_day_indices:
+            w = dict(rng.choice(WORKOUTS))
+            w["logged_at"] = f"{day_str}T07:00:00Z" if rng.random() > 0.5 else f"{day_str}T18:00:00Z"
+            workouts.append(w)
+
+        # Realistic weight trend
+        if direction == "decrease":
+            w_day = round(weight_kg + (6 - i) * 0.09 + rng.uniform(-0.12, 0.12), 1)
+        elif direction == "increase":
+            w_day = round(weight_kg - (6 - i) * 0.07 + rng.uniform(-0.1, 0.1), 1)
+        else:
+            w_day = round(weight_kg + rng.uniform(-0.2, 0.2), 1)
+
         _user_ref(user_id).collection("logs").document(day_str).set({
             "meals":         meals,
             "workouts":      workouts,
-            "water_glasses": day_obj.get("water_glasses", 6),
-            "weight_kg":     day_obj.get("weight_kg", weight_kg),
+            "water_glasses": rng.randint(5, 9),
+            "weight_kg":     w_day,
         })
         written.append(day_str)
 
-    return {"status": "seeded", "days": written}
+    # ── Workout plans (3 past days: done / partial / untouched) ─────────────
+    WORKOUT_PLAN_TEMPLATES = [
+        {
+            "name": "Push Day — Chest & Shoulders",
+            "total_duration_min": 45,
+            "exercises": [
+                {"name": "Push-ups",       "type": "strength", "sets": 4, "reps": 15, "weight_kg": 0,    "duration_min": None, "calories_burned": 55,  "target_muscles": "chest, triceps, anterior deltoid"},
+                {"name": "Dumbbell Press", "type": "strength", "sets": 3, "reps": 10, "weight_kg": 15,   "duration_min": None, "calories_burned": 60,  "target_muscles": "chest, triceps"},
+                {"name": "Shoulder Press", "type": "strength", "sets": 3, "reps": 12, "weight_kg": 10,   "duration_min": None, "calories_burned": 50,  "target_muscles": "deltoids, triceps"},
+                {"name": "Tricep Dips",    "type": "strength", "sets": 3, "reps": 12, "weight_kg": 0,    "duration_min": None, "calories_burned": 40,  "target_muscles": "triceps, chest"},
+                {"name": "Treadmill run",  "type": "cardio",   "sets": None, "reps": None, "weight_kg": None, "duration_min": 15, "calories_burned": 135, "target_muscles": "cardiovascular, legs"},
+            ],
+        },
+        {
+            "name": "Full Body HIIT",
+            "total_duration_min": 30,
+            "exercises": [
+                {"name": "Burpees",            "type": "cardio",   "sets": None, "reps": None, "weight_kg": None, "duration_min": 8,  "calories_burned": 100, "target_muscles": "full body, cardiovascular"},
+                {"name": "Jump Squats",         "type": "strength", "sets": 4, "reps": 15, "weight_kg": 0,    "duration_min": None, "calories_burned": 60,  "target_muscles": "quadriceps, glutes, calves"},
+                {"name": "Mountain Climbers",   "type": "cardio",   "sets": None, "reps": None, "weight_kg": None, "duration_min": 7,  "calories_burned": 80,  "target_muscles": "core, shoulders, cardiovascular"},
+                {"name": "Kettlebell Swings",   "type": "strength", "sets": 3, "reps": 15, "weight_kg": 12,   "duration_min": None, "calories_burned": 70,  "target_muscles": "glutes, hamstrings, core"},
+            ],
+        },
+        {
+            "name": "Run + Core",
+            "total_duration_min": 40,
+            "exercises": [
+                {"name": "Easy Run",          "type": "cardio",   "sets": None, "reps": None, "weight_kg": None, "duration_min": 25, "calories_burned": 230, "target_muscles": "cardiovascular, legs"},
+                {"name": "Plank",             "type": "strength", "sets": 3, "reps": None, "weight_kg": 0,    "duration_min": None, "calories_burned": 30,  "target_muscles": "core, transverse abdominis"},
+                {"name": "Bicycle Crunches",  "type": "strength", "sets": 3, "reps": 20, "weight_kg": 0,    "duration_min": None, "calories_burned": 25,  "target_muscles": "obliques, core"},
+                {"name": "Leg Raises",        "type": "strength", "sets": 3, "reps": 15, "weight_kg": 0,    "duration_min": None, "calories_burned": 25,  "target_muscles": "lower abs, hip flexors"},
+            ],
+        },
+    ]
+    # day-4=fully done, day-2=partial, day-1=untouched
+    plan_dates = [
+        (today - timedelta(days=4), "fully_done"),
+        (today - timedelta(days=2), "partially_done"),
+        (today - timedelta(days=1), "untouched"),
+    ]
+    for (plan_day, completion), template in zip(plan_dates, WORKOUT_PLAN_TEMPLATES):
+        day_str  = plan_day.isoformat()
+        plan_obj = {
+            "id":   str(uuid.uuid4()),
+            "date": day_str,
+            "name": template["name"],
+            "total_duration_min": template["total_duration_min"],
+            "exercises": [],
+        }
+        for j, ex in enumerate(template["exercises"]):
+            ex_copy = dict(ex)
+            ex_copy["id"] = str(uuid.uuid4())
+            if completion == "fully_done":
+                ex_copy["logged"] = True; ex_copy["completed"] = True
+            elif completion == "partially_done":
+                ex_copy["logged"] = j < 2; ex_copy["completed"] = j < 2
+            else:
+                ex_copy["logged"] = False; ex_copy["completed"] = False
+            plan_obj["exercises"].append(ex_copy)
+        _workout_plan_ref(user_id, day_str).set(plan_obj)
+
+    # ── Meal plans (3 past days: fully logged / partial / unlogged) ──────────
+    MEAL_PLAN_TEMPLATES = [
+        {
+            "total_calories": calorie_target,
+            "notes": "High protein day — great for muscle recovery.",
+            "meals": [
+                {"meal_type": "breakfast", "name": "Spinach omelette with whole wheat toast",
+                 "description": "3-egg spinach and mushroom omelette with 2 slices of whole wheat toast",
+                 "cook_time_min": 10, "calories": 380, "protein_g": 28, "carbs_g": 30, "fat_g": 14,
+                 "youtube_query": "spinach mushroom omelette healthy breakfast"},
+                {"meal_type": "lunch", "name": "Grilled chicken quinoa bowl",
+                 "description": "150g grilled chicken on quinoa with cucumber, tomato, and lemon tahini dressing",
+                 "cook_time_min": 20, "calories": 490, "protein_g": 45, "carbs_g": 40, "fat_g": 14,
+                 "youtube_query": "grilled chicken quinoa bowl meal prep recipe"},
+                {"meal_type": "snack", "name": "Protein shake with banana",
+                 "description": "1 scoop whey protein, 1 banana, 200ml almond milk",
+                 "cook_time_min": 2, "calories": 220, "protein_g": 24, "carbs_g": 28, "fat_g": 3,
+                 "youtube_query": "high protein post workout shake"},
+                {"meal_type": "dinner", "name": "Baked salmon with roasted vegetables",
+                 "description": "180g baked salmon with broccoli and bell pepper, drizzle of olive oil",
+                 "cook_time_min": 25, "calories": 490, "protein_g": 42, "carbs_g": 20, "fat_g": 22,
+                 "youtube_query": "baked salmon roasted vegetables easy healthy dinner"},
+            ],
+        },
+        {
+            "total_calories": calorie_target,
+            "notes": "Balanced Indian-style day with good macros.",
+            "meals": [
+                {"meal_type": "breakfast", "name": "Moong dal chilla with mint chutney",
+                 "description": "4 moong dal chillas with chopped onion and ginger, served with mint chutney",
+                 "cook_time_min": 15, "calories": 310, "protein_g": 18, "carbs_g": 40, "fat_g": 7,
+                 "youtube_query": "moong dal chilla healthy breakfast"},
+                {"meal_type": "lunch", "name": "Paneer tikka with brown rice",
+                 "description": "200g grilled paneer tikka with spiced brown rice and raita",
+                 "cook_time_min": 25, "calories": 560, "protein_g": 28, "carbs_g": 60, "fat_g": 20,
+                 "youtube_query": "paneer tikka easy recipe homemade"},
+                {"meal_type": "snack", "name": "Mixed fruit bowl with chaat masala",
+                 "description": "Apple, banana, and pomegranate with a pinch of chaat masala",
+                 "cook_time_min": 3, "calories": 150, "protein_g": 2, "carbs_g": 36, "fat_g": 1,
+                 "youtube_query": "healthy fruit chaat recipe"},
+                {"meal_type": "dinner", "name": "Dal makhani with 2 rotis",
+                 "description": "Slow-cooked dal makhani with 2 whole wheat rotis and a side salad",
+                 "cook_time_min": 30, "calories": 520, "protein_g": 22, "carbs_g": 72, "fat_g": 14,
+                 "youtube_query": "dal makhani dhaba style recipe"},
+            ],
+        },
+        {
+            "total_calories": calorie_target,
+            "notes": "Lower carb day — lean protein and lots of veggies.",
+            "meals": [
+                {"meal_type": "breakfast", "name": "Egg white scramble with avocado",
+                 "description": "4 egg whites scrambled with spinach and half an avocado on the side",
+                 "cook_time_min": 8, "calories": 290, "protein_g": 22, "carbs_g": 10, "fat_g": 18,
+                 "youtube_query": "egg white scramble low carb healthy breakfast"},
+                {"meal_type": "lunch", "name": "Grilled fish with mixed greens",
+                 "description": "200g grilled tilapia with a large mixed greens salad, olive oil dressing",
+                 "cook_time_min": 15, "calories": 380, "protein_g": 42, "carbs_g": 12, "fat_g": 16,
+                 "youtube_query": "grilled tilapia salad healthy lunch"},
+                {"meal_type": "snack", "name": "Almonds and green tea",
+                 "description": "20 almonds with a cup of unsweetened green tea",
+                 "cook_time_min": 1, "calories": 140, "protein_g": 5, "carbs_g": 5, "fat_g": 12,
+                 "youtube_query": ""},
+                {"meal_type": "dinner", "name": "Chicken lettuce wraps",
+                 "description": "Spiced minced chicken in iceberg lettuce cups with salsa and lime",
+                 "cook_time_min": 20, "calories": 380, "protein_g": 38, "carbs_g": 14, "fat_g": 14,
+                 "youtube_query": "chicken lettuce wraps healthy dinner"},
+            ],
+        },
+    ]
+    # day-5=fully logged, day-3=partial, day-1 already handled by workout plan
+    meal_plan_dates = [
+        (today - timedelta(days=5), "fully_logged"),
+        (today - timedelta(days=3), "partially_logged"),
+        (today - timedelta(days=1), "unlogged"),
+    ]
+    for (plan_day, log_state), template in zip(meal_plan_dates, MEAL_PLAN_TEMPLATES):
+        day_str  = plan_day.isoformat()
+        plan_obj = {
+            "id":             str(uuid.uuid4()),
+            "date":           day_str,
+            "total_calories": template["total_calories"],
+            "notes":          template["notes"],
+            "meals":          [],
+        }
+        for k, meal in enumerate(template["meals"]):
+            m = dict(meal)
+            m["id"] = str(uuid.uuid4())
+            if log_state == "fully_logged":
+                m["logged"] = True
+            elif log_state == "partially_logged":
+                m["logged"] = k < 2
+            else:
+                m["logged"] = False
+            plan_obj["meals"].append(m)
+        _meal_plan_ref(user_id, day_str).set(plan_obj)
+
+    # ── Tomorrow plan notes ───────────────────────────────────────────────────
+    tomorrow = today + timedelta(days=1)
+    PLAN_NOTES = [
+        "Planning a 30-minute morning run tomorrow and will meal prep grilled chicken and veggies for lunch. Aiming to hit protein target.",
+        "Keeping it light — an evening walk and focusing on eating clean. Will try the moong dal chilla for breakfast.",
+        "Big day planned — going to do the full HIIT workout and stick to the high-protein meal plan. Feeling motivated!",
+    ]
+    now_utc = datetime.now(timezone.utc)
+    _tomorrow_plan_ref(user_id, tomorrow.isoformat()).set({
+        "summary":    rng.choice(PLAN_NOTES),
+        "date":       tomorrow.isoformat(),
+        "created_at": now_utc,
+        "updated_at": now_utc,
+    })
+    # Also seed a note for a day earlier in the week
+    prev_plan_date = today - timedelta(days=2) + timedelta(days=1)
+    _tomorrow_plan_ref(user_id, prev_plan_date.isoformat()).set({
+        "summary":    PLAN_NOTES[1],
+        "date":       prev_plan_date.isoformat(),
+        "created_at": now_utc - timedelta(days=2),
+        "updated_at": now_utc - timedelta(days=2),
+    })
+
+    return {
+        "status":        "seeded",
+        "days":          written,
+        "workout_plans": [d.isoformat() for d, _ in plan_dates],
+        "meal_plans":    [d.isoformat() for d, _ in meal_plan_dates],
+        "tomorrow_plan": tomorrow.isoformat(),
+    }
 
 
 def _estimate_macros(meal_name: str, calories: int) -> dict:
