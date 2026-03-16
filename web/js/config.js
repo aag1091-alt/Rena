@@ -5,5 +5,5 @@ const CONFIG = {
   // Web OAuth 2.0 Client ID — create one at:
   // GCP Console → APIs & Services → Credentials → + Create Credentials → OAuth client ID → Web application
   // Add your hosting URL (e.g. https://rena-490107.web.app) as an Authorized JavaScript origin
-  GOOGLE_CLIENT_ID: "879054433521-rdqeseb320crra6phl9anti84cjvteo1.apps.googleusercontent.com",
+  GOOGLE_CLIENT_ID: "879054433521-adc6gpbhl02dn1v5ecbsi6fpvuu18t1m.apps.googleusercontent.com",
 };
