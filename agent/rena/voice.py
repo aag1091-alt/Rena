@@ -157,6 +157,17 @@ _CONTEXT_PROMPTS = {
         "Summarise the meal plan in 2-3 sentences — highlight the best meal and total calories. "
         "Keep the whole exchange to 3 turns max."
     ),
+    "update_meal_plan": (
+        "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
+        "Open with one sentence referencing {day_label}'s planned meals from [RENA MEMORY] "
+        "(e.g. 'You've got chicken stir fry and oats lined up'). "
+        "Then ask what they'd like to change: 'What would you like to swap or adjust?' — "
+        "they might want a different meal, lighter calories, different cuisine, fewer dishes, etc. "
+        "Once you understand what they want, call generate_meal_plan with for_date=[meal_date] "
+        "and their requested changes in the notes parameter. "
+        "Summarise the key change in one sentence and highlight the updated total calories. "
+        "Keep it to 2-3 turns max."
+    ),
     "plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
         "Open with one sentence about {name}'s recent progress from [RENA MEMORY] "
@@ -278,6 +289,7 @@ async def _save_session_note_async(user_id: str, context: str, name: str):
             "workout_plan":        "planning a workout",
             "update_workout_plan": "updating their workout plan",
             "meal_plan":           "planning meals",
+            "update_meal_plan":    "updating their meal plan",
             "plan":                "planning a day's nutrition and activity",
             "scan":                "logging food by photo",
         }
@@ -371,6 +383,12 @@ async def handle_voice(websocket: WebSocket, user_id: str,
         elif context and context.startswith("meal_plan:"):
             _, plan_date = context.split(":", 1)
             base_context = "meal_plan"
+            today_str = datetime.now(timezone.utc).date().isoformat()
+            day_label = "today" if plan_date == today_str else "tomorrow"
+            text = f"{text}\n[meal_date:{plan_date}]"
+        elif context and context.startswith("update_meal_plan:"):
+            _, plan_date = context.split(":", 1)
+            base_context = "update_meal_plan"
             today_str = datetime.now(timezone.utc).date().isoformat()
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[meal_date:{plan_date}]"
