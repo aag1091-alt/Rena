@@ -978,6 +978,9 @@ html, body {
 .voice-transcript {
   font-size: 14px; color: #3D2B1F; line-height: 1.5;
 }
+.voice-tool-status {
+  font-size: 13px; color: var(--muted); font-style: italic;
+}
 
 .voice-talk-btn {
   display: flex; align-items: center; gap: 12px;

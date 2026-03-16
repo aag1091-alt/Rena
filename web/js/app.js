@@ -1393,15 +1393,19 @@ function bindVoiceEvents() {
     if (document.getElementById("voice-overlay").classList.contains("hidden")) return;
 
     const label = document.getElementById("voice-btn-label");
-    const icon = document.getElementById("voice-btn-icon");
-    const ts = voice.toolStatus;
+    const icon  = document.getElementById("voice-btn-icon");
+    const tw    = document.getElementById("voice-transcript-wrap");
+    const te    = document.getElementById("voice-transcript");
+    const ts    = voice.toolStatus;
+
+    // Button label stays simple — tool status goes in the transcript area
     const labels = {
-      idle: "Talk to Rena",
+      idle:       "Talk to Rena",
       connecting: "Connecting…",
-      listening: "Listening…",
-      thinking: ts || "Thinking…",
-      speaking: "Rena is speaking…",
-      error: "Connection error",
+      listening:  "Listening…",
+      thinking:   "Thinking…",
+      speaking:   "Rena is speaking…",
+      error:      "Connection error",
     };
     if (label) label.textContent = labels[state] || state;
 
@@ -1410,6 +1414,16 @@ function bindVoiceEvents() {
     } else if (state === "thinking") {
       if (icon) icon.innerHTML = `<div class="thinking-dots"><div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div></div>`;
     }
+
+    // Transcript area: show tool status when thinking, clear on listening
+    if (state === "thinking" && ts) {
+      if (te) { te.textContent = ts; te.className = "voice-transcript voice-tool-status"; }
+      if (tw) tw.style.display = "block";
+    } else if (state === "listening" || state === "connecting") {
+      if (te) { te.textContent = ""; te.className = "voice-transcript"; }
+      if (tw) tw.style.display = "none";
+    }
+    // "speaking" state: transcript area managed by transcriptchange events
   });
 
   voice.addEventListener("transcriptchange", (e) => {
@@ -1418,8 +1432,10 @@ function bindVoiceEvents() {
     if (!te) return;
     if (e.detail) {
       te.textContent = e.detail;
+      te.className = "voice-transcript"; // speech transcript — normal style
       if (tw) tw.style.display = "block";
     } else {
+      te.className = "voice-transcript";
       if (tw) tw.style.display = "none";
     }
   });

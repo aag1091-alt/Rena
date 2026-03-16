@@ -90,11 +90,9 @@ class VoiceManager extends EventTarget {
         this._setState("thinking");
       } else if (msg.type === "turn_complete") {
         this.toolStatus = "";
+        this.transcript = "";
         this._setState("listening");
-        setTimeout(() => {
-          this.transcript = "";
-          this.dispatchEvent(new CustomEvent("transcriptchange", { detail: "" }));
-        }, 1500);
+        this.dispatchEvent(new CustomEvent("transcriptchange", { detail: "" }));
         this.dispatchEvent(new CustomEvent("turncomplete"));
       } else if (msg.type === "transcript" && msg.text) {
         this.transcript = msg.text;
