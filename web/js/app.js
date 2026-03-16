@@ -1428,7 +1428,7 @@ function bindVoiceEvents() {
 // ── Dev Sheet ─────────────────────────────────────────────────────────────
 
 function bindDevSheet() {
-  document.getElementById("home-gear").addEventListener("click", () => {
+  document.querySelectorAll(".settings-gear-btn").forEach(btn => btn.addEventListener("click", () => {
     // Populate profile
     const u = app.user || {};
     const avatarEl = document.getElementById("settings-avatar");
@@ -1443,7 +1443,7 @@ function bindDevSheet() {
     document.getElementById("dev-seed").textContent  = `🧪 Seed 7 Days Data for ${first}`;
     document.getElementById("dev-reset").textContent = `↩ Reset ${first}'s Onboarding`;
     document.getElementById("dev-sheet").classList.remove("hidden");
-  });
+  }));
   document.getElementById("dev-close").addEventListener("click", () => {
     document.getElementById("dev-sheet").classList.add("hidden");
   });
