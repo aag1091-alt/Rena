@@ -147,13 +147,13 @@ _CONTEXT_PROMPTS = {
     "meal_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
         "Open with one sentence about {name}'s recent meal patterns from [RENA MEMORY] — "
-        "reference what they've been eating lately (from 'Recent meals') or today's calorie intake. "
+        "reference what they've been eating lately (from 'Recent meals') or their calorie intake. "
         "Do NOT mention workouts. "
-        "Then ask 2 quick questions to plan today's meals: "
+        "Then ask 2 quick questions to plan {day_label}'s meals: "
         "First: 'What food or ingredients do you have at home?' "
-        "Then: 'Any dietary preferences or things you want to avoid today?' "
-        "Once they've answered both, call generate_meal_plan. In the notes parameter combine their "
-        "available ingredients and preferences. "
+        "Then: 'Any dietary preferences or things you want to avoid?' "
+        "Once they've answered both, call generate_meal_plan with for_date=[meal_date]. "
+        "In the notes parameter combine their available ingredients and preferences. "
         "Summarise the meal plan in 2-3 sentences — highlight the best meal and total calories. "
         "Keep the whole exchange to 3 turns max."
     ),
@@ -269,7 +269,12 @@ async def _save_session_note_async(user_id: str, context: str, name: str):
         progress = await asyncio.to_thread(get_progress, user_id)
         today = datetime.now(timezone.utc).date().isoformat()
 
-        base_ctx = "plan" if context and context.startswith("plan:") else context
+        if context and context.startswith("plan:"):
+            base_ctx = "plan"
+        elif context and context.startswith("meal_plan:"):
+            base_ctx = "meal_plan"
+        else:
+            base_ctx = context
         context_labels = {
             "home":                "general chat / logging food or water",
             "workout_plan":        "planning a new workout",
@@ -354,8 +359,8 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             if rich:
                 text = f"{text}\n{rich}"
 
-        # Parse "plan:<date>" context — e.g. "plan:2026-03-15".
-        # base_context is used for prompt lookup; plan_date / day_label are injected into the prompt.
+        # Parse dated context formats: "plan:<date>" and "meal_plan:<date>".
+        # base_context is used for prompt lookup; the date / day_label are injected into the prompt.
         base_context = context
         plan_date = None
         day_label = None
@@ -365,6 +370,12 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             today_str = datetime.now(timezone.utc).date().isoformat()
             day_label = "today" if plan_date == today_str else "tomorrow"
             text = f"{text}\n[plan_date:{plan_date}]"
+        elif context and context.startswith("meal_plan:"):
+            _, plan_date = context.split(":", 1)
+            base_context = "meal_plan"
+            today_str = datetime.now(timezone.utc).date().isoformat()
+            day_label = "today" if plan_date == today_str else "tomorrow"
+            text = f"{text}\n[meal_date:{plan_date}]"
 
         # For home context, inject today's plan_tomorrow nudge (once per hour max).
         if context == "home":

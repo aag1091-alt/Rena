@@ -120,8 +120,8 @@ struct WorkbookView: View {
                         MealPlanSection(
                             plan: mealPlan, isInteractive: isInteractive,
                             readOnly: isPast, sectionTitle: "MEALS",
-                            onPlanWithRena:   { renaContext = isToday ? "meal_plan" : "plan:\(dateString)"; showRena = true },
-                            onUpdateWithRena: { renaContext = isToday ? "meal_plan" : "plan:\(dateString)"; showRena = true },
+                            onPlanWithRena:   { renaContext = "meal_plan:\(dateString)"; showRena = true },
+                            onUpdateWithRena: { renaContext = "meal_plan:\(dateString)"; showRena = true },
                             onDelete:         { Task { await deleteMealPlanAction() } },
                             onWatch:          { meal in logMealSheet = meal },
                             onLog:            { meal in Task { await logMeal(meal) } }
