@@ -117,11 +117,23 @@ class VoiceManager: NSObject, ObservableObject {
         thinkingWorkItem?.cancel()
         thinkingWorkItem = nil
         sessionVersion += 1          // invalidate all stale main-queue state writes
-        audioPlayer.stop()           // immediately cut any queued / playing audio
+        fadeOutAndStop()             // graceful audio cut — no click
         disconnectWebSocket()
         state = .idle
         transcript = ""
         toolStatus = ""
+    }
+
+    private func fadeOutAndStop() {
+        guard audioPlayer.isPlaying else { return }
+        // Drop volume to 0 — CoreAudio smooths this over ~1 ms, eliminating the
+        // hard-cut click from calling stop() mid-sample.  Then hard-stop once
+        // silence is reached and restore volume for the next session.
+        audioPlayer.volume = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+            self?.audioPlayer.stop()
+            self?.audioPlayer.volume = 1
+        }
     }
 
     func sendText(_ text: String) {
