@@ -49,7 +49,7 @@ _nudge_said_at: dict[str, float] = {}
 # Prompt cache — fetched from Firestore, refreshed every 5 minutes.
 # Keyed by context_key → (prompt_text, timestamp).
 _prompt_cache: dict[str, tuple[str, float]] = {}
-_PROMPT_CACHE_TTL = 300  # 5 minutes
+_PROMPT_CACHE_TTL = 60  # 1 minute (lower during development)
 
 
 def _get_prompt(context_key: str) -> str:
