@@ -145,7 +145,7 @@ struct WorkbookView: View {
                             plan: mealPlan,
                             isInteractive: isToday,
                             sectionTitle: isTomorrow ? "TOMORROW'S MEALS" : "TODAY'S MEALS",
-                            onPlanWithRena: { renaContext = "plan_tomorrow"; showRena = true },
+                            onPlanWithRena: { renaContext = isTomorrow ? "plan_tomorrow" : "meal_plan"; showRena = true },
                             onDelete:       { Task { await deleteMealPlanAction() } },
                             onWatch:        { meal in logMealSheet = meal },
                             onLog:          { meal in Task { await logMeal(meal) } }

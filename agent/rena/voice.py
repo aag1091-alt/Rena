@@ -128,6 +128,15 @@ _CONTEXT_PROMPTS = {
         "Describe the key change in one sentence and end with a short motivating line. "
         "Keep it to 2-3 turns max."
     ),
+    "meal_plan": (
+        "SPEAK OUT LOUD NOW. Ask the user 2 quick questions to plan today's meals: "
+        "First: 'What food or ingredients do you have at home?' "
+        "Then: 'Any dietary preferences or things you want to avoid today?' "
+        "Once they've answered both, call generate_meal_plan. In the notes parameter combine their "
+        "available ingredients and preferences. "
+        "Summarise the meal plan in 2-3 sentences — highlight the best meal and total calories. "
+        "Keep the whole exchange to 3 turns max."
+    ),
     "plan_tomorrow": (
         "SPEAK OUT LOUD NOW: Say 'Let\\'s plan tomorrow, {name}!' "
         "Ask 3 quick questions — do NOT suggest anything yet: "
