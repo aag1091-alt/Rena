@@ -299,7 +299,7 @@ function switchTab(tab) {
 // ── Home ──────────────────────────────────────────────────────────────────
 
 async function loadHome() {
-  if (!app.user) return;
+  if (!app.user?.id) return;
   document.getElementById("home-content").innerHTML =
     `<div class="loading-row"><div class="spinner"></div></div>`;
   try {
@@ -503,7 +503,7 @@ function fmtVal(v) {
 // ── History ───────────────────────────────────────────────────────────────
 
 async function loadHistory() {
-  if (!app.user) return;
+  if (!app.user?.id) return;
   renderHistoryShell();
   await loadHistoryDay();
 }
@@ -704,7 +704,7 @@ function cap(s = "") { return s.charAt(0).toUpperCase() + s.slice(1); }
 // ── Plan ──────────────────────────────────────────────────────────────────
 
 async function loadPlan() {
-  if (!app.user) return;
+  if (!app.user?.id) return;
   renderPlanShell();
   await loadPlanDay();
 }
