@@ -977,12 +977,15 @@ def generate_workout_plan(user_id: str, notes: str = "") -> dict:
     calories_consumed  = sum(m.get("calories", 0) for m in log.get("meals", []))
     calories_remaining = max(0, calorie_target - calories_consumed)
 
+    recent             = get_recent_workouts(user_id, days=14)
+    history_block      = f"\n- Recent workout history (14 days): {recent['summary']}"
+
     notes_block = f"\n- User preferences: {notes}" if notes and notes.strip() else ""
 
     prompt = f"""Generate a workout plan for today for someone with:
 - Goal: {goal_text} ({goal_type}, direction: {direction})
 - Body weight: {weight_kg} kg
-- Calories remaining today: {calories_remaining} kcal{notes_block}
+- Calories remaining today: {calories_remaining} kcal{history_block}{notes_block}
 
 Rules:
 - 3-6 exercises total.
