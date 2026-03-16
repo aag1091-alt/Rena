@@ -49,8 +49,7 @@ PROMPTS = {
     ),
     "workout_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Open with one sentence about {name}'s recent workout pattern from [RENA MEMORY] "
-        "(e.g. 'You've been doing a lot of cardio lately' or 'You haven't trained since Tuesday'). "
+        "Get straight to the task: greet {name} briefly and start asking what you need. "
         "Ask questions to personalise {day_label}'s workout — at minimum: "
         "gym or home, and any specific muscle group or goal. "
         "Ask follow-up questions as needed until you have enough detail to generate a great plan. "
@@ -73,8 +72,7 @@ PROMPTS = {
     ),
     "meal_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Open with one sentence about {name}'s recent meal patterns from [RENA MEMORY] — "
-        "reference what they've been eating lately (from 'Recent meals') or their calorie intake. "
+        "Get straight to the task: greet {name} briefly and start asking what you need. "
         "Do NOT mention workouts. "
         "Ask questions to plan {day_label}'s meals — at minimum: "
         "what food or ingredients they have at home, and any dietary preferences or things to avoid. "
@@ -97,9 +95,7 @@ PROMPTS = {
     ),
     "plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
-        "Open with one sentence about {name}'s recent progress from [RENA MEMORY] "
-        "(e.g. mention a recent workout streak, calorie trend, or last session note). "
-        "Then say 'Let\\'s plan {day_label}!' and follow this exact flow, asking ONE question at a time: "
+        "Get straight to planning: say 'Let\\'s plan {day_label}!' and follow this exact flow, asking ONE question at a time: "
         "1. Ask: 'Any events or commitments {day_label} I should know about?' — wait for answer. "
         "2. Ask: 'What do you want to focus on — eating well, a workout, both, or just rest?' — wait for answer. "
         "3. If they mentioned a workout (or 'both'): ask 'Will you be at the gym or working out at home?' — wait. "
@@ -117,9 +113,7 @@ PROMPTS = {
     ),
     "notes": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
-        "Open with one short sentence summarising {name}'s day so far from [RENA MEMORY] — "
-        "mention what they've eaten or if they worked out (e.g. 'You've had 3 meals and hit your water goal today'). "
-        "Then immediately ask: 'What would you like to note for {day_label}?' "
+        "Get straight to it: ask {name} 'What would you like to note for {day_label}?' "
         "They might say anything — drink more water, eat lighter, go for a walk, avoid sugar. "
         "IMPORTANT: Do NOT call generate_workout_plan or generate_meal_plan — this is notes only. "
         "If their answer is vague, ask a follow-up to clarify. "
