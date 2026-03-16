@@ -32,6 +32,7 @@ ZStack(alignment: .bottom) {
                     .transition(.opacity)
                     .zIndex(1)
                     .onChange(of: showRena) { if !showRena { renaContext = nil } }
+                    .onChange(of: selectedTab) { showRena = false }
             }
 
             // ── Custom tab bar ────────────────────────────────────

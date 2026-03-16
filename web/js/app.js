@@ -389,6 +389,12 @@ function bindTabNav() {
 }
 
 function switchTab(tab) {
+  // Disconnect any active voice session when switching pages
+  if (voice.state !== "idle") {
+    voice.disconnect();
+    setVoiceActive(false);
+    document.getElementById("voice-overlay")?.classList.add("hidden");
+  }
   app.tab = tab;
   history.replaceState(null, "", `#${tab}`);
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
