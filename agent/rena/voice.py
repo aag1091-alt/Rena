@@ -39,20 +39,20 @@ load_dotenv()
 # thinking_config from llm_request.config into live_connect_config right before connecting.
 from google.adk.models import google_llm as _google_llm  # noqa: E402
 
-_orig_google_llm_connect = _google_llm.GoogleLLM.connect
+_orig_gemini_connect = _google_llm.Gemini.connect
 
 @contextlib.asynccontextmanager
-async def _patched_google_llm_connect(self, llm_request):
+async def _patched_gemini_connect(self, llm_request):
     if (
         llm_request.live_connect_config is not None
         and llm_request.config is not None
         and getattr(llm_request.config, "thinking_config", None) is not None
     ):
         llm_request.live_connect_config.thinking_config = llm_request.config.thinking_config
-    async with _orig_google_llm_connect(self, llm_request) as conn:
+    async with _orig_gemini_connect(self, llm_request) as conn:
         yield conn
 
-_google_llm.GoogleLLM.connect = _patched_google_llm_connect
+_google_llm.Gemini.connect = _patched_gemini_connect
 
 session_service = InMemorySessionService()
 APP_NAME = "rena"
