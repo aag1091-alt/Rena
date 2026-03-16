@@ -12,7 +12,7 @@ ZStack(alignment: .bottom) {
 
             // ── Tab content ───────────────────────────────────────
             TabView(selection: $selectedTab) {
-                HomeView().tag(0)
+                HomeView(showRena: $showRena, renaContext: $renaContext).tag(0)
                 DataView().tag(1)
                 WorkbookView(showRena: $showRena, renaContext: $renaContext).tag(2)
                 ScanView().tag(3)

@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct HomeView: View {
+    @Binding var showRena: Bool
+    @Binding var renaContext: String?
+
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var voice: VoiceManager
 
@@ -27,7 +30,10 @@ struct HomeView: View {
                             NudgeCard(nudge: morningNudge)
                         }
 
-                        GoalCard(goal: goalData, isLoading: isLoadingGoal)
+                        GoalCard(goal: goalData, isLoading: isLoadingGoal) {
+                            renaContext = "goal"
+                            showRena = true
+                        }
 
                         DayCalorieBreakdownCard(
                             caloriesConsumed: appState.caloriesConsumed,
@@ -76,7 +82,14 @@ struct HomeView: View {
     private func loadGoal() async {
         isLoadingGoal = true
         let resp = try? await RenaAPI.shared.getGoal(userId: appState.userId)
-        await MainActor.run { goalData = resp; isLoadingGoal = false }
+        await MainActor.run {
+            goalData = resp
+            isLoadingGoal = false
+            // Keep hasGoal in sync so RootView doesn't need to gate on it
+            if let g = resp, !g.goal.isEmpty {
+                appState.hasGoal = true
+            }
+        }
     }
 
     private func loadInsight() async {
@@ -341,13 +354,15 @@ struct DevSheet: View {
 struct GoalCard: View {
     let goal: GoalResponse?
     let isLoading: Bool
+    let onAction: () -> Void      // "Add goal" when empty, "Change goal" when set
 
+    private var hasGoal: Bool      { goal != nil && !(goal?.goal.isEmpty ?? true) }
     private var goalType: String   { goal?.goalType ?? "event" }
     private var goalText: String   { goal?.goal ?? "" }
     private var daysLeft: Int      { goal?.daysUntilGoal ?? 0 }
     private var pct: Int           { goal?.progressPercent ?? 0 }
     private var label: String      { goal?.progressLabel ?? "" }
-    private var showProgress: Bool { goalType != "event" && goal != nil }
+    private var showProgress: Bool { goalType != "event" && hasGoal }
 
     private var goalIcon: String {
         switch goalType {
@@ -381,18 +396,18 @@ struct GoalCard: View {
             HStack(spacing: 10) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(goalColor.opacity(0.14))
+                        .fill((hasGoal ? goalColor : Color(hex: "E76F51")).opacity(0.14))
                         .frame(width: 30, height: 30)
-                    Image(systemName: goalIcon)
+                    Image(systemName: hasGoal ? goalIcon : "target")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(goalColor)
+                        .foregroundColor(hasGoal ? goalColor : Color(hex: "E76F51"))
                 }
                 Text("YOUR GOAL")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
                 Spacer()
-                if daysLeft > 0 {
+                if hasGoal && daysLeft > 0 {
                     Text("\(daysLeft)d to go")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(goalColor)
@@ -403,59 +418,101 @@ struct GoalCard: View {
                 }
             }
 
-            // ── Goal text ────────────────────────────────────────────
-            Text(isLoading ? "Loading…" : (goalText.isEmpty ? "Set your goal" : goalText))
-                .font(.system(size: 19, weight: .bold, design: .rounded))
-                .foregroundColor(Color(hex: "3D2B1F"))
-                .fixedSize(horizontal: false, vertical: true)
-                .lineLimit(2)
+            if isLoading {
+                Text("Loading…")
+                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "B09880"))
+            } else if hasGoal {
+                // ── Goal text ────────────────────────────────────────
+                Text(goalText)
+                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: "3D2B1F"))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
 
-            // ── Progress ─────────────────────────────────────────────
-            if showProgress {
-                VStack(alignment: .leading, spacing: 10) {
-                    // Bar + percentage
-                    HStack(spacing: 8) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(goalColor.opacity(0.12))
-                                    .frame(height: 7)
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(goalColor)
-                                    .frame(width: geo.size.width * Double(pct) / 100.0, height: 7)
-                                    .animation(.spring(), value: pct)
+                // ── Progress ─────────────────────────────────────────
+                if showProgress {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(goalColor.opacity(0.12))
+                                        .frame(height: 7)
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(goalColor)
+                                        .frame(width: geo.size.width * Double(pct) / 100.0, height: 7)
+                                        .animation(.spring(), value: pct)
+                                }
+                            }
+                            .frame(height: 7)
+                            Text("\(pct)%")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(goalColor)
+                                .frame(width: 36, alignment: .trailing)
+                        }
+
+                        if let g = goal, g.targetValue > 0 {
+                            HStack(spacing: 0) {
+                                statCol(label: "Started", value: fmtVal(g.startValue), unit: g.unit)
+                                Divider().frame(height: 34)
+                                statCol(label: "Now",     value: fmtVal(g.currentValue), unit: g.unit, color: goalColor)
+                                Divider().frame(height: 34)
+                                statCol(label: "Target",  value: fmtVal(g.targetValue), unit: g.unit)
                             }
                         }
-                        .frame(height: 7)
-                        Text("\(pct)%")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(goalColor)
-                            .frame(width: 36, alignment: .trailing)
-                    }
 
-                    // Start / Now / Target
-                    if let g = goal, g.targetValue > 0 {
-                        HStack(spacing: 0) {
-                            statCol(label: "Started", value: fmtVal(g.startValue), unit: g.unit)
-                            Divider().frame(height: 34)
-                            statCol(label: "Now",     value: fmtVal(g.currentValue), unit: g.unit, color: goalColor)
-                            Divider().frame(height: 34)
-                            statCol(label: "Target",  value: fmtVal(g.targetValue), unit: g.unit)
+                        if !label.isEmpty {
+                            Text(label)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(goalColor)
                         }
                     }
-
-                    if !label.isEmpty {
-                        Text(label)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(goalColor)
-                    }
                 }
+
+                // ── Change goal ──────────────────────────────────────
+                HStack {
+                    Spacer()
+                    Button(action: onAction) {
+                        Text("Change goal")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(hex: "B09880"))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+            } else {
+                // ── Empty state: no goal set ─────────────────────────
+                Text("No goal set yet")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(hex: "B09880"))
+
+                Button(action: onAction) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Add goal with Rena")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        LinearGradient(
+                            colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(14)
+                    .shadow(color: Color(hex: "E76F51").opacity(0.3), radius: 8, y: 3)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(18)
         .background(
             LinearGradient(
-                colors: [goalColor.opacity(0.07), Color.white],
+                colors: [(hasGoal ? goalColor : Color(hex: "E76F51")).opacity(0.07), Color.white],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
