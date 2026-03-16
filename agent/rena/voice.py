@@ -46,6 +46,35 @@ _CONTEXT_CACHE_TTL = 600  # 10 minutes
 # Keyed by user_id → epoch seconds. Prevents repeating within 1 hour.
 _nudge_said_at: dict[str, float] = {}
 
+# Prompt cache — fetched from Firestore, refreshed every 5 minutes.
+# Keyed by context_key → (prompt_text, timestamp).
+_prompt_cache: dict[str, tuple[str, float]] = {}
+_PROMPT_CACHE_TTL = 300  # 5 minutes
+
+
+def _get_prompt(context_key: str) -> str:
+    """
+    Return the prompt for a given context key.
+    Checks Firestore first (with 5-minute cache), falls back to _CONTEXT_PROMPTS.
+    """
+    from rena.tools import db
+    cached = _prompt_cache.get(context_key)
+    if cached:
+        text, ts = cached
+        if time.time() - ts < _PROMPT_CACHE_TTL:
+            return text
+    try:
+        doc = db.collection("prompts").document(context_key).get()
+        if doc.exists:
+            text = (doc.to_dict() or {}).get("text", "")
+            if text:
+                _prompt_cache[context_key] = (text, time.time())
+                return text
+    except Exception:
+        pass
+    return _CONTEXT_PROMPTS.get(context_key, "")
+
+
 RUN_CONFIG = RunConfig(
     response_modalities=[genai_types.Modality.AUDIO],
     speech_config=genai_types.SpeechConfig(
@@ -279,15 +308,16 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                 except Exception:
                     pass
 
-        if context and context in _CONTEXT_PROMPTS:
-            prompt = _CONTEXT_PROMPTS[context].replace("{name}", name or "there")
-            # For home context with a nudge, add instruction to mention it briefly
-            if context == "home" and user_id in _nudge_said_at and time.time() - _nudge_said_at[user_id] < 5:
-                prompt = (
-                    prompt.rstrip() + " If there is a [TODAY_NUDGE] in this message, "
-                    "weave it naturally into your greeting in one short sentence."
-                )
-            text = f"{text}\n{prompt}"
+        if context:
+            prompt = _get_prompt(context).replace("{name}", name or "there")
+            if prompt:
+                # For home context with a nudge, add instruction to mention it briefly
+                if context == "home" and user_id in _nudge_said_at and time.time() - _nudge_said_at[user_id] < 5:
+                    prompt = (
+                        prompt.rstrip() + " If there is a [TODAY_NUDGE] in this message, "
+                        "weave it naturally into your greeting in one short sentence."
+                    )
+                text = f"{text}\n{prompt}"
 
         live_queue.send_content(
             genai_types.Content(
