@@ -279,12 +279,28 @@
   <div id="dev-sheet" class="bottom-sheet hidden">
     <div class="sheet-card">
       <div class="sheet-header">
-        <span class="sheet-title">Dev Tools</span>
+        <span class="sheet-title">Settings</span>
         <button class="sheet-close" id="dev-close">✕</button>
       </div>
-      <button class="dev-btn danger" id="dev-reset">↩ Reset Onboarding</button>
+      <!-- Profile -->
+      <div class="settings-profile">
+        <div class="settings-avatar" id="settings-avatar"></div>
+        <div class="settings-profile-info">
+          <div class="settings-name" id="settings-name"></div>
+          <div class="settings-email" id="settings-email"></div>
+        </div>
+      </div>
+      <div class="settings-divider"></div>
+      <!-- Log Out -->
+      <button class="settings-logout-btn" id="dev-signout">
+        <span class="settings-logout-icon">→</span>
+        Log Out
+      </button>
+      <div class="settings-divider"></div>
+      <!-- Dev Tools -->
+      <div class="settings-section-label">Developer</div>
       <button class="dev-btn" id="dev-seed">🧪 Seed Last 7 Days Data</button>
-      <button class="dev-btn danger" id="dev-signout">⬡ Log Out</button>
+      <button class="dev-btn danger" id="dev-reset">↩ Reset Onboarding</button>
     </div>
   </div>
 

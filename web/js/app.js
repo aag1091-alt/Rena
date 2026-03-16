@@ -126,7 +126,7 @@ function initGoogleSignIn() {
 async function handleCredential(response) {
   const raw = response.credential.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
   const payload = JSON.parse(atob(raw + "=".repeat((4 - raw.length % 4) % 4)));
-  app.user = { id: payload.sub, email: payload.email, name: payload.given_name || payload.name };
+  app.user = { id: payload.sub, email: payload.email, name: payload.given_name || payload.name, picture: payload.picture || "" };
   localStorage.setItem("rena_user", JSON.stringify(app.user));
   const btn = document.getElementById("google-btn-custom");
   btn.disabled = true; btn.textContent = "Signing in…";
@@ -1423,6 +1423,16 @@ function bindVoiceEvents() {
 
 function bindDevSheet() {
   document.getElementById("home-gear").addEventListener("click", () => {
+    // Populate profile
+    const u = app.user || {};
+    const avatarEl = document.getElementById("settings-avatar");
+    if (u.picture) {
+      avatarEl.innerHTML = `<img src="${u.picture}" alt="${u.name}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+    } else {
+      avatarEl.textContent = (u.name || "?")[0].toUpperCase();
+    }
+    document.getElementById("settings-name").textContent  = u.name  || "";
+    document.getElementById("settings-email").textContent = u.email || "";
     document.getElementById("dev-sheet").classList.remove("hidden");
   });
   document.getElementById("dev-close").addEventListener("click", () => {
