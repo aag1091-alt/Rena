@@ -8,7 +8,7 @@ from rena.voice import handle_voice
 from rena.tools import (
     scan_image, log_meal, log_water, log_weight, get_progress, get_goal, create_profile, reset_user,
     get_workout_plan, generate_workout_plan, delete_workout_plan, toggle_exercise_complete, log_exercise_from_plan,
-    get_exercise_video, get_exercise_video_status,
+    get_exercise_video, get_exercise_video_status, get_morning_nudge,
 )
 
 load_dotenv()
@@ -310,6 +310,14 @@ async def exercise_video_status_endpoint(job_id: str):
         return get_exercise_video_status(job_id)
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/morning-nudge/{user_id}")
+async def morning_nudge_endpoint(user_id: str):
+    """Return today's motivational nudge derived from the user's plan_tomorrow session notes."""
+    if not user_id or user_id.strip() == "":
+        raise HTTPException(status_code=400, detail="user_id is required")
+    return await asyncio.to_thread(get_morning_nudge, user_id)
 
 
 @app.websocket("/ws/{user_id}")

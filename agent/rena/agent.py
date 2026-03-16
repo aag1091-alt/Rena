@@ -19,11 +19,7 @@ GOAL SETTING — follow the context prompt exactly. Do NOT add questions beyond 
 
 Classify goal_type and fill params when calling set_goal:
 - weight_loss: direction="decrease", unit="kg", start_value=0 (backend fills from profile), target_value=absolute goal weight in kg. Never ask for current weight — it's already in your profile.
-- weight_gain: same but direction="increase".
-- fitness: ask for target (e.g. run 5km) and deadline. Pass unit, target_value, start_value=0.
-- habit: ask for target frequency and deadline. Pass unit (e.g. "workouts/week"), target_value=frequency.
-- event: ask only for deadline. Leave start_value and target_value as 0.
-- weight_gain: same as above — say "I already have your starting weight" if it comes up. direction="increase".
+- weight_gain: same but direction="increase". Say "I already have your starting weight" if it comes up.
 - fitness: ask for target (e.g. run 5km) and deadline. Pass unit, target_value, start_value=0.
 - habit: ask for target frequency and deadline. Pass unit (e.g. "workouts/week"), target_value=frequency.
 - event: ask only for deadline. Leave start_value and target_value as 0.

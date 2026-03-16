@@ -949,7 +949,7 @@ def delete_workout_plan(user_id: str, for_date: str = None) -> dict:
     return {"status": "deleted", "date": date_str}
 
 
-def generate_workout_plan(user_id: str) -> dict:
+def generate_workout_plan(user_id: str, notes: str = "") -> dict:
     """
     Generate and save a personalised workout plan for today using Gemini.
     Reads the user's goal, body weight, and remaining calories from Firestore.
@@ -957,6 +957,7 @@ def generate_workout_plan(user_id: str) -> dict:
 
     Args:
         user_id: The user's unique ID.
+        notes: Optional free-text preferences from the user (e.g. "home workout, focus on legs").
 
     Returns:
         The generated workout plan with exercises, sets/reps or duration, and calories per exercise.
@@ -976,10 +977,12 @@ def generate_workout_plan(user_id: str) -> dict:
     calories_consumed  = sum(m.get("calories", 0) for m in log.get("meals", []))
     calories_remaining = max(0, calorie_target - calories_consumed)
 
+    notes_block = f"\n- User preferences: {notes}" if notes and notes.strip() else ""
+
     prompt = f"""Generate a workout plan for today for someone with:
 - Goal: {goal_text} ({goal_type}, direction: {direction})
 - Body weight: {weight_kg} kg
-- Calories remaining today: {calories_remaining} kcal
+- Calories remaining today: {calories_remaining} kcal{notes_block}
 
 Rules:
 - 3-6 exercises total.
@@ -1369,6 +1372,57 @@ def get_rich_context(user_id: str) -> dict:
         "workout_summary": recent.get("summary", ""),
         "session_notes": notes,
     }
+
+
+def get_morning_nudge(user_id: str) -> dict:
+    """
+    Look for a recent plan_tomorrow session note (within ~18 hours) and generate
+    a short motivational focus message for the day. Cached once per day in Firestore.
+    Returns {"has_nudge": bool, "nudge": str}.
+    """
+    from datetime import timedelta
+
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    # Return cached nudge if already generated today
+    cache_ref = _user_ref(user_id).collection("morning_nudges").document(today)
+    cached = cache_ref.get().to_dict()
+    if cached:
+        return {"has_nudge": True, "nudge": cached["nudge"]}
+
+    # Look for a recent plan_tomorrow session note (within 18 hours)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=18)
+    docs = (
+        _user_ref(user_id).collection("session_notes")
+        .order_by("created_at", direction=firestore.Query.DESCENDING)
+        .limit(10)
+        .stream()
+    )
+
+    note_text = None
+    for doc in docs:
+        d = doc.to_dict()
+        if d.get("context") != "plan_tomorrow":
+            continue
+        created_at = d.get("created_at")
+        if created_at and created_at > cutoff:
+            note_text = d.get("note", "")
+            break
+
+    if not note_text:
+        return {"has_nudge": False, "nudge": ""}
+
+    prompt = (
+        "You are Rena, a warm health companion. Based on what the user planned yesterday: "
+        f"'{note_text}' — write ONE short, warm, motivational sentence (max 20 words) "
+        "as a focus message for today. Start with 'Today,' or 'Remember,'. No markdown, no quotes."
+    )
+    client = _get_text_client()
+    resp = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+    nudge = resp.text.strip()
+
+    cache_ref.set({"nudge": nudge, "generated_at": firestore.SERVER_TIMESTAMP})
+    return {"has_nudge": True, "nudge": nudge}
 
 
 def reset_user(user_id: str) -> dict:

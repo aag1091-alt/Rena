@@ -8,6 +8,7 @@ struct HomeView: View {
     @State private var isLoadingGoal = false
     @State private var insight: String = ""
     @State private var isInsightLoading = false
+    @State private var morningNudge: String = ""
 
     var body: some View {
         NavigationView {
@@ -21,6 +22,10 @@ struct HomeView: View {
                 // ── Scrollable cards ───────────────────────────────
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 12) {
+
+                        if !morningNudge.isEmpty {
+                            NudgeCard(nudge: morningNudge)
+                        }
 
                         GoalCard(goal: goalData, isLoading: isLoadingGoal)
 
@@ -45,7 +50,7 @@ struct HomeView: View {
             }
         }
         .navigationBarHidden(true)
-        .onAppear { Task { await loadGoal(); await loadProgress(); await loadInsight() } }
+        .onAppear { Task { await loadGoal(); await loadProgress(); await loadInsight(); await loadMorningNudge() } }
         .onChange(of: voice.turnCount) { Task { await loadProgress(); await loadInsight() } }
         } // NavigationView
     }
@@ -83,6 +88,59 @@ struct HomeView: View {
         }
     }
 
+    private func loadMorningNudge() async {
+        let nudge = try? await RenaAPI.shared.getMorningNudge(userId: appState.userId)
+        await MainActor.run { morningNudge = nudge ?? "" }
+    }
+
+}
+
+// MARK: - Nudge Card (today's focus from plan_tomorrow notes)
+
+struct NudgeCard: View {
+    let nudge: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "E76F51"), Color(hex: "C47A5A")],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 36, height: 36)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("TODAY'S FOCUS")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(Color(hex: "B09880"))
+                    .kerning(1.0)
+                Text(nudge)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color(hex: "3D2B1F"))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            LinearGradient(
+                colors: [Color(hex: "E76F51").opacity(0.08), Color.white],
+                startPoint: .leading, endPoint: .trailing
+            )
+        )
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color(hex: "E76F51").opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 5, y: 2)
+    }
 }
 
 // MARK: - Quick Log Row

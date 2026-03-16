@@ -42,6 +42,10 @@ _active_sessions: dict[str, str] = {}
 _context_cache: dict[str, tuple[str, float]] = {}
 _CONTEXT_CACHE_TTL = 600  # 10 minutes
 
+# Tracks when we last injected the morning nudge into a home-context session.
+# Keyed by user_id → epoch seconds. Prevents repeating within 1 hour.
+_nudge_said_at: dict[str, float] = {}
+
 RUN_CONFIG = RunConfig(
     response_modalities=[genai_types.Modality.AUDIO],
     speech_config=genai_types.SpeechConfig(
@@ -77,14 +81,11 @@ _CONTEXT_PROMPTS = {
         "Keep it short and friendly — one sentence."
     ),
     "workout_plan": (
-        "SPEAK OUT LOUD NOW. First call get_recent_workouts with the user's user_id to check their workout history. "
-        "TWO paths: "
-        "(A) They HAVE recent workouts: acknowledge it in one warm sentence (e.g. 'Looks like you've been hitting the gym a lot this week!'), "
-        "then immediately call generate_workout_plan to build today's plan — no questions needed. "
-        "Describe the plan in 1-2 sentences and ask: 'Does that work, or want me to tweak anything?' "
-        "(B) They have NO recent workouts: ask 2 quick questions only — "
-        "'Do you have access to a gym or working out at home?' then 'Any specific muscle group or goal for today?' "
-        "Then call generate_workout_plan and describe the plan. "
+        "SPEAK OUT LOUD NOW. Ask the user 2 quick questions to personalise today's workout: "
+        "First: 'Do you have access to a gym, or are you working out at home?' "
+        "Then: 'Any specific muscle group or goal for today?' "
+        "Once they've answered both, call generate_workout_plan passing their answers as the notes parameter. "
+        "Describe the plan in 1-2 sentences and ask: 'Does that work for you, or want me to tweak anything?' "
         "Keep the whole exchange to 3-4 turns max."
     ),
     "update_workout_plan": (
@@ -246,7 +247,7 @@ async def handle_voice(websocket: WebSocket, user_id: str,
     # agent has a single trigger → single response with no double-greeting.
     async def inject_opening():
         await asyncio.sleep(0.2)
-        from rena.tools import _user_ref, generate_workout_plan
+        from rena.tools import _user_ref, get_morning_nudge
         try:
             profile = _user_ref(user_id).get().to_dict() or {}
             weight_kg = profile.get("weight_kg")
@@ -261,34 +262,27 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             if rich:
                 text = f"{text}\n{rich}"
 
-        if context == "workout_plan":
-            # Pre-generate the plan here so there is no blocking tool call during the
-            # live voice session. Rena receives the finished plan in the opening message
-            # and can describe it immediately — no generate_workout_plan call needed.
-            try:
-                plan = await asyncio.to_thread(generate_workout_plan, user_id)
-                exercise_lines = "; ".join(
-                    f"{ex['name']} ({ex['duration_min']} min, ~{ex.get('calories_burned', 0)} kcal)"
-                    if ex.get("duration_min")
-                    else f"{ex['name']} ({ex.get('sets', '')}×{ex.get('reps', '')}, ~{ex.get('calories_burned', 0)} kcal)"
-                    for ex in plan.get("exercises", [])
-                )
-                plan_summary = (
-                    f"{plan['name']}, {plan.get('total_duration_min', 0)} min total. "
-                    f"Exercises: {exercise_lines}."
-                )
-                prompt = (
-                    f"SPEAK OUT LOUD NOW. A workout plan has already been generated and saved for {name or 'them'}. "
-                    f"Here it is: {plan_summary} "
-                    "Describe it warmly in 1-2 sentences and ask: 'Does that work for you, or want me to tweak anything?' "
-                    "Do NOT call generate_workout_plan — the plan is already saved."
-                )
-            except Exception as e:
-                sentry_sdk.capture_exception(e)
-                prompt = _CONTEXT_PROMPTS["workout_plan"].replace("{name}", name or "there")
-            text = f"{text}\n{prompt}"
-        elif context and context in _CONTEXT_PROMPTS:
+        # For home context, inject today's plan_tomorrow nudge (once per hour max).
+        if context == "home":
+            last_said = _nudge_said_at.get(user_id, 0)
+            if time.time() - last_said > 3600:
+                try:
+                    nudge_data = await asyncio.to_thread(get_morning_nudge, user_id)
+                    if nudge_data.get("has_nudge"):
+                        nudge_text = nudge_data["nudge"]
+                        text = f"{text}\n[TODAY_NUDGE: {nudge_text}]"
+                        _nudge_said_at[user_id] = time.time()
+                except Exception:
+                    pass
+
+        if context and context in _CONTEXT_PROMPTS:
             prompt = _CONTEXT_PROMPTS[context].replace("{name}", name or "there")
+            # For home context with a nudge, add instruction to mention it briefly
+            if context == "home" and user_id in _nudge_said_at and time.time() - _nudge_said_at[user_id] < 5:
+                prompt = (
+                    prompt.rstrip() + " If there is a [TODAY_NUDGE] in this message, "
+                    "weave it naturally into your greeting in one short sentence."
+                )
             text = f"{text}\n{prompt}"
 
         live_queue.send_content(

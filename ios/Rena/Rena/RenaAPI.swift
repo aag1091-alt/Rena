@@ -383,6 +383,17 @@ class RenaAPI {
         return ("", "")
     }
 
+    func getMorningNudge(userId: String) async throws -> String? {
+        let req = try request("\(kBaseURL)/morning-nudge/\(userId)")
+        let (data, _) = try await session.data(for: req)
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let hasNudge = json["has_nudge"] as? Bool, hasNudge,
+           let nudge = json["nudge"] as? String, !nudge.isEmpty {
+            return nudge
+        }
+        return nil
+    }
+
     func devReset(userId: String) async throws {
         let req = try request("\(kBaseURL)/dev/reset/\(userId)", method: "DELETE")
         _ = try await session.data(for: req)
