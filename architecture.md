@@ -4,17 +4,17 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                        iOS App (SwiftUI)                          │
-│                                                                   │
-│  ┌──────────┐  ┌──────────┐  ┌────────────┐  ┌───────────────┐  │
-│  │  Home    │  │ History  │  │    Plan    │  │  Scan/Camera  │  │
-│  │          │  │ Workbook │  │  Workout + │  │               │  │
-│  │          │  │ Insights │  │  Meal Plan │  │               │  │
-│  └────┬─────┘  └────┬─────┘  └─────┬──────┘  └──────┬────────┘  │
+│                        iOS App (SwiftUI)                         │
+│                                                                  │
+│  ┌──────────┐  ┌──────────┐  ┌────────────┐   ┌───────────────┐  │
+│  │  Home    │  │ History  │  │    Plan    │   │  Scan/Camera  │  │
+│  │          │  │ Workbook │  │  Workout + │   │               │  │
+│  │          │  │ Insights │  │  Meal Plan │   │               │  │
+│  └────┬─────┘  └────┬─────┘  └─────┬──────┘   └──────┬────────┘  │
 └───────┼─────────────┼──────────────┼─────────────────┼───────────┘
         │ WebSocket   │ REST         │ REST            │ REST
         │ (audio)     │ (insights)   │ (plans/video)   │ (scan/log)
-┌───────▼─────────────▼──────────────▼─────────────────▼───────────┐
+┌───────▼─────────────▼──────────────▼─────────────────▼─────────────┐
 │                      Rena Agent (Cloud Run)                        │
 │                                                                    │
 │  ┌──────────────────────────────────────────────────────────────┐  │
@@ -39,20 +39,20 @@
 │  └──────────────────────────────────────────────────────────────┘  │
 │                                                                    │
 │  REST Endpoints:                                                   │
-│  WS  /ws/{user_id}              POST /onboard                     │
-│  GET /progress/{user_id}        POST /scan                        │
-│  GET /goal/{user_id}            GET  /workbook/insight/{user_id}  │
-│  GET/POST/DELETE /workout-plan  GET/POST/DELETE /meal-plan        │
-│  PATCH …/exercise/complete      POST …/exercise/log               │
-│  GET /exercise/video/{name}     GET /exercise/video/status/{id}   │
-│  GET/POST/DELETE /tomorrow-plan GET /morning-nudge/{user_id}      │
-│  DELETE /dev/reset/{user_id}    POST /dev/seed/{user_id}          │
+│  WS  /ws/{user_id}              POST /onboard                      │
+│  GET /progress/{user_id}        POST /scan                         │
+│  GET /goal/{user_id}            GET  /workbook/insight/{user_id}   │
+│  GET/POST/DELETE /workout-plan  GET/POST/DELETE /meal-plan         │
+│  PATCH …/exercise/complete      POST …/exercise/log                │
+│  GET /exercise/video/{name}     GET /exercise/video/status/{id}    │
+│  GET/POST/DELETE /tomorrow-plan GET /morning-nudge/{user_id}       │
+│  DELETE /dev/reset/{user_id}    POST /dev/seed/{user_id}           │
 └───────────────────────────┬────────────────────────────────────────┘
                             │
           ┌─────────────────┼─────────────────────┐
           ▼                 ▼                      ▼
 ┌──────────────────┐  ┌─────────────────────┐  ┌──────────────────┐
-│    Firestore     │  │    Gemini APIs       │  │  Cloud Storage   │
+│    Firestore     │  │    Gemini APIs      │  │  Cloud Storage   │
 │                  │  │                     │  │  rena-assets/    │
 │ users/           │  │ • Live API (voice)  │  │                  │
 │   logs/          │  │ • 2.5 Flash         │  │ exercise_videos/ │
