@@ -43,12 +43,12 @@ _orig_gemini_connect = _google_llm.Gemini.connect
 
 @contextlib.asynccontextmanager
 async def _patched_gemini_connect(self, llm_request):
-    if (
-        llm_request.live_connect_config is not None
-        and llm_request.config is not None
-        and getattr(llm_request.config, "thinking_config", None) is not None
-    ):
-        llm_request.live_connect_config.thinking_config = llm_request.config.thinking_config
+    tc = getattr(llm_request.config, "thinking_config", None) if llm_request.config else None
+    if llm_request.live_connect_config is not None and tc is not None:
+        llm_request.live_connect_config.thinking_config = tc
+        print(f"[PATCH] thinking_config={tc} injected into live_connect_config", flush=True)
+    else:
+        print(f"[PATCH] NOT injected — lcc={llm_request.live_connect_config is not None} tc={tc}", flush=True)
     async with _orig_gemini_connect(self, llm_request) as conn:
         yield conn
 
@@ -501,8 +501,12 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                     break
                 if event.content and event.content.parts:
                     for part in event.content.parts:
+                        is_thought = getattr(part, "thought", False)
+                        has_audio = bool(part.inline_data)
+                        has_text = bool(part.text)
+                        print(f"[EVENT] thought={is_thought} audio={has_audio} text={has_text}", flush=True)
                         # Skip thought parts (thinking_budget=0 prevents most, but guard anyway)
-                        if getattr(part, "thought", False):
+                        if is_thought:
                             continue
                         if part.inline_data:
                             if not await _safe_send_bytes(part.inline_data.data):
