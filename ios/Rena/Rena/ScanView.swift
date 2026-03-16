@@ -381,15 +381,20 @@ struct ScanItemCard: View {
 
             // Calorie slider
             VStack(spacing: 4) {
-                Slider(
-                    value: Binding(
-                        get: { Double(adjustedCalories) },
-                        set: { adjustedCalories = Int($0.rounded() / 10) * 10 }
-                    ),
-                    in: sliderMin...sliderMax,
-                    step: 10
-                )
-                .tint(Color(hex: "E76F51"))
+                ZStack(alignment: .center) {
+                    Capsule()
+                        .fill(Color(hex: "EDE8E3"))
+                        .frame(height: 4)
+                    Slider(
+                        value: Binding(
+                            get: { Double(adjustedCalories) },
+                            set: { adjustedCalories = Int($0.rounded() / 10) * 10 }
+                        ),
+                        in: sliderMin...sliderMax,
+                        step: 10
+                    )
+                    .tint(Color(hex: "E76F51"))
+                }
 
                 HStack {
                     Text("\(Int(sliderMin)) kcal")
