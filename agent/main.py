@@ -3,6 +3,7 @@ import os
 import sentry_sdk
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from rena.voice import handle_voice
 from rena.tools import (
@@ -22,6 +23,13 @@ sentry_sdk.init(
 )
 
 app = FastAPI(title="Rena Agent API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://rena-490107-f0f28.web.app", "http://localhost:3000", "http://localhost:8080"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class ScanRequest(BaseModel):
