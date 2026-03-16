@@ -1,5 +1,12 @@
 {
   "projects": {
-    "default": "rena-490107"
+    "default": "rena-490107-f0f28"
+  },
+  "targets": {
+    "rena-490107-f0f28": {
+      "hosting": {
+        "rena": ["rena-490107-f0f28"]
+      }
+    }
   }
 }

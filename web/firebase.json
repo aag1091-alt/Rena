@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "rena-490107-f0f28",
     "public": ".",
     "ignore": ["firebase.json", ".firebaserc", "Dockerfile", "nginx.conf", "cloudbuild.yaml", "node_modules"],
     "headers": [
