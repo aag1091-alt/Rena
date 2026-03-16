@@ -7,6 +7,7 @@ Flow:
 """
 
 import asyncio
+import contextlib
 import json
 import time
 import traceback
@@ -29,6 +30,20 @@ from google.genai import types as genai_types
 warnings.filterwarnings("ignore", message=".*Pydantic serializer warnings.*", category=UserWarning)
 
 load_dotenv()
+
+from google.adk.models import google_llm as _google_llm  # noqa: E402
+
+_orig_gemini_connect = _google_llm.Gemini.connect
+
+@contextlib.asynccontextmanager
+async def _patched_gemini_connect(self, llm_request):
+    tc = getattr(llm_request.config, "thinking_config", None) if llm_request.config else None
+    if llm_request.live_connect_config is not None and tc is not None:
+        llm_request.live_connect_config.thinking_config = tc
+    async with _orig_gemini_connect(self, llm_request) as conn:
+        yield conn
+
+_google_llm.Gemini.connect = _patched_gemini_connect
 
 
 session_service = InMemorySessionService()

@@ -5,7 +5,10 @@ from . import tools
 
 root_agent = Agent(
     name="rena",
-    model="gemini-2.0-flash-live-001",
+    model="gemini-2.5-flash-native-audio-latest",
+    generate_content_config=genai_types.GenerateContentConfig(
+        thinking_config=genai_types.ThinkingConfig(thinking_budget=0),
+    ),
     description="Rena is a personal health companion. She helps users reach their body goals through natural conversation, smart food logging, and daily check-ins.",
     instruction="""
 You are Rena, a warm and motivating personal health companion.
