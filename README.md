@@ -6,7 +6,25 @@ AI-powered health companion. Log meals, track workouts, plan your days, and stay
 
 ## Ways to experience the app
 
-### Option 1 — Xcode Simulator (recommended for full experience)
+### Option 1 — Web App (easiest, no install required)
+
+A full Progressive Web App (PWA) is live and ready to use — no Xcode, no install needed.
+
+**URL:** https://rena-490107-f0f28.web.app
+
+Features available in the web app:
+- Voice conversation with Rena (log meals, workouts, weight)
+- Home dashboard — daily progress, food log, workout log
+- History view — scroll back through past days
+- Plan / Workbook — view and manage workout and meal plans, with delete buttons
+- Food scan — upload a photo to identify food and estimate calories
+- Settings — profile, log out, developer seed/reset tools
+
+> **Voice:** Tap the Rena orb and allow microphone access when prompted. Works in Chrome and Safari on desktop and mobile.
+
+---
+
+### Option 2 — Xcode Simulator (recommended for full native experience)
 
 The full app runs on the iOS Simulator in Xcode. Voice, camera, and all features work.
 
@@ -39,7 +57,7 @@ The full app runs on the iOS Simulator in Xcode. Voice, camera, and all features
 
 ---
 
-### Option 2 — Physical iPhone
+### Option 3 — Physical iPhone
 
 If you have an Apple Developer account:
 
@@ -52,12 +70,12 @@ This gives the full native experience including real camera and microphone.
 
 ---
 
-### Option 3 — REST API (no iOS required)
+### Option 4 — REST API (no client required)
 
 The backend is live and fully accessible. You can hit any endpoint directly:
 
 ```
-Base URL: https://rena-agent-[hash]-uc.a.run.app
+Base URL: https://rena-agent-879054433521.us-central1.run.app
 ```
 
 Key endpoints to explore:
@@ -80,6 +98,35 @@ GET /workbook/insight/{user_id}
 
 ---
 
+## AI-generated exercise videos
+
+Rena includes AI-generated video demonstrations for a selection of exercises. These videos are pre-generated and served directly from Google Cloud Storage — no cost is incurred on playback.
+
+**Exercises with AI-generated videos:**
+
+| Exercise | Video |
+|---|---|
+| Bodyweight Squats | [view](https://storage.googleapis.com/rena-assets/exercise_videos/bodyweight_squats.mp4) |
+| Glute Bridges | [view](https://storage.googleapis.com/rena-assets/exercise_videos/glute_bridges.mp4) |
+| Plank | [view](https://storage.googleapis.com/rena-assets/exercise_videos/plank.mp4) |
+| Walking Lunges | [view](https://storage.googleapis.com/rena-assets/exercise_videos/walking_lunges.mp4) |
+
+For all other exercises the ▶ button opens a YouTube search instead.
+
+### How to test the video feature
+
+1. Open the web app at https://rena-490107-f0f28.web.app (or run the iOS app)
+2. Go to the **Plan** tab
+3. Tap the Rena orb and say: *"Add a plank to my workout plan for today"*
+4. After Rena responds, the Plan tab will refresh and show the workout
+5. Tap the **▶** button next to Plank — the AI-generated video will open directly
+6. Try adding **Bodyweight Squats**, **Glute Bridges**, or **Walking Lunges** to see their videos too
+7. Any other exercise (e.g. "Add push-ups") will show a YouTube search link instead
+
+This behaviour is identical on both the **web app** and **iOS app**.
+
+---
+
 ## Project structure
 
 ```
@@ -97,6 +144,12 @@ rena/
 │       ├── VoiceManager.swift   # WebSocket + AVAudioEngine
 │       ├── RenaButton.swift     # Voice overlay + tab bar
 │       └── ...
+│
+├── web/            # Progressive Web App (PWA)
+│   ├── index.html
+│   ├── js/         # app.js, api.js, voice.js, config.js
+│   ├── css/        # app.css
+│   └── sw.js       # Service worker (offline + cache)
 │
 └── architecture.md  # Full system architecture
 ```
@@ -116,16 +169,4 @@ cp .env.example .env
 uvicorn main:app --reload --port 8080
 ```
 
-Then update `kBaseURL` in the iOS app to point to `http://localhost:8080`.
-
----
-
-## A note on the web app question
-
-The backend is fully platform-agnostic — any client that can open a WebSocket and stream PCM audio can talk to Rena. A web app (PWA) is technically feasible:
-
-- **Voice** — browser `getUserMedia` can capture mic audio and stream it over WebSocket. Latency and quality are slightly worse than native but workable.
-- **Camera / scan** — `<input type="file" capture>` works in mobile Safari for photo uploads.
-- **What you'd lose** — fine-grained PCM audio control, seamless exercise video looping, and background audio. The REST-based features (plans, history, insights) would work identically.
-
-A web frontend isn't built yet, but the backend is ready for it.
+Then update `kBaseURL` in `ios/Rena/Rena/RenaAPI.swift` and `API_BASE` in `web/js/config.js` to point to `http://localhost:8080`.
