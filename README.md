@@ -6,13 +6,14 @@ AI-powered health companion. Log meals, track workouts, plan your days, and stay
 
 ## Ways to experience the app
 
-### Option 1 — Xcode Simulator ★ Recommended for judging
+### Option 1 — Physical iPhone ★ Recommended for judging
 
-The primary client is the native iOS app — this is the intended experience and the best way to evaluate the product. Voice quality, animations, camera, and the exercise video player are all significantly better than the web companion.
+The primary client is the native iOS app on a real device — this is the intended experience and the best way to evaluate the product. Voice, camera, and the exercise video player all require a physical device to work properly.
 
 **Requirements**
-- macOS 13 or later
-- Xcode 15 or later ([download from the Mac App Store](https://apps.apple.com/app/xcode/id497799835))
+- An iPhone running iOS 16 or later
+- macOS with Xcode 15 or later ([download from the Mac App Store](https://apps.apple.com/app/xcode/id497799835))
+- An Apple Developer account
 
 **Steps**
 
@@ -27,32 +28,17 @@ The primary client is the native iOS app — this is the intended experience and
    open Rena.xcodeproj
    ```
 
-3. Select a simulator target — **iPhone 15 Pro** or **iPhone 16** recommended — from the device picker in the toolbar.
+3. Connect your iPhone via USB and select it in the Xcode device picker.
 
-4. Press **⌘R** (or the ▶ Run button) to build and launch.
+4. Trust the developer certificate on the device: **Settings → General → VPN & Device Management**.
 
-5. The app connects to the live backend on Cloud Run — no local server setup needed.
+5. Press **⌘R** (or the ▶ Run button) to build and run.
 
-> **Microphone in Simulator:** The simulator uses your Mac's microphone. When prompted for microphone permission, click Allow. Make sure your Mac mic is not muted.
-
-> **Camera in Simulator:** The simulator doesn't have a real camera. Use **Device → Photos** in the Xcode menu to add test images, or use the photo library picker in the Scan tab.
+6. The app connects to the live backend on Cloud Run — no local server setup needed.
 
 ---
 
-### Option 2 — Physical iPhone
-
-If you have an Apple Developer account:
-
-1. Connect your iPhone via USB
-2. Select your device in the Xcode device picker
-3. Trust the developer certificate on the device (**Settings → General → VPN & Device Management**)
-4. Press **⌘R** to build and run
-
-This gives the full native experience including real camera and microphone.
-
----
-
-### Option 3 — Web App (quick preview, no install)
+### Option 2 — Web App (quick preview, no install)
 
 A PWA companion is live at https://rena-490107-f0f28.web.app — it mirrors the iOS app's screens and was built rapidly as a secondary access point. **It has not been thoroughly tested** and is provided for convenience rather than as a primary evaluation surface. Use the iOS app for judging.
 
@@ -62,7 +48,7 @@ Features available: voice, home dashboard, history, plan/workbook, food scan, se
 
 ---
 
-### Option 4 — REST API (no client required)
+### Option 3 — REST API (no client required)
 
 The backend is live and fully accessible:
 
@@ -122,7 +108,7 @@ rena/
 │   │   └── tools.py    # All agent tools (log, plan, scan, etc.)
 │   └── seed_prompts.py # Push voice context prompts to Firestore
 │
-├── ios/Rena/       # SwiftUI iOS app (primary client)
+├── ios/Rena/       # SwiftUI iOS app (primary client — physical iPhone recommended)
 │   └── Rena/
 │       ├── VoiceManager.swift   # WebSocket + AVAudioEngine
 │       ├── RenaButton.swift     # Voice overlay + tab bar
