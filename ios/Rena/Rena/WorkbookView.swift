@@ -93,6 +93,7 @@ struct WorkbookView: View {
                     if !isPast || !planNote.isEmpty {
                         DayPlanCard(
                             note: planNote,
+                            dayLabel: dateLabel,
                             isReadOnly: isPast,
                             onDelete: planNote.isEmpty ? nil : { Task { await deletePlanNote() } },
                             onTap: { renaContext = "notes:\(dateString)"; showRena = true }
@@ -541,6 +542,7 @@ struct ExerciseRow: View {
 
 struct DayPlanCard: View {
     let note: String
+    let dayLabel: String
     let isReadOnly: Bool
     var onDelete: (() -> Void)? = nil
     let onTap: () -> Void
@@ -559,10 +561,10 @@ struct DayPlanCard: View {
                         .foregroundColor(accent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Notes")
+                    Text("\(dayLabel)'s Notes")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(Color(hex: "3D2B1F"))
-                    Text(note.isEmpty ? "Remind yourself — drink water, eat light, go for a walk…" : "Your note for this day")
+                    Text(note.isEmpty ? "Remind yourself — drink water, eat light, go for a walk…" : "Your note for \(dayLabel.lowercased())")
                         .font(.system(size: 12))
                         .foregroundColor(Color(hex: "B09880"))
                 }
@@ -604,7 +606,7 @@ struct DayPlanCard: View {
                                 .foregroundColor(.white)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(note.isEmpty ? "Add a Note" : "Update Note")
+                            Text(note.isEmpty ? "Add \(dayLabel)'s Note" : "Update \(dayLabel)'s Note")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(Color(hex: "3D2B1F"))
                             Text(note.isEmpty ? "Tell Rena what to remember for you" : "Tell Rena what to update")

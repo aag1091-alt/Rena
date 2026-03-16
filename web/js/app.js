@@ -919,19 +919,20 @@ function renderPlanDay(workout, meal, note, date) {
 }
 
 function renderDayPlanCard(note, interactive, date) {
+  const dl = isToday(app.planDate) ? "Today" : isTomorrow(app.planDate) ? "Tomorrow" : dateDayLabel(app.planDate);
   return `<div class="day-plan-card">
     <div class="day-plan-header">
       <div class="day-plan-icon">📝</div>
       <div>
-        <div class="day-plan-title">Notes</div>
-        <div class="day-plan-sub">${note ? "Your note for this day" : "Remind yourself of anything — drink water, eat light, go for a walk…"}</div>
+        <div class="day-plan-title">${dl}'s Notes</div>
+        <div class="day-plan-sub">${note ? `Your note for ${dl.toLowerCase()}` : "Remind yourself — drink water, eat light, go for a walk…"}</div>
       </div>
     </div>
     ${note ? `<div class="day-plan-note">${note}</div>` : ""}
     ${interactive ? `<button class="rena-action-btn" data-rena-ctx="notes:${date}">
       <div class="rena-action-circle">✦</div>
       <div class="rena-action-text">
-        <div class="rena-action-label">${note ? "Update Note" : "Add a Note"}</div>
+        <div class="rena-action-label">${note ? `Update ${dl}'s Note` : `Add ${dl}'s Note`}</div>
         <div class="rena-action-sub">${note ? "Tell Rena what to update" : "Tell Rena what to remember for you"}</div>
       </div>
       <span class="rena-action-chevron">›</span>
