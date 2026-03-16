@@ -1288,12 +1288,7 @@ const HINTS = {
     { icon: "💧", label: "Remove water entry", color: "#457B9D", ctx: "history" },
     { icon: "⚖",  label: "Log weight",        color: "#9B7EC8", ctx: "home" },
   ],
-  plan: [
-    { icon: "🏋", label: "Plan my workout", color: "#2A9D8F", ctx: "workout_plan" },
-    { icon: "🍴", label: "Plan my meals",   color: "#F4A261", ctx: "meal_plan" },
-    { icon: "🌙", label: "Plan tomorrow",   color: "#9B7EC8", ctx: "plan" },
-    { icon: "🍴", label: "Log food",        color: "#E76F51", ctx: "home" },
-  ],
+  // plan tab hints are generated dynamically in openVoiceOverlay with the current planDate
   scan: [
     { icon: "🍴", label: "Log food",     color: "#E76F51", ctx: "home" },
     { icon: "💧", label: "Log water",    color: "#457B9D", ctx: "home" },
@@ -1303,8 +1298,21 @@ const HINTS = {
 };
 
 function openVoiceOverlay(pendingCtx) {
-  const hints = HINTS[app.tab] || HINTS.home;
-  const defCtx = { home: "home", history: "history", plan: "update_workout_plan", scan: "scan" }[app.tab] || "home";
+  // Plan tab hints and default context must include the current plan date so the backend
+  // knows which date to generate/update plans for — prompts reference [workout_date] etc.
+  const planDate = fmtDateISO(app.planDate);
+  const hints = app.tab === "plan" ? [
+    { icon: "🏋", label: "Plan my workout", color: "#2A9D8F", ctx: `workout_plan:${planDate}` },
+    { icon: "🍴", label: "Plan my meals",   color: "#F4A261", ctx: `meal_plan:${planDate}` },
+    { icon: "🌙", label: "Plan tomorrow",   color: "#9B7EC8", ctx: `plan:${planDate}` },
+    { icon: "🍴", label: "Log food",        color: "#E76F51", ctx: "home" },
+  ] : (HINTS[app.tab] || HINTS.home);
+  const defCtx = {
+    home:    "home",
+    history: "history",
+    plan:    `update_workout_plan:${planDate}`,
+    scan:    "scan",
+  }[app.tab] || "home";
   const ctx = pendingCtx || defCtx;
 
   // Render hints
