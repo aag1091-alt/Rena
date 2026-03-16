@@ -1186,9 +1186,13 @@ def get_exercise_video(exercise_name: str, target_muscles: str = "") -> dict:
         blob.make_public()
         return {"status": "ready", "video_url": f"https://storage.googleapis.com/{bucket_name}/{blob_path}"}
 
-    # Return existing pending job for the same exercise
+    # Return existing pending job for the same exercise (skip if stale > 10 min)
     jobs_ref = db.collection("exercise_video_jobs")
     for job_doc in jobs_ref.where(filter=firestore.FieldFilter("slug", "==", slug)).where(filter=firestore.FieldFilter("status", "==", "generating")).limit(1).stream():
+        created = job_doc.to_dict().get("created_at")
+        if created and (datetime.now(timezone.utc) - created).total_seconds() > 600:
+            job_doc.reference.update({"status": "error", "error": "Timed out"})
+            break  # stale — fall through to submit a new job
         return {"status": "generating", "job_id": job_doc.id}
 
     # Submit new Veo 2 job
@@ -1247,6 +1251,13 @@ def get_exercise_video_status(job_id: str) -> dict:
     job         = job_doc.to_dict()
     slug        = job["slug"]
     bucket_name = os.getenv("GCS_BUCKET", "rena-assets")
+
+    # Expire jobs stuck in "generating" for more than 10 minutes
+    if job["status"] == "generating":
+        created = job.get("created_at")
+        if created and (datetime.now(timezone.utc) - created).total_seconds() > 600:
+            db.collection("exercise_video_jobs").document(job_id).update({"status": "error", "error": "Timed out"})
+            return {"status": "error", "message": "Video generation timed out. Please try again."}
 
     if job["status"] == "done":
         return {"status": "done", "video_url": f"https://storage.googleapis.com/{bucket_name}/exercise_videos/{slug}.mp4"}

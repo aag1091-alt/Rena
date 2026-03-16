@@ -128,7 +128,11 @@ class VoiceManager: NSObject, ObservableObject {
         if let name    { queryItems.append(URLQueryItem(name: "name",    value: name))    }
         if !queryItems.isEmpty { components.queryItems = queryItems }
 
-        webSocket = urlSession.webSocketTask(with: components.url!)
+        guard let wsURL = components.url else {
+            DispatchQueue.main.async { self.state = .error("Invalid server URL") }
+            return
+        }
+        webSocket = urlSession.webSocketTask(with: wsURL)
         webSocket?.resume()
         receiveLoop()
     }
@@ -229,7 +233,7 @@ class VoiceManager: NSObject, ObservableObject {
                 }
                 self.receiveLoop()
             case .failure:
-                DispatchQueue.main.async { self.state = .idle }
+                DispatchQueue.main.async { self.state = .error("Connection lost") }
             }
         }
     }

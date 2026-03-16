@@ -268,8 +268,9 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             try:
                 plan = await asyncio.to_thread(generate_workout_plan, user_id)
                 exercise_lines = "; ".join(
-                    f"{ex['name']} ({ex.get('sets', '')}×{ex.get('reps', '')} "
-                    f"or {ex.get('duration_min', '')} min, ~{ex.get('calories_burned', 0)} kcal)"
+                    f"{ex['name']} ({ex['duration_min']} min, ~{ex.get('calories_burned', 0)} kcal)"
+                    if ex.get("duration_min")
+                    else f"{ex['name']} ({ex.get('sets', '')}×{ex.get('reps', '')}, ~{ex.get('calories_burned', 0)} kcal)"
                     for ex in plan.get("exercises", [])
                 )
                 plan_summary = (

@@ -145,7 +145,11 @@ struct ExerciseVideoSheet: View {
     private func handleVideoStatus(_ vs: VideoStatus) async {
         if vs.status == "ready" || vs.status == "done", let url = vs.videoUrl {
             await MainActor.run {
-                let item = AVPlayerItem(url: URL(string: url)!)
+                guard let videoURL = URL(string: url) else {
+                    status = "error"; errorMessage = "Invalid video URL"
+                    return
+                }
+                let item = AVPlayerItem(url: videoURL)
                 let queuePlayer = AVQueuePlayer()
                 playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
                 player = queuePlayer

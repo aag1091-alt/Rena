@@ -24,19 +24,7 @@ struct ScanView: View {
             ZStack {
                 Color(hex: "FDF6EE").ignoresSafeArea()
                 VStack(spacing: 0) {
-                    // Simple task header (no greeting — this is a focused task page)
-                    HStack {
-                        Text("Log Food")
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(hex: "3D2B1F"))
-                        Spacer()
-                        Image(systemName: "camera.viewfinder")
-                            .font(.system(size: 22))
-                            .foregroundColor(Color(hex: "E76F51"))
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 56)
-                    .padding(.bottom, 8)
+                    AppHeader()
                     ScrollView {
                 VStack(spacing: 20) {
 

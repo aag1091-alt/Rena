@@ -306,8 +306,9 @@ class RenaAPI {
     static let shared = RenaAPI()
     private let session = URLSession.shared
 
-    private func request(_ urlString: String, method: String = "GET") -> URLRequest {
-        var req = URLRequest(url: URL(string: urlString)!)
+    private func request(_ urlString: String, method: String = "GET") throws -> URLRequest {
+        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         return req
@@ -319,7 +320,7 @@ class RenaAPI {
         }
         let b64 = imageData.base64EncodedString()
 
-        var req = request("\(kBaseURL)/scan", method: "POST")
+        var req = try request("\(kBaseURL)/scan", method: "POST")
         let body: [String: Any] = [
             "user_id": userId,
             "image_base64": b64,
@@ -335,7 +336,7 @@ class RenaAPI {
     func getProgress(userId: String, date: String? = nil) async throws -> ProgressResponse {
         var urlString = "\(kBaseURL)/progress/\(userId)"
         if let date { urlString += "?date=\(date)" }
-        let req = request(urlString)
+        let req = try request(urlString)
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(ProgressResponse.self, from: data)
     }
@@ -349,7 +350,7 @@ class RenaAPI {
         weightKg: Double,
         activityLevel: String
     ) async throws -> OnboardResponse {
-        var req = request("\(kBaseURL)/onboard", method: "POST")
+        var req = try request("\(kBaseURL)/onboard", method: "POST")
         let body: [String: Any] = [
             "user_id": userId,
             "name": name,
@@ -365,7 +366,7 @@ class RenaAPI {
     }
 
     func getGoal(userId: String) async throws -> GoalResponse {
-        let req = request("\(kBaseURL)/goal/\(userId)")
+        let req = try request("\(kBaseURL)/goal/\(userId)")
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(GoalResponse.self, from: data)
     }
@@ -373,7 +374,7 @@ class RenaAPI {
     func getWorkbookInsight(userId: String, date: String? = nil) async throws -> (insight: String, activity: String) {
         var urlString = "\(kBaseURL)/workbook/insight/\(userId)"
         if let date { urlString += "?date=\(date)" }
-        let req = request(urlString)
+        let req = try request(urlString)
         let (data, _) = try await session.data(for: req)
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             return (
@@ -385,17 +386,17 @@ class RenaAPI {
     }
 
     func devReset(userId: String) async throws {
-        let req = request("\(kBaseURL)/dev/reset/\(userId)", method: "DELETE")
+        let req = try request("\(kBaseURL)/dev/reset/\(userId)", method: "DELETE")
         _ = try await session.data(for: req)
     }
 
     func devSeed(userId: String) async throws {
-        let req = request("\(kBaseURL)/dev/seed/\(userId)", method: "POST")
+        let req = try request("\(kBaseURL)/dev/seed/\(userId)", method: "POST")
         _ = try await session.data(for: req)
     }
 
     func logMeal(userId: String, name: String, calories: Int, proteinG: Int = 0, carbsG: Int = 0, fatG: Int = 0) async throws {
-        var req = request("\(kBaseURL)/log/meal", method: "POST")
+        var req = try request("\(kBaseURL)/log/meal", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
             "user_id": userId, "name": name, "calories": calories,
             "protein_g": proteinG, "carbs_g": carbsG, "fat_g": fatG
@@ -404,14 +405,14 @@ class RenaAPI {
     }
 
     func logWeight(userId: String, weightKg: Double) async throws -> [String: Any] {
-        var req = request("\(kBaseURL)/log/weight", method: "POST")
+        var req = try request("\(kBaseURL)/log/weight", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId, "weight_kg": weightKg])
         let (data, _) = try await session.data(for: req)
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
     func logWater(userId: String, glasses: Int = 1) async throws -> Int {
-        var req = request("\(kBaseURL)/log/water", method: "POST")
+        var req = try request("\(kBaseURL)/log/water", method: "POST")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["user_id": userId, "glasses": glasses])
         let (data, _) = try await session.data(for: req)
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -424,14 +425,14 @@ class RenaAPI {
     func getWorkoutPlan(userId: String, date: String? = nil) async throws -> PlannedWorkout? {
         var urlString = "\(kBaseURL)/workout-plan/\(userId)"
         if let date { urlString += "?date=\(date)" }
-        let req = request(urlString)
+        let req = try request(urlString)
         let (data, _) = try await session.data(for: req)
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], json.isEmpty { return nil }
         return try JSONDecoder().decode(PlannedWorkout.self, from: data)
     }
 
     func generateWorkoutPlan(userId: String) async throws -> PlannedWorkout {
-        let req = request("\(kBaseURL)/workout-plan/\(userId)", method: "POST")
+        let req = try request("\(kBaseURL)/workout-plan/\(userId)", method: "POST")
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(PlannedWorkout.self, from: data)
     }
@@ -439,13 +440,13 @@ class RenaAPI {
     func toggleExerciseComplete(userId: String, exerciseId: String, date: String? = nil) async throws {
         var urlString = "\(kBaseURL)/workout-plan/\(userId)/exercise/\(exerciseId)/complete"
         if let date { urlString += "?date=\(date)" }
-        var req = request(urlString, method: "PATCH")
+        var req = try request(urlString, method: "PATCH")
         req.httpBody = Data()
         _ = try await session.data(for: req)
     }
 
     func logExercise(userId: String, exerciseId: String, calories: Int? = nil, date: String? = nil) async throws {
-        var req = request("\(kBaseURL)/workout-plan/\(userId)/exercise/\(exerciseId)/log", method: "POST")
+        var req = try request("\(kBaseURL)/workout-plan/\(userId)/exercise/\(exerciseId)/log", method: "POST")
         var body: [String: Any] = [:]
         if let cal = calories { body["calories_override"] = cal }
         if let d = date { body["date"] = d }
@@ -460,13 +461,13 @@ class RenaAPI {
             let m = targetMuscles.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? targetMuscles
             urlString += "?target_muscles=\(m)"
         }
-        let req = request(urlString)
+        let req = try request(urlString)
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(VideoStatus.self, from: data)
     }
 
     func pollExerciseVideoStatus(jobId: String) async throws -> VideoStatus {
-        let req = request("\(kBaseURL)/exercise/video/status/\(jobId)")
+        let req = try request("\(kBaseURL)/exercise/video/status/\(jobId)")
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(VideoStatus.self, from: data)
     }
