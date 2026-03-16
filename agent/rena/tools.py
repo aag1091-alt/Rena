@@ -384,7 +384,7 @@ def get_progress(user_id: str, for_date: str = None) -> dict:
     Returns:
         Dict with goal info and today's logged activity.
     """
-    _emit_tool_status(user_id, "Checking your progress…")
+    _emit_tool_status(user_id, "Listening…")
     profile = _user_ref(user_id).get().to_dict() or {}
     log_date = for_date or datetime.now(timezone.utc).date().isoformat()
     log_ref = _user_ref(user_id).collection("logs").document(log_date)
