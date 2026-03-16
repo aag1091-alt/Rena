@@ -48,25 +48,6 @@ Features available: voice, home dashboard, history, plan/workbook, food scan, se
 
 ---
 
-### Option 3 — REST API (no client required)
-
-The backend is live and fully accessible:
-
-```
-Base URL: https://rena-agent-879054433521.us-central1.run.app
-```
-
-Key endpoints:
-```bash
-POST /dev/seed/{user_id}       # Seed 7 days of test data
-GET  /progress/{user_id}       # Today's progress
-GET  /workout-plan/{user_id}   # Workout plan
-GET  /meal-plan/{user_id}      # Meal plan
-GET  /workbook/insight/{user_id}  # Workbook insight
-```
-
----
-
 ## AI-generated exercise videos
 
 Rena includes AI-generated video demonstrations for a selection of exercises, served directly from Google Cloud Storage.
