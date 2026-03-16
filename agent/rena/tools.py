@@ -1353,6 +1353,15 @@ def generate_meal_plan(user_id: str, notes: str = "", for_date: str = None) -> d
 
     notes_block = f"\nUser preferences / available ingredients: {notes}" if notes and notes.strip() else ""
 
+    # Pull in the user's personal note for this date (set via the Notes card)
+    try:
+        day_note_doc = _tomorrow_plan_ref(user_id, date_str).get()
+        day_note = (day_note_doc.to_dict() or {}).get("summary", "") if day_note_doc.exists else ""
+        if day_note:
+            notes_block += f"\nUser's personal note for this day: {day_note}"
+    except Exception:
+        pass
+
     # If a plan already exists for this date, include it so only the requested changes are made
     try:
         existing_doc = _meal_plan_ref(user_id, date_str).get()
@@ -1491,6 +1500,15 @@ def generate_workout_plan(user_id: str, notes: str = "", for_date: str = None) -
     calories_remaining = max(0, calorie_target - calories_consumed)
 
     notes_block = f"\n- User preferences / recent history: {notes}" if notes and notes.strip() else ""
+
+    # Pull in the user's personal note for this date (set via the Notes card)
+    try:
+        day_note_doc = _tomorrow_plan_ref(user_id, date_str).get()
+        day_note = (day_note_doc.to_dict() or {}).get("summary", "") if day_note_doc.exists else ""
+        if day_note:
+            notes_block += f"\n- User's personal note for this day: {day_note}"
+    except Exception:
+        pass
 
     # If a plan already exists for this date, include it so only the requested changes are made
     try:
