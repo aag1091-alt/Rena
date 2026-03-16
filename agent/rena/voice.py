@@ -112,25 +112,33 @@ _CONTEXT_PROMPTS = {
         "Call set_goal as soon as you have everything. Keep it to 2–3 exchanges."
     ),
     "home": (
-        "SPEAK OUT LOUD NOW: Say 'Hi {name}! What would you like to do today?' "
-        "Keep it short and friendly — one sentence."
+        "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
+        "Start with a warm, personal greeting for {name}. "
+        "Then give a brief 1–2 sentence snapshot of their day so far using [RENA MEMORY]: "
+        "mention calories eaten vs target, whether they've worked out, and water intake. "
+        "Be specific — use the actual numbers (e.g. 'You've had 650 of your 2000 calories'). "
+        "End with: 'What would you like to do?' "
+        "Keep the whole opening under 20 seconds."
     ),
     "workout_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Ask the user 2 quick questions to personalise today's workout: "
+        "Open with one sentence about {name}'s recent workout pattern from [RENA MEMORY] "
+        "(e.g. 'You've been doing a lot of cardio lately' or 'You haven't trained since Tuesday'). "
+        "Then ask 2 quick questions to personalise today's workout: "
         "First: 'Do you have access to a gym, or are you working out at home?' "
         "Then: 'Any specific muscle group or goal for today?' "
         "Once they've answered both, call generate_workout_plan. In the notes parameter combine: "
         "(1) their gym/home preference, (2) their muscle group focus, and "
-        "(3) a one-sentence summary of their recent workout pattern from your memory (e.g. 'has been doing mostly running this week'). "
+        "(3) a one-sentence summary of their recent workout pattern from your memory. "
         "Describe the plan in 1-2 sentences and ask: 'Does that work for you, or want me to tweak anything?' "
         "Keep the whole exchange to 3-4 turns max."
     ),
     "update_workout_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Ask the user what they want to change: "
-        "Say something like 'What would you like to tweak?' and listen for their answer — "
-        "they might want to swap an exercise, adjust intensity, add more cardio, shorten the session, etc. "
+        "Open with one sentence referencing today's planned workout from [RENA MEMORY] "
+        "(e.g. 'You've got a 40-minute strength session lined up'). "
+        "Then ask what they'd like to change: 'What would you like to tweak?' — "
+        "they might want to swap an exercise, adjust intensity, add cardio, shorten the session, etc. "
         "Once you understand what they want, call generate_workout_plan with their request in the notes parameter "
         "along with a one-sentence summary of their recent workout history from your memory. "
         "Describe the key change in one sentence and end with a short motivating line. "
@@ -138,7 +146,9 @@ _CONTEXT_PROMPTS = {
     ),
     "meal_plan": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace throughout — never rush. "
-        "Ask the user 2 quick questions to plan today's meals: "
+        "Open with one sentence about {name}'s nutrition today from [RENA MEMORY] "
+        "(e.g. 'You've had 800 of your 2000 calories so far — plenty of room to plan something great'). "
+        "Then ask 2 quick questions to plan today's meals: "
         "First: 'What food or ingredients do you have at home?' "
         "Then: 'Any dietary preferences or things you want to avoid today?' "
         "Once they've answered both, call generate_meal_plan. In the notes parameter combine their "
@@ -146,24 +156,30 @@ _CONTEXT_PROMPTS = {
         "Summarise the meal plan in 2-3 sentences — highlight the best meal and total calories. "
         "Keep the whole exchange to 3 turns max."
     ),
-    "plan_tomorrow": (
-        "SPEAK OUT LOUD NOW: Say 'Let\\'s plan tomorrow, {name}!' "
-        "Speak at a calm, natural pace. Ask ONE question at a time, wait for the answer, then ask the next. "
-        "Follow this exact flow: "
-        "1. Ask: 'Any events or commitments tomorrow I should know about?' — wait for answer. "
+    "plan": (
+        "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
+        "Open with one sentence about {name}'s recent progress from [RENA MEMORY] "
+        "(e.g. mention a recent workout streak, calorie trend, or last session note). "
+        "Then say 'Let\\'s plan {day_label}!' and follow this exact flow, asking ONE question at a time: "
+        "1. Ask: 'Any events or commitments {day_label} I should know about?' — wait for answer. "
         "2. Ask: 'What do you want to focus on — eating well, a workout, both, or just rest?' — wait for answer. "
         "3. If they mentioned a workout (or 'both'): ask 'Will you be at the gym or working out at home?' — wait. "
-        "   Then ask: 'Any specific muscle group or goal for tomorrow?' — wait for answer. "
+        "   Then ask: 'Any specific muscle group or goal?' — wait for answer. "
         "4. If they mentioned eating well or cooking at home (or 'both'): ask 'What food or ingredients do you have at home?' — wait. "
         "   Skip this if they said eating out, takeaway, or restaurant. "
         "Once you have all the answers, decide which tools to call: "
-        "- Call generate_workout_plan(user_id, notes=<gym/home + muscle focus + history>, for_date=<tomorrow_date>) "
+        "- Call generate_workout_plan(user_id, notes=<gym/home + muscle focus + history>, for_date=[plan_date]) "
         "  ONLY if user plans to work out (skip for rest days or 'no workout'). "
-        "- Call generate_meal_plan(user_id, notes=<ingredients + preferences>, for_date=<tomorrow_date>) "
+        "- Call generate_meal_plan(user_id, notes=<ingredients + preferences>, for_date=[plan_date]) "
         "  ONLY if user plans to cook/eat at home (skip if eating out). "
         "- If neither plan is needed, acknowledge warmly — e.g. 'Sounds like a relaxing day, enjoy the break!' "
-        "Always end by calling save_tomorrow_plan_note(user_id, summary=<1-2 sentences of what was discussed>, for_date=<tomorrow_date>). "
+        "Always end by calling save_tomorrow_plan_note(user_id, summary=<1-2 sentences of what was discussed>, for_date=[plan_date]). "
         "Summarise any generated plans warmly in 3-4 sentences — workout first, then meals."
+    ),
+    "scan": (
+        "SPEAK OUT LOUD NOW: Say one short encouraging line to {name} — "
+        "e.g. 'Go ahead, take a photo of your food and I'll log it for you!' "
+        "Keep it to one sentence. The user is about to use the camera."
     ),
 }
 
@@ -248,13 +264,16 @@ async def _save_session_note_async(user_id: str, context: str, name: str):
         progress = await asyncio.to_thread(get_progress, user_id)
         today = datetime.now(timezone.utc).date().isoformat()
 
+        base_ctx = "plan" if context and context.startswith("plan:") else context
         context_labels = {
             "home":                "general chat / logging food or water",
             "workout_plan":        "planning a new workout",
             "update_workout_plan": "updating their workout plan",
-            "plan_tomorrow":       "planning tomorrow's nutrition and activity",
+            "meal_plan":           "planning today's meals",
+            "plan":                "planning a day's nutrition and activity",
+            "scan":                "logging food by photo",
         }
-        label = context_labels.get(context, context)
+        label = context_labels.get(base_ctx, base_ctx)
 
         meals = progress.get("meals_logged", [])
         workouts = progress.get("workouts_logged", [])
@@ -330,11 +349,17 @@ async def handle_voice(websocket: WebSocket, user_id: str,
             if rich:
                 text = f"{text}\n{rich}"
 
-        # For plan_tomorrow context, inject tomorrow's date so the agent can pass it to tools.
-        if context == "plan_tomorrow":
-            from datetime import timedelta
-            tomorrow = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
-            text = f"{text}\n[tomorrow_date:{tomorrow}]"
+        # Parse "plan:<date>" context — e.g. "plan:2026-03-15".
+        # base_context is used for prompt lookup; plan_date / day_label are injected into the prompt.
+        base_context = context
+        plan_date = None
+        day_label = None
+        if context and context.startswith("plan:"):
+            _, plan_date = context.split(":", 1)
+            base_context = "plan"
+            today_str = datetime.now(timezone.utc).date().isoformat()
+            day_label = "today" if plan_date == today_str else "tomorrow"
+            text = f"{text}\n[plan_date:{plan_date}]"
 
         # For home context, inject today's plan_tomorrow nudge (once per hour max).
         if context == "home":
@@ -350,7 +375,9 @@ async def handle_voice(websocket: WebSocket, user_id: str,
                     pass
 
         if context:
-            prompt = _get_prompt(context).replace("{name}", name or "there")
+            prompt = _get_prompt(base_context).replace("{name}", name or "there")
+            if day_label:
+                prompt = prompt.replace("{day_label}", day_label)
             if prompt:
                 # For home context with a nudge, add instruction to mention it briefly
                 if context == "home" and user_id in _nudge_said_at and time.time() - _nudge_said_at[user_id] < 5:

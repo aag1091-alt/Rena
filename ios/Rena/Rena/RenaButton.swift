@@ -7,27 +7,29 @@ struct RenaHint: Identifiable {
     let icon: String
     let label: String
     let color: Color
+    var context: String? = nil
 }
 
 private let defaultHints: [RenaHint] = [
-    RenaHint(icon: "fork.knife",  label: "Log food",     color: Color(hex: "E76F51")),
-    RenaHint(icon: "drop.fill",   label: "Log water",    color: Color(hex: "457B9D")),
-    RenaHint(icon: "figure.run",  label: "Log exercise", color: Color(hex: "2A9D8F")),
-    RenaHint(icon: "scalemass",   label: "Log weight",   color: Color(hex: "9B7EC8")),
+    RenaHint(icon: "fork.knife",  label: "Log food",     color: Color(hex: "E76F51"), context: "log_food"),
+    RenaHint(icon: "drop.fill",   label: "Log water",    color: Color(hex: "457B9D"), context: "log_water"),
+    RenaHint(icon: "figure.run",  label: "Log exercise", color: Color(hex: "2A9D8F"), context: "log_workout"),
+    RenaHint(icon: "scalemass",   label: "Log weight",   color: Color(hex: "9B7EC8"), context: "log_weight"),
 ]
 
 func renaHints(for tab: Int) -> [RenaHint] {
     switch tab {
-    case 1: // Data
+    case 1: // History
         return [
-            RenaHint(icon: "fork.knife.circle",   label: "Remove food log",    color: Color(hex: "E76F51")),
-            RenaHint(icon: "figure.run.circle",   label: "Remove exercise",    color: Color(hex: "2A9D8F")),
-            RenaHint(icon: "drop.circle",         label: "Remove water entry", color: Color(hex: "457B9D")),
+            RenaHint(icon: "fork.knife.circle",   label: "Remove food log",    color: Color(hex: "E76F51"), context: "home"),
+            RenaHint(icon: "figure.run.circle",   label: "Remove exercise",    color: Color(hex: "2A9D8F"), context: "home"),
+            RenaHint(icon: "drop.circle",         label: "Remove water entry", color: Color(hex: "457B9D"), context: "home"),
         ] + defaultHints
-    case 2: // Workbook
+    case 2: // Plan
         return [
-            RenaHint(icon: "dumbbell.fill",   label: "Plan my workout",    color: Color(hex: "2A9D8F")),
-            RenaHint(icon: "pencil.circle",   label: "Update workout",     color: Color(hex: "457B9D")),
+            RenaHint(icon: "dumbbell.fill",   label: "Plan my workout", color: Color(hex: "2A9D8F"), context: "workout_plan"),
+            RenaHint(icon: "fork.knife",      label: "Plan my meals",   color: Color(hex: "F4A261"), context: "meal_plan"),
+            RenaHint(icon: "moon.stars.fill", label: "Plan tomorrow",   color: Color(hex: "9B7EC8"), context: "plan"),
         ] + defaultHints
     default:
         return defaultHints
@@ -37,6 +39,7 @@ func renaHints(for tab: Int) -> [RenaHint] {
 private func voiceContext(for tab: Int) -> String {
     switch tab {
     case 2: return "update_workout_plan"
+    case 3: return "scan"
     default: return "home"
     }
 }
@@ -342,11 +345,11 @@ struct CustomTabBar: View {
                     tabLabel(icon: "camera.fill", text: "Scan", active: currentTab == 3)
                 }.buttonStyle(.plain)
 
-                // ── Workbook ──
+                // ── Plan ──
                 Button {
                     selectedTab = 2; if showRena { showRena = false }
                 } label: {
-                    tabLabel(icon: "note.text", text: "Workbook", active: currentTab == 2)
+                    tabLabel(icon: "calendar", text: "Plan", active: currentTab == 2)
                 }.buttonStyle(.plain)
             }
             .padding(.horizontal, 8)

@@ -9,10 +9,8 @@ struct WorkbookView: View {
     @EnvironmentObject var voice: VoiceManager
 
     @State private var selectedDate = Date()
-    @State private var dayData: ProgressResponse? = nil
-    @State private var insight: String = ""
-    @State private var activity: String = ""
     @State private var isLoading = false
+    @State private var planNote: String = ""
     @State private var workoutPlan: PlannedWorkout? = nil
     @State private var mealPlan: PlannedMealPlan? = nil
     @State private var isGeneratingPlan = false
@@ -20,18 +18,10 @@ struct WorkbookView: View {
     @State private var videoSheet: PlannedExercise? = nil
     @State private var logMealSheet: PlannedMeal? = nil
 
-    private var isToday:    Bool { Calendar.current.isDateInToday(selectedDate) }
-    private var isTomorrow: Bool { Calendar.current.isDateInTomorrow(selectedDate) }
-
-    private var displayMeals: [MealEntry]       { dayData?.mealsLogged    ?? (isToday ? appState.mealsLogged    : []) }
-    private var displayWorkouts: [WorkoutEntry] { dayData?.workoutsLogged ?? (isToday ? appState.workoutsLogged : []) }
-    private var displayConsumed: Int  { dayData?.caloriesConsumed ?? (isToday ? appState.caloriesConsumed : 0) }
-    private var displayTarget: Int    { dayData?.caloriesTarget   ?? (isToday ? appState.caloriesTarget   : 1800) }
-    private var displayBurned: Int    { dayData?.caloriesBurned   ?? (isToday ? appState.caloriesBurned   : 0) }
-
-    private var hour: Int { Calendar.current.component(.hour, from: Date()) }
-    private var isMorning: Bool { isToday && hour >= 5  && hour < 12 }
-    private var isEvening: Bool { isToday && hour >= 17 }
+    private var isToday:       Bool { Calendar.current.isDateInToday(selectedDate) }
+    private var isTomorrow:    Bool { Calendar.current.isDateInTomorrow(selectedDate) }
+    private var isPast:        Bool { !isToday && !isTomorrow }
+    private var isInteractive: Bool { !isPast }
 
     private var dateString: String {
         let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd"
@@ -61,22 +51,17 @@ struct WorkbookView: View {
                             Task { await loadDay() }
                         } label: {
                             ZStack {
-                                Circle()
-                                    .fill(Color(hex: "E76F51").opacity(0.10))
-                                    .frame(width: 36, height: 36)
+                                Circle().fill(Color(hex: "E76F51").opacity(0.10)).frame(width: 36, height: 36)
                                 Image(systemName: "chevron.left")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(Color(hex: "E76F51"))
+                                    .font(.system(size: 13, weight: .bold)).foregroundColor(Color(hex: "E76F51"))
                             }
                         }
-
                         Spacer()
-
                         HStack(spacing: 6) {
-                            if isToday {
-                                Circle()
-                                    .fill(Color(hex: "E76F51"))
-                                    .frame(width: 6, height: 6)
+                            if isLoading {
+                                ProgressView().scaleEffect(0.7)
+                            } else if isToday {
+                                Circle().fill(Color(hex: "E76F51")).frame(width: 6, height: 6)
                             }
                             Text(dateLabel)
                                 .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -84,9 +69,7 @@ struct WorkbookView: View {
                                 .contentTransition(.numericText())
                                 .animation(.spring(duration: 0.2), value: dateLabel)
                         }
-
                         Spacer()
-
                         Button {
                             selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate)!
                             Task { await loadDay() }
@@ -102,36 +85,28 @@ struct WorkbookView: View {
                         }
                         .disabled(isTomorrow)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(Color.white)
-                    .cornerRadius(18)
+                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .background(Color.white).cornerRadius(18)
                     .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
 
-                    // ── Header card ─────────────────────────────────
-                    WorkbookHeader(
-                        isMorning: isMorning,
-                        isEvening: isEvening,
-                        caloriesConsumed: displayConsumed,
-                        caloriesTarget: displayTarget,
-                        caloriesBurned: displayBurned,
-                        isToday: isToday
-                    )
-
-                    // ── Day Recap (AI) — past dates only (not today, not tomorrow) ──
-                    if !isToday && !isTomorrow {
-                        DaySoFarCard(insight: insight, isLoading: isLoading, isToday: false)
+                    // ── Plan card (all dates) ────────────────────────
+                    if !isPast || !planNote.isEmpty {
+                        DayPlanCard(
+                            note: planNote,
+                            isReadOnly: isPast,
+                            onDelete: planNote.isEmpty ? nil : { Task { await deletePlanNote() } },
+                            onTap: { renaContext = "plan:\(dateString)"; showRena = true }
+                        )
                     }
 
-                    // ── Workout plan — today + tomorrow ─────────────
-                    if isToday || isTomorrow {
+                    // ── Workout ──────────────────────────────────────
+                    if !isPast || workoutPlan != nil {
                         WorkoutPlanSection(
-                            plan: workoutPlan,
-                            isGenerating: isGeneratingPlan,
-                            isInteractive: isToday,
-                            sectionTitle: isTomorrow ? "TOMORROW'S WORKOUT" : "TODAY'S WORKOUT",
-                            onPlanWithRena:   { renaContext = isTomorrow ? "plan_tomorrow" : "workout_plan"; showRena = true },
-                            onOpenRena:       { renaContext = "update_workout_plan"; showRena = true },
+                            plan: workoutPlan, isGenerating: isGeneratingPlan,
+                            isInteractive: isInteractive, readOnly: isPast,
+                            sectionTitle: "WORKOUT",
+                            onPlanWithRena:   { renaContext = isToday ? "workout_plan" : "plan:\(dateString)"; showRena = true },
+                            onOpenRena:       { renaContext = isToday ? "update_workout_plan" : "plan:\(dateString)"; showRena = true },
                             onRegenerate:     { Task { await generatePlan() } },
                             onDelete:         { Task { await deletePlan() } },
                             onToggleComplete: { ex in Task { await toggleComplete(ex) } },
@@ -140,38 +115,15 @@ struct WorkbookView: View {
                         )
                     }
 
-                    // ── Meal plan — today + tomorrow ─────────────────
-                    if isToday || isTomorrow {
+                    // ── Meals ────────────────────────────────────────
+                    if !isPast || mealPlan != nil {
                         MealPlanSection(
-                            plan: mealPlan,
-                            isInteractive: isToday,
-                            sectionTitle: isTomorrow ? "TOMORROW'S MEALS" : "TODAY'S MEALS",
-                            onPlanWithRena: { renaContext = isTomorrow ? "plan_tomorrow" : "meal_plan"; showRena = true },
+                            plan: mealPlan, isInteractive: isInteractive,
+                            readOnly: isPast, sectionTitle: "MEALS",
+                            onPlanWithRena: { renaContext = isToday ? "meal_plan" : "plan:\(dateString)"; showRena = true },
                             onDelete:       { Task { await deleteMealPlanAction() } },
                             onWatch:        { meal in logMealSheet = meal },
                             onLog:          { meal in Task { await logMeal(meal) } }
-                        )
-                    }
-
-                    // ── Plan Tomorrow — always visible on today ──────
-                    if isToday {
-                        WorkbookVoiceCard(
-                            icon: "moon.stars.fill",
-                            iconColor: Color(hex: "9B7EC8"),
-                            title: "Plan Tomorrow",
-                            subtitle: "Review today with Rena and set tomorrow's targets",
-                            onTap: { renaContext = "plan_tomorrow"; showRena = true }
-                        )
-                    }
-
-                    // ── Activity summary — not shown for tomorrow ────
-                    if !isTomorrow {
-                        TodayActivityCard(
-                            aiSummary: activity,
-                            isLoading: isLoading,
-                            meals: displayMeals,
-                            workouts: displayWorkouts,
-                            isToday: isToday
                         )
                     }
 
@@ -183,7 +135,7 @@ struct WorkbookView: View {
             .scrollBounceBehavior(.always)
             .refreshable { await loadDay() }
             .onAppear { Task { await loadDay() } }
-            .onChange(of: voice.turnCount) { if isToday { Task { await loadDay() } } }
+            .onChange(of: voice.turnCount) { if !isPast { Task { await loadDay() } } }
             .sheet(item: $logSheet) { ex in
                 LogExerciseSheet(exercise: ex, userId: appState.userId, dateString: dateString)
             }
@@ -199,34 +151,36 @@ struct WorkbookView: View {
         }
     }
 
-    // MARK: - Workout plan
+    // MARK: - Actions
 
     private func generatePlan() async {
         await MainActor.run { isGeneratingPlan = true }
-        let plan = try? await RenaAPI.shared.generateWorkoutPlan(userId: appState.userId)
-        await MainActor.run { workoutPlan = plan; isGeneratingPlan = false }
+        let plan = try? await RenaAPI.shared.generateWorkoutPlan(userId: appState.userId, date: dateString)
+        await MainActor.run {
+            workoutPlan = plan
+            isGeneratingPlan = false
+        }
     }
 
     private func deletePlan() async {
-        try? await RenaAPI.shared.deleteWorkoutPlan(userId: appState.userId)
+        try? await RenaAPI.shared.deleteWorkoutPlan(userId: appState.userId, date: dateString)
         await MainActor.run { workoutPlan = nil }
     }
 
     private func deleteMealPlanAction() async {
-        try? await RenaAPI.shared.deleteMealPlan(userId: appState.userId, date: isTomorrow ? tomorrowDateString : nil)
+        try? await RenaAPI.shared.deleteMealPlan(userId: appState.userId, date: dateString)
         await MainActor.run { mealPlan = nil }
     }
 
     private func logMeal(_ meal: PlannedMeal) async {
-        try? await RenaAPI.shared.logMealFromPlan(userId: appState.userId, mealId: meal.id, date: isToday ? nil : dateString)
-        let plan = try? await RenaAPI.shared.getMealPlan(userId: appState.userId, date: isToday ? nil : dateString)
+        try? await RenaAPI.shared.logMealFromPlan(userId: appState.userId, mealId: meal.id, date: dateString)
+        let plan = try? await RenaAPI.shared.getMealPlan(userId: appState.userId, date: dateString)
         await MainActor.run { mealPlan = plan }
     }
 
-    private var tomorrowDateString: String {
-        let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd"
-        fmt.timeZone = TimeZone(identifier: "UTC")
-        return fmt.string(from: Calendar.current.date(byAdding: .day, value: 1, to: Date())!)
+    private func deletePlanNote() async {
+        try? await RenaAPI.shared.deleteTomorrowPlan(userId: appState.userId, date: dateString)
+        await MainActor.run { planNote = "" }
     }
 
     private func toggleComplete(_ exercise: PlannedExercise) async {
@@ -239,123 +193,20 @@ struct WorkbookView: View {
     // MARK: - Data
 
     private func loadDay() async {
-        await MainActor.run { isLoading = true; insight = ""; activity = "" }
-        let date = (isToday || isTomorrow) ? nil : dateString
-        async let progressTask  = RenaAPI.shared.getProgress(userId: appState.userId, date: dateString)
-        async let insightTask   = RenaAPI.shared.getWorkbookInsight(userId: appState.userId, date: date)
-        async let planTask      = RenaAPI.shared.getWorkoutPlan(userId: appState.userId, date: dateString)
-        async let mealPlanTask  = RenaAPI.shared.getMealPlan(userId: appState.userId, date: dateString)
-        let progress = try? await progressTask
-        let result   = try? await insightTask
-        let plan     = try? await planTask
-        let mPlan    = try? await mealPlanTask
+        await MainActor.run { isLoading = true; planNote = "" }
+        let d = dateString
+        async let planTask     = RenaAPI.shared.getWorkoutPlan(userId: appState.userId, date: d)
+        async let mealPlanTask = RenaAPI.shared.getMealPlan(userId: appState.userId, date: d)
+        async let noteTask     = RenaAPI.shared.getTomorrowPlan(userId: appState.userId, date: d)
+        let plan  = try? await planTask
+        let mPlan = try? await mealPlanTask
+        let note  = try? await noteTask
         await MainActor.run {
-            dayData     = progress
             workoutPlan = plan
             mealPlan    = mPlan
-            if let r = result { insight = r.insight; activity = r.activity }
-            isLoading = false
+            planNote    = note ?? ""
+            isLoading   = false
         }
-    }
-}
-
-// MARK: - Header card
-
-struct WorkbookHeader: View {
-    let isMorning: Bool
-    let isEvening: Bool
-    let caloriesConsumed: Int
-    let caloriesTarget: Int
-    let caloriesBurned: Int
-    var isToday: Bool = true
-
-    private var netCalories: Int { caloriesConsumed - caloriesBurned }
-    private var remaining: Int   { max(0, caloriesTarget - netCalories) }
-    private var progress: Double { min(1.0, Double(max(0, netCalories)) / Double(max(caloriesTarget, 1))) }
-
-    private var phaseIcon: String {
-        if isMorning { return "sun.rise.fill" }
-        if isEvening { return "moon.fill" }
-        return "sun.max.fill"
-    }
-    private var phaseColor: Color {
-        if isMorning { return Color(hex: "F4A261") }
-        if isEvening { return Color(hex: "9B7EC8") }
-        return Color(hex: "E9C46A")
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(isToday ? "TODAY'S CALORIES" : "DAY'S CALORIES")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color(hex: "B09880"))
-                        .kerning(1.0)
-                    HStack(alignment: .lastTextBaseline, spacing: 4) {
-                        Text("\(remaining)")
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(hex: "E76F51"))
-                        Text("kcal remaining")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(hex: "B09880"))
-                    }
-                }
-                Spacer()
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(phaseColor.opacity(0.14))
-                        .frame(width: 38, height: 38)
-                    Image(systemName: phaseIcon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(phaseColor)
-                }
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(Color(hex: "F0E6DA"))
-                        .frame(height: 8)
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(LinearGradient(
-                            colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
-                            startPoint: .leading, endPoint: .trailing
-                        ))
-                        .frame(width: geo.size.width * progress, height: 8)
-                        .animation(.spring(), value: progress)
-                }
-            }
-            .frame(height: 8)
-
-            HStack(spacing: 0) {
-                caloriePill(icon: "fork.knife",  value: "\(caloriesConsumed)", label: "eaten",  color: Color(hex: "E76F51"))
-                Spacer()
-                caloriePill(icon: "figure.run",  value: "\(caloriesBurned)",  label: "burned", color: Color(hex: "2A9D8F"))
-                Spacer()
-                caloriePill(icon: "target",      value: "\(caloriesTarget)",  label: "target", color: Color(hex: "B09880"))
-            }
-        }
-        .padding(18)
-        .background(Color.white)
-        .cornerRadius(18)
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
-    }
-
-    @ViewBuilder
-    private func caloriePill(icon: String, value: String, label: String, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(color)
-            Text("\(value) \(label)")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color(hex: "5C3D2E"))
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(color.opacity(0.08))
-        .cornerRadius(20)
     }
 }
 
@@ -421,113 +272,13 @@ struct DaySoFarCard: View {
     }
 }
 
-// MARK: - Activity summary (food + workout as friendly text)
-
-struct TodayActivityCard: View {
-    let aiSummary: String
-    let isLoading: Bool
-    let meals: [MealEntry]
-    let workouts: [WorkoutEntry]
-    var isToday: Bool = true
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(Color(hex: "457B9D").opacity(0.12))
-                        .frame(width: 26, height: 26)
-                    Image(systemName: "list.bullet.rectangle")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color(hex: "457B9D"))
-                }
-                Text(isToday ? "TODAY'S ACTIVITY" : "DAY'S ACTIVITY")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Color(hex: "B09880"))
-                    .kerning(1.0)
-            }
-
-            if isLoading {
-                HStack(spacing: 8) {
-                    ProgressView().scaleEffect(0.8)
-                    Text("Summarising your day…")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color(hex: "B09880"))
-                }
-            } else if !aiSummary.isEmpty {
-                Text(aiSummary)
-                    .font(.system(size: 15))
-                    .foregroundColor(Color(hex: "3D2B1F"))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(4)
-            } else {
-                Text(fallback)
-                    .font(.system(size: 14))
-                    .foregroundColor(Color(hex: "B09880"))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(2)
-            }
-
-            // Quick meal/workout count chips
-            if !meals.isEmpty || !workouts.isEmpty {
-                HStack(spacing: 8) {
-                    if !meals.isEmpty {
-                        activityChip(
-                            icon: "fork.knife",
-                            label: "\(meals.count) meal\(meals.count == 1 ? "" : "s")",
-                            color: Color(hex: "E76F51")
-                        )
-                    }
-                    if !workouts.isEmpty {
-                        activityChip(
-                            icon: "figure.run",
-                            label: "\(workouts.count) workout\(workouts.count == 1 ? "" : "s")",
-                            color: Color(hex: "2A9D8F")
-                        )
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(Color.white)
-        .cornerRadius(18)
-        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
-    }
-
-    @ViewBuilder
-    private func activityChip(icon: String, label: String, color: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(color)
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(color)
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background(color.opacity(0.08))
-        .cornerRadius(20)
-    }
-
-    private var fallback: String {
-        if meals.isEmpty && workouts.isEmpty {
-            return "Nothing logged yet — tell Rena what you've eaten or how you moved today."
-        }
-        if workouts.isEmpty {
-            return "You've logged \(meals.count) meal\(meals.count > 1 ? "s" : "") today. No workouts yet."
-        }
-        return "You've logged \(meals.count) meal\(meals.count > 1 ? "s" : "") and \(workouts.count) workout\(workouts.count > 1 ? "s" : "") today."
-    }
-}
-
 // MARK: - Unified Workout Plan Section
 
 struct WorkoutPlanSection: View {
     let plan: PlannedWorkout?
     let isGenerating: Bool
     var isInteractive: Bool = true
+    var readOnly: Bool = false
     var sectionTitle: String = "TODAY'S WORKOUT"
     let onPlanWithRena: () -> Void
     let onOpenRena: () -> Void
@@ -557,7 +308,7 @@ struct WorkoutPlanSection: View {
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
                 Spacer()
-                if plan != nil {
+                if plan != nil && !readOnly {
                     HStack(spacing: 12) {
                         Button(action: onRegenerate) {
                             Image(systemName: "arrow.clockwise")
@@ -632,11 +383,13 @@ struct WorkoutPlanSection: View {
                         .foregroundColor(Color(hex: "B09880"))
                         .fixedSize(horizontal: false, vertical: true)
 
-                    renaActionButton(
-                        label: "Plan with Rena",
-                        subtitle: isInteractive ? "Rena will build today's workout for you" : "Rena will plan tomorrow's workout",
-                        action: onPlanWithRena
-                    )
+                    if !readOnly {
+                        renaActionButton(
+                            label: "Plan with Rena",
+                            subtitle: isInteractive ? "Rena will build today's workout for you" : "Rena will plan tomorrow's workout",
+                            action: onPlanWithRena
+                        )
+                    }
                 }
             }
         }
@@ -792,70 +545,92 @@ struct ExerciseRow: View {
     }
 }
 
-// MARK: - Voice action card (Plan Tomorrow)
+// MARK: - Day Plan Card
 
-struct WorkbookVoiceCard: View {
-    let icon: String
-    let iconColor: Color
-    let title: String
-    let subtitle: String
+struct DayPlanCard: View {
+    let note: String
+    let isReadOnly: Bool
+    var onDelete: (() -> Void)? = nil
     let onTap: () -> Void
+
+    private let accent = Color(hex: "9B7EC8")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(iconColor.opacity(0.12))
+                        .fill(accent.opacity(0.12))
                         .frame(width: 40, height: 40)
-                    Image(systemName: icon)
+                    Image(systemName: note.isEmpty ? "moon.stars.fill" : "text.quote")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(iconColor)
+                        .foregroundColor(accent)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(note.isEmpty ? "Plan" : "Plan, Summarised by Rena")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(Color(hex: "3D2B1F"))
-                    Text(subtitle)
+                    Text(note.isEmpty ? "Talk to Rena to set your focus" : "Tap below to update with Rena")
                         .font(.system(size: 12))
                         .foregroundColor(Color(hex: "B09880"))
                 }
                 Spacer()
+                if let onDelete {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color(hex: "C4A882"))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
-            Button(action: onTap) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient(
-                                colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ))
-                            .frame(width: 40, height: 40)
-                            .shadow(color: Color(hex: "E76F51").opacity(0.3), radius: 8, y: 3)
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Plan with Rena")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(Color(hex: "3D2B1F"))
-                        Text("Rena will review today and plan tomorrow")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(hex: "B09880"))
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color(hex: "C4A882"))
-                }
-                .padding(14)
-                .background(Color(hex: "FFF8F2"))
-                .cornerRadius(14)
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: "F4C9A8"), lineWidth: 1))
+            if !note.isEmpty {
+                Text(note)
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(hex: "5C4033"))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(accent.opacity(0.07))
+                    .cornerRadius(10)
             }
-            .buttonStyle(.plain)
+
+            if !isReadOnly {
+                Button(action: onTap) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(
+                                    colors: [Color(hex: "E76F51"), Color(hex: "F4A261")],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                ))
+                                .frame(width: 40, height: 40)
+                                .shadow(color: Color(hex: "E76F51").opacity(0.3), radius: 8, y: 3)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(note.isEmpty ? "Plan with Rena" : "Update Plan")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(Color(hex: "3D2B1F"))
+                            Text(note.isEmpty ? "Set your focus for the day" : "Chat with Rena to refine your plan")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(hex: "B09880"))
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(hex: "C4A882"))
+                    }
+                    .padding(14)
+                    .background(Color(hex: "FFF8F2"))
+                    .cornerRadius(14)
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: "F4C9A8"), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(18)
         .background(Color.white)
@@ -869,6 +644,7 @@ struct WorkbookVoiceCard: View {
 struct MealPlanSection: View {
     let plan: PlannedMealPlan?
     var isInteractive: Bool = true
+    var readOnly: Bool = false
     var sectionTitle: String = "TODAY'S MEALS"
     let onPlanWithRena: () -> Void
     let onDelete: () -> Void
@@ -895,7 +671,7 @@ struct MealPlanSection: View {
                     .foregroundColor(Color(hex: "B09880"))
                     .kerning(1.0)
                 Spacer()
-                if plan != nil {
+                if plan != nil && !readOnly {
                     Button(action: onDelete) {
                         Image(systemName: "xmark")
                             .font(.system(size: 13, weight: .semibold))
@@ -949,7 +725,7 @@ struct MealPlanSection: View {
                         .foregroundColor(Color(hex: "B09880"))
                         .fixedSize(horizontal: false, vertical: true)
 
-                    mealPlanButton
+                    if !readOnly { mealPlanButton }
                 }
             }
         }

@@ -102,7 +102,7 @@ struct ScanResponse: Codable {
 }
 
 struct MealEntry: Identifiable {
-    var id: String { loggedAt ?? name }
+    var id: String { "\(loggedAt ?? name)-\(name)-\(calories)" }
     let name: String
     let calories: Int
     let proteinG: Int
@@ -296,6 +296,22 @@ struct PlannedMeal: Codable, Identifiable {
     }
 }
 
+extension PlannedMeal {
+    init(fromMealEntry name: String, calories: Int, proteinG: Int, carbsG: Int, fatG: Int) {
+        self.id          = UUID().uuidString
+        self.mealType    = "meal"
+        self.name        = name
+        self.description = ""
+        self.cookTimeMin = 0
+        self.calories    = calories
+        self.proteinG    = proteinG
+        self.carbsG      = carbsG
+        self.fatG        = fatG
+        self.youtubeQuery = "\(name) recipe"
+        self.logged      = true
+    }
+}
+
 struct PlannedMealPlan: Codable {
     let id: String
     let date: String
@@ -458,7 +474,6 @@ class RenaAPI {
         if let date { urlString += "?date=\(date)" }
         let req = try request(urlString)
         let (data, _) = try await session.data(for: req)
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], json.isEmpty { return nil }
         return try? JSONDecoder().decode(PlannedMealPlan.self, from: data)
     }
 
@@ -485,6 +500,25 @@ class RenaAPI {
             return nudge
         }
         return nil
+    }
+
+    func getTomorrowPlan(userId: String, date: String? = nil) async throws -> String? {
+        var urlString = "\(kBaseURL)/tomorrow-plan/\(userId)"
+        if let date { urlString += "?date=\(date)" }
+        let req = try request(urlString)
+        let (data, _) = try await session.data(for: req)
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let summary = json["summary"] as? String, !summary.isEmpty {
+            return summary
+        }
+        return nil
+    }
+
+    func deleteTomorrowPlan(userId: String, date: String? = nil) async throws {
+        var urlString = "\(kBaseURL)/tomorrow-plan/\(userId)"
+        if let date { urlString += "?date=\(date)" }
+        let req = try request(urlString, method: "DELETE")
+        _ = try await session.data(for: req)
     }
 
     func devReset(userId: String) async throws {
@@ -529,8 +563,7 @@ class RenaAPI {
         if let date { urlString += "?date=\(date)" }
         let req = try request(urlString)
         let (data, _) = try await session.data(for: req)
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], json.isEmpty { return nil }
-        return try JSONDecoder().decode(PlannedWorkout.self, from: data)
+        return try? JSONDecoder().decode(PlannedWorkout.self, from: data)
     }
 
     func deleteWorkoutPlan(userId: String, date: String? = nil) async throws {
@@ -540,8 +573,10 @@ class RenaAPI {
         _ = try await session.data(for: req)
     }
 
-    func generateWorkoutPlan(userId: String) async throws -> PlannedWorkout {
-        let req = try request("\(kBaseURL)/workout-plan/\(userId)", method: "POST")
+    func generateWorkoutPlan(userId: String, date: String? = nil) async throws -> PlannedWorkout {
+        var urlString = "\(kBaseURL)/workout-plan/\(userId)"
+        if let date { urlString += "?date=\(date)" }
+        let req = try request(urlString, method: "POST")
         let (data, _) = try await session.data(for: req)
         return try JSONDecoder().decode(PlannedWorkout.self, from: data)
     }

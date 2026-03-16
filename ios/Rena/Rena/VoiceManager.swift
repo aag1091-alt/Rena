@@ -104,6 +104,7 @@ class VoiceManager: NSObject, ObservableObject {
         disconnectWebSocket()
         state = .idle
         transcript = ""
+        toolStatus = ""
     }
 
     func sendText(_ text: String) {

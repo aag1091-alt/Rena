@@ -48,19 +48,21 @@ struct DataView: View {
 
                     // ── Date navigator ─────────────────────────────────
                     HStack(spacing: 0) {
+                        let isOldest = (Calendar.current.dateComponents([.day], from: selectedDate, to: Date()).day ?? 0) >= 90
                         Button {
                             selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate)!
                             Task { await loadData() }
                         } label: {
                             ZStack {
                                 Circle()
-                                    .fill(Color(hex: "E76F51").opacity(0.10))
+                                    .fill(isOldest ? Color(hex: "B09880").opacity(0.08) : Color(hex: "E76F51").opacity(0.10))
                                     .frame(width: 36, height: 36)
                                 Image(systemName: "chevron.left")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(Color(hex: "E76F51"))
+                                    .foregroundColor(isOldest ? Color(hex: "C4A882") : Color(hex: "E76F51"))
                             }
                         }
+                        .disabled(isOldest)
 
                         Spacer()
 
@@ -663,7 +665,7 @@ struct WeightCard: View {
                     Text("Not logged")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(Color(hex: "B09880"))
-                    Text(isToday ? "Use the weight button on home" : "No weight recorded this day")
+                    Text(isToday ? "Tell Rena your weight to log it" : "No weight recorded this day")
                         .font(.system(size: 11))
                         .foregroundColor(Color(hex: "C4AFA0"))
                 }

@@ -22,7 +22,7 @@ struct ScanView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color(hex: "FDF6EE").ignoresSafeArea()
+                Color(hex: "F7F3EE").ignoresSafeArea()
                 VStack(spacing: 0) {
                     AppHeader()
                     ScrollView {
@@ -173,13 +173,24 @@ struct ScanView: View {
             .padding(.horizontal, 4)
 
             if logState == .logged {
-                Label("All items logged!", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline.bold())
-                    .foregroundColor(Color(hex: "2A9D8F"))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color(hex: "2A9D8F").opacity(0.1))
-                    .cornerRadius(14)
+                VStack(spacing: 10) {
+                    Label("All items logged!", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.bold())
+                        .foregroundColor(Color(hex: "2A9D8F"))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color(hex: "2A9D8F").opacity(0.1))
+                        .cornerRadius(14)
+                    Button(action: resetScan) {
+                        Text("Scan another")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(Color(hex: "E76F51"))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color(hex: "E76F51").opacity(0.09))
+                            .cornerRadius(14)
+                    }
+                }
             } else {
                 Button {
                     Task { await logAllItems(items) }
