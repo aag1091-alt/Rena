@@ -48,6 +48,22 @@ Features available: voice, home dashboard, history, plan/workbook, food scan, se
 
 ---
 
+## Testing tools (Settings ⚙)
+
+Tap the **⚙ gear icon** in the top-right corner of the home screen to open the Settings sheet. It has three tools useful for testing:
+
+| Action | What it does |
+|---|---|
+| **Seed 7 Days Data** | Fills your account with realistic meals, workouts, and weight entries for the past 7 days — great for getting a feel for the app without having to log everything manually |
+| **Reset Onboarding** | Deletes all your data and returns to the onboarding flow — useful for starting fresh between demo runs |
+| **Log Out** | Signs you out and returns to the Google sign-in screen |
+
+All three actions are scoped to the currently signed-in user only.
+
+> **Tip for judges:** Hit **Seed 7 Days Data** first thing after signing in — it immediately populates History, Home stats, and the Plan view so you can explore a fully loaded app experience.
+
+---
+
 ## AI-generated exercise videos
 
 Rena includes AI-generated video demonstrations for a selection of exercises, served directly from Google Cloud Storage.
