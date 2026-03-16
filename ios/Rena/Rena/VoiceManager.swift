@@ -31,6 +31,15 @@ class VoiceManager: NSObject, ObservableObject {
     private var micTapInstalled = false
     private var thinkingWorkItem: DispatchWorkItem?
 
+    /// Incremented on every disconnect. Stale DispatchQueue.main.async blocks
+    /// capture this value and bail if it has changed by the time they execute.
+    private var sessionVersion: Int = 0
+
+    /// Set at the start of connect(); cleared immediately by disconnect() so a
+    /// pending AVAudioApplication.requestRecordPermission callback self-aborts
+    /// rather than opening a ghost WebSocket after the session was already torn down.
+    private var pendingConnectID: UUID?
+
     override init() {
         super.init()
     }
@@ -68,6 +77,9 @@ class VoiceManager: NSObject, ObservableObject {
         disconnectWebSocket()
         state = .connecting
 
+        let connectID = UUID()
+        pendingConnectID = connectID
+
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self else { return }
             guard granted else {
@@ -75,6 +87,8 @@ class VoiceManager: NSObject, ObservableObject {
                 return
             }
             DispatchQueue.main.async {
+                // Abort if disconnect() was called while waiting for permission.
+                guard self.pendingConnectID == connectID else { return }
                 // Install tap first — accessing inputNode may reconfigure + stop the engine.
                 // Then ensure engine is running after the reconfiguration settles.
                 self.installMicTapIfNeeded()
@@ -99,8 +113,11 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Disconnect (WebSocket only — engine stays alive)
 
     func disconnect() {
+        pendingConnectID = nil        // abort any in-flight permission callback
         thinkingWorkItem?.cancel()
         thinkingWorkItem = nil
+        sessionVersion += 1          // invalidate all stale main-queue state writes
+        audioPlayer.stop()           // immediately cut any queued / playing audio
         disconnectWebSocket()
         state = .idle
         transcript = ""
@@ -118,11 +135,11 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Private helpers
 
     private func disconnectWebSocket() {
-        if let ws = webSocket {
-            let msg = URLSessionWebSocketTask.Message.string(#"{"type":"end_session"}"#)
-            ws.send(msg) { _ in }
-            ws.cancel(with: .normalClosure, reason: nil)
-        }
+        // A normal WS close frame is sufficient — the backend's recv_from_client()
+        // detects websocket.disconnect and tears down the Gemini session cleanly.
+        // Sending end_session before cancel() is unreliable (cancel wins the race),
+        // so we skip it and rely on the standard close handshake.
+        webSocket?.cancel(with: .normalClosure, reason: nil)
         webSocket = nil
     }
 
@@ -153,7 +170,6 @@ class VoiceManager: NSObject, ObservableObject {
         // Converter is created lazily on the first real buffer — avoids the 0.0Hz
         // sample rate that inputNode reports before the hardware finishes initializing.
         var converter: AVAudioConverter?
-        var micChunkCount = 0
 
         audioEngine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
             guard let self else { return }
@@ -179,15 +195,16 @@ class VoiceManager: NSObject, ObservableObject {
                 return buffer
             }
             guard error == nil, let data = converted.toData() else { return }
-            micChunkCount += 1
             self.webSocket?.send(.data(data)) { _ in }
 
-            // After 500 ms of silence from the server, assume Gemini is processing → show thinking
+            // After 500 ms of silence from the server, assume Gemini is processing → show thinking.
+            // Capture sessionVersion so this work item self-cancels if disconnect() fires first.
+            let v = self.sessionVersion
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.thinkingWorkItem?.cancel()
                 let item = DispatchWorkItem { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.sessionVersion == v else { return }
                     if case .listening = self.state { self.state = .thinking }
                 }
                 self.thinkingWorkItem = item
@@ -201,13 +218,17 @@ class VoiceManager: NSObject, ObservableObject {
     private func receiveLoop() {
         guard let ws = webSocket else { return }
         ws.receive { [weak self] result in
-            guard let self, self.webSocket === ws else { return }  // ignore if already disconnected/replaced
+            guard let self, self.webSocket === ws else { return }  // discard stale callbacks
+            // Capture version on the URLSession thread; each main-queue block checks it
+            // to self-cancel if disconnect() has already run between now and execution.
+            let v = self.sessionVersion
             switch result {
             case .success(let msg):
                 switch msg {
                 case .data(let audioData):
                     self.playAudio(audioData)
                     DispatchQueue.main.async {
+                        guard self.sessionVersion == v else { return }
                         self.thinkingWorkItem?.cancel()
                         self.thinkingWorkItem = nil
                         self.toolStatus = ""
@@ -218,27 +239,33 @@ class VoiceManager: NSObject, ObservableObject {
                         let msgType = json["type"] as? String
                         if msgType == "tool_status", let message = json["message"] as? String {
                             DispatchQueue.main.async {
+                                guard self.sessionVersion == v else { return }
                                 self.toolStatus = message
                                 self.state = .thinking
                             }
                         } else if msgType == "turn_complete" {
                             DispatchQueue.main.async {
+                                guard self.sessionVersion == v else { return }
                                 self.thinkingWorkItem?.cancel()
                                 self.thinkingWorkItem = nil
                                 self.toolStatus = ""
                                 self.state = .listening
                                 self.turnCount += 1
-                                // Fade out CC captions after a short pause
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                // Fade out CC captions after a short pause.
+                                // Guard against the 1.5 s delay outliving this session.
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                                    guard let self, self.sessionVersion == v else { return }
                                     withAnimation(.easeOut(duration: 0.4)) { self.transcript = "" }
                                 }
                             }
                         } else if msgType == "transcript", let t = json["text"] as? String, !t.isEmpty {
                             DispatchQueue.main.async {
+                                guard self.sessionVersion == v else { return }
                                 withAnimation(.easeIn(duration: 0.15)) { self.transcript = t }
                             }
                         } else if let t = json["text"] as? String {
                             DispatchQueue.main.async {
+                                guard self.sessionVersion == v else { return }
                                 self.lastResponse = t
                                 self.state = .listening
                             }
@@ -249,6 +276,7 @@ class VoiceManager: NSObject, ObservableObject {
                 self.receiveLoop()
             case .failure:
                 DispatchQueue.main.async {
+                    // No version guard here — a failure always reflects the current socket's health.
                     self.thinkingWorkItem?.cancel()
                     self.thinkingWorkItem = nil
                     self.toolStatus = ""
