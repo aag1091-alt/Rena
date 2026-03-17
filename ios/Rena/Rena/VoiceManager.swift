@@ -2,6 +2,9 @@ import Foundation
 import AVFoundation
 import Combine
 import SwiftUI
+import os.log
+
+private let vlog = Logger(subsystem: "com.rena.app", category: "Voice")
 
 enum VoiceState: Equatable {
     case idle
@@ -13,8 +16,6 @@ enum VoiceState: Equatable {
 }
 
 /// Shared voice manager — one instance for the whole app lifetime.
-/// The audio engine starts once and never stops, eliminating interruptions
-/// caused by session-category switches between screens.
 class VoiceManager: NSObject, ObservableObject {
     @Published var state: VoiceState = .idle
     @Published var transcript: String = ""
@@ -42,17 +43,57 @@ class VoiceManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        // Re-start the engine whenever iOS reconfigures the audio graph
+        // (e.g. headphones plugged in, phone call ends, sample-rate change).
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleEngineConfigChange),
+            name: .AVAudioEngineConfigurationChange,
+            object: audioEngine
+        )
     }
 
-    // MARK: - Engine (lazy start — called when first connection is made, never stopped after)
+    @objc private func handleEngineConfigChange(_ notification: Notification) {
+        // iOS stopped the engine due to a hardware reconfiguration (e.g. headphones,
+        // phone call, sample-rate change). Just restart it — DO NOT touch the tap.
+        // The tap survives engine stops; reinstalling it would crash ("already has a tap").
+        vlog.warning("AVAudioEngineConfigurationChange fired")
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.audioEngine.isRunning else { return }
+            vlog.info("Engine not running after config change — restarting")
+            self.ensureEngineRunning()
+        }
+    }
+
+    // MARK: - Engine setup
+
+    private func activateVoiceChatSession() {
+        // Set voiceChat mode so the HW sample rate is locked to 16 kHz BEFORE
+        // installMicTapIfNeeded() accesses inputNode. The tap is installed with
+        // format:nil (= current HW format), so the session mode must be set first
+        // to avoid an HW-format mismatch (-10868) if the mode is changed later.
+        let s = AVAudioSession.sharedInstance()
+        do {
+            try s.setCategory(.playAndRecord, mode: .voiceChat,
+                              options: [.defaultToSpeaker, .allowBluetooth])
+            try s.setActive(true)
+            vlog.info("AVAudioSession set: voiceChat, HW sample rate = \(s.sampleRate) Hz")
+        } catch {
+            vlog.error("AVAudioSession setup failed: \(error)")
+        }
+    }
 
     private func ensureEngineRunning() {
-        guard !audioEngine.isRunning else { return }
+        guard !audioEngine.isRunning else {
+            vlog.debug("ensureEngineRunning: already running")
+            return
+        }
 
-        let avSession = AVAudioSession.sharedInstance()
-        try? avSession.setCategory(.playAndRecord, mode: .voiceChat,
-                                   options: [.defaultToSpeaker, .allowBluetooth])
-        try? avSession.setActive(true)
+        // Session must be active (voiceChat mode) before we start the engine.
+        let s = AVAudioSession.sharedInstance()
+        try? s.setCategory(.playAndRecord, mode: .voiceChat,
+                           options: [.defaultToSpeaker, .allowBluetooth])
+        try? s.setActive(true)
 
         if playerFormat == nil {
             playerFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
@@ -60,20 +101,23 @@ class VoiceManager: NSObject, ObservableObject {
             audioEngine.attach(audioPlayer)
             if let pf = playerFormat {
                 audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: pf)
+                vlog.info("AudioPlayer attached and connected at 24 kHz Int16")
             }
         }
 
         audioEngine.prepare()
         do {
             try audioEngine.start()
+            vlog.info("AudioEngine started, isRunning=\(self.audioEngine.isRunning)")
         } catch {
-            // engine start failure is non-fatal; will retry on playback
+            vlog.error("AudioEngine.start() failed: \(error)")
         }
     }
 
     // MARK: - Connect (full duplex: mic + speaker)
 
     func connect(userId: String, context: String? = nil, name: String? = nil) {
+        vlog.info("connect() userId=\(userId) context=\(context ?? "nil")")
         disconnectWebSocket()
         state = .connecting
 
@@ -82,21 +126,33 @@ class VoiceManager: NSObject, ObservableObject {
 
         AVAudioApplication.requestRecordPermission { [weak self] granted in
             guard let self else { return }
+            vlog.info("Microphone permission: \(granted)")
             guard granted else {
                 DispatchQueue.main.async { self.state = .error("Microphone access denied") }
                 return
             }
             DispatchQueue.main.async {
-                // Abort if disconnect() was called while waiting for permission.
-                guard self.pendingConnectID == connectID else { return }
-                // Set voiceChat mode first so the HW sample rate is 16 kHz before the tap
-                // is installed. Installing with format:nil captures the current HW format —
-                // if we set the mode after, the HW shifts to 16 kHz while the tap is still
-                // holding 48 kHz, causing an engine restart with mismatched formats (-10868).
-                self.ensureEngineRunning()
+                guard self.pendingConnectID == connectID else {
+                    vlog.info("connect() aborted — session was disconnected while waiting for permission")
+                    return
+                }
+
+                // Step 1: Set voiceChat mode FIRST so HW = 16 kHz before tap install.
+                //         The tap uses format:nil (= current HW format), so this must
+                //         happen before inputNode is accessed.
+                self.activateVoiceChatSession()
+
+                // Step 2: Install tap — accessing inputNode may reconfigure + stop the engine.
+                //         That is expected; ensureEngineRunning() (step 3) handles the restart.
                 self.installMicTapIfNeeded()
+
+                // Step 3: Start engine AFTER any reconfiguration from inputNode access has settled.
+                self.ensureEngineRunning()
+
+                // Step 4: Open WebSocket — audio flows once the server sends its opening prompt.
                 self.openWebSocket(userId: userId, context: context, name: name)
                 self.state = .listening
+                vlog.info("connect() complete — engine=\(self.audioEngine.isRunning) state=listening")
             }
         }
     }
@@ -104,7 +160,9 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Connect (playback only — intro screen, no mic)
 
     func connectGreetOnly() {
+        vlog.info("connectGreetOnly()")
         disconnectWebSocket()
+        activateVoiceChatSession()
         ensureEngineRunning()
         state = .connecting
         let guestId = "guest-\(UUID().uuidString)"
@@ -115,6 +173,7 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Disconnect (WebSocket only — engine stays alive)
 
     func disconnect() {
+        vlog.info("disconnect() — sessionVersion \(self.sessionVersion) → \(self.sessionVersion + 1)")
         pendingConnectID = nil        // abort any in-flight permission callback
         thinkingWorkItem?.cancel()
         thinkingWorkItem = nil
@@ -128,9 +187,6 @@ class VoiceManager: NSObject, ObservableObject {
 
     private func fadeOutAndStop() {
         guard audioPlayer.isPlaying else { return }
-        // Drop volume to 0 — CoreAudio smooths this over ~1 ms, eliminating the
-        // hard-cut click from calling stop() mid-sample.  Then hard-stop once
-        // silence is reached and restore volume for the next session.
         audioPlayer.volume = 0
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
             self?.audioPlayer.stop()
@@ -149,10 +205,6 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Private helpers
 
     private func disconnectWebSocket() {
-        // A normal WS close frame is sufficient — the backend's recv_from_client()
-        // detects websocket.disconnect and tears down the Gemini session cleanly.
-        // Sending end_session before cancel() is unreliable (cancel wins the race),
-        // so we skip it and rely on the standard close handshake.
         webSocket?.cancel(with: .normalClosure, reason: nil)
         webSocket = nil
     }
@@ -167,36 +219,53 @@ class VoiceManager: NSObject, ObservableObject {
         components.queryItems = queryItems
 
         guard let wsURL = components.url else {
+            vlog.error("openWebSocket: invalid URL")
             DispatchQueue.main.async { self.state = .error("Invalid server URL") }
             return
         }
+        vlog.info("openWebSocket: \(wsURL)")
         webSocket = urlSession.webSocketTask(with: wsURL)
         webSocket?.resume()
         receiveLoop()
     }
 
     private func installMicTapIfNeeded() {
-        guard !micTapInstalled else { return }
+        guard !micTapInstalled else {
+            vlog.debug("installMicTapIfNeeded: tap already installed")
+            return
+        }
 
         micTapInstalled = true
+        vlog.info("installMicTapIfNeeded: installing tap on inputNode")
+
         let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                          sampleRate: 16000, channels: 1, interleaved: true)!
-        // Converter is created lazily on the first real buffer — avoids the 0.0Hz
-        // sample rate that inputNode reports before the hardware finishes initializing.
         var converter: AVAudioConverter?
+        var firstBuffer = true
 
         audioEngine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
             guard let self else { return }
             if case .speaking = self.state { return }
 
-            // Build converter from the first real buffer format
+            // Build converter lazily on the first real buffer
             if converter == nil {
-                guard buffer.format.sampleRate > 0,
-                      let c = AVAudioConverter(from: buffer.format, to: targetFormat) else {
-                            return
+                guard buffer.format.sampleRate > 0 else {
+                    vlog.warning("Tap: buffer has 0 Hz sample rate, skipping")
+                    return
+                }
+                guard let c = AVAudioConverter(from: buffer.format, to: targetFormat) else {
+                    vlog.error("Tap: failed to create converter from \(buffer.format.sampleRate) Hz → 16000 Hz")
+                    return
                 }
                 converter = c
+                vlog.info("Tap: converter created — HW=\(buffer.format.sampleRate) Hz → 16000 Hz")
             }
+
+            if firstBuffer {
+                firstBuffer = false
+                vlog.info("Tap: first audio buffer received, format=\(buffer.format.sampleRate) Hz frames=\(buffer.frameLength)")
+            }
+
             guard let converter else { return }
 
             let ratio = 16000.0 / buffer.format.sampleRate
@@ -211,8 +280,6 @@ class VoiceManager: NSObject, ObservableObject {
             guard error == nil, let data = converted.toData() else { return }
             self.webSocket?.send(.data(data)) { _ in }
 
-            // After 500 ms of silence from the server, assume Gemini is processing → show thinking.
-            // Capture sessionVersion so this work item self-cancels if disconnect() fires first.
             let v = self.sessionVersion
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
@@ -225,6 +292,7 @@ class VoiceManager: NSObject, ObservableObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
             }
         }
+        vlog.info("installMicTapIfNeeded: tap installed, engine isRunning=\(self.audioEngine.isRunning)")
     }
 
     // MARK: - Receive loop
@@ -232,14 +300,13 @@ class VoiceManager: NSObject, ObservableObject {
     private func receiveLoop() {
         guard let ws = webSocket else { return }
         ws.receive { [weak self] result in
-            guard let self, self.webSocket === ws else { return }  // discard stale callbacks
-            // Capture version on the URLSession thread; each main-queue block checks it
-            // to self-cancel if disconnect() has already run between now and execution.
+            guard let self, self.webSocket === ws else { return }
             let v = self.sessionVersion
             switch result {
             case .success(let msg):
                 switch msg {
                 case .data(let audioData):
+                    vlog.debug("WS: received audio \(audioData.count) bytes")
                     self.playAudio(audioData)
                     DispatchQueue.main.async {
                         guard self.sessionVersion == v else { return }
@@ -251,13 +318,16 @@ class VoiceManager: NSObject, ObservableObject {
                 case .string(let text):
                     if let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
                         let msgType = json["type"] as? String
+                        vlog.debug("WS: received text type=\(msgType ?? "unknown")")
                         if msgType == "tool_status", let message = json["message"] as? String {
+                            vlog.info("WS: tool_status → \(message)")
                             DispatchQueue.main.async {
                                 guard self.sessionVersion == v else { return }
                                 self.toolStatus = message
                                 self.state = .thinking
                             }
                         } else if msgType == "turn_complete" {
+                            vlog.info("WS: turn_complete received")
                             DispatchQueue.main.async {
                                 guard self.sessionVersion == v else { return }
                                 self.thinkingWorkItem?.cancel()
@@ -265,14 +335,13 @@ class VoiceManager: NSObject, ObservableObject {
                                 self.toolStatus = ""
                                 self.state = .listening
                                 self.turnCount += 1
-                                // Fade out CC captions after a short pause.
-                                // Guard against the 1.5 s delay outliving this session.
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                                     guard let self, self.sessionVersion == v else { return }
                                     withAnimation(.easeOut(duration: 0.4)) { self.transcript = "" }
                                 }
                             }
                         } else if msgType == "transcript", let t = json["text"] as? String, !t.isEmpty {
+                            vlog.info("WS: transcript → \(t)")
                             DispatchQueue.main.async {
                                 guard self.sessionVersion == v else { return }
                                 withAnimation(.easeIn(duration: 0.15)) { self.transcript = t }
@@ -288,9 +357,9 @@ class VoiceManager: NSObject, ObservableObject {
                 @unknown default: break
                 }
                 self.receiveLoop()
-            case .failure:
+            case .failure(let error):
+                vlog.error("WS: receive failure — \(error)")
                 DispatchQueue.main.async {
-                    // No version guard here — a failure always reflects the current socket's health.
                     self.thinkingWorkItem?.cancel()
                     self.thinkingWorkItem = nil
                     self.toolStatus = ""
@@ -304,7 +373,10 @@ class VoiceManager: NSObject, ObservableObject {
     // MARK: - Playback
 
     private func playAudio(_ data: Data) {
-        guard let format = playerFormat else { return }
+        guard let format = playerFormat else {
+            vlog.error("playAudio: playerFormat is nil")
+            return
+        }
         let frameCount = UInt32(data.count) / format.streamDescription.pointee.mBytesPerFrame
         guard frameCount > 0,
               let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return }
@@ -315,10 +387,13 @@ class VoiceManager: NSObject, ObservableObject {
             }
         }
         if !audioEngine.isRunning {
+            vlog.warning("playAudio: engine not running — attempting restart")
             try? AVAudioSession.sharedInstance().setActive(true)
             do {
                 try audioEngine.start()
+                vlog.info("playAudio: engine restarted, isRunning=\(self.audioEngine.isRunning)")
             } catch {
+                vlog.error("playAudio: engine restart failed — \(error)")
                 return
             }
         }
