@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from rena.voice import handle_voice
 from rena.tools import (
-    scan_image, log_meal, log_water, log_weight, get_progress, get_goal, create_profile, reset_user,
+    scan_image, log_meal, log_water, log_weight, get_progress, get_goal, create_profile, reset_user, _user_ref,
     get_workout_plan, generate_workout_plan, delete_workout_plan, toggle_exercise_complete, log_exercise_from_plan,
     get_exercise_video, get_exercise_video_status, get_morning_nudge,
     get_meal_plan, delete_meal_plan, log_meal_from_plan,
@@ -109,6 +109,12 @@ async def progress(user_id: str, date: str = None):
     """Get progress for a given date (YYYY-MM-DD) or today if omitted."""
     if not user_id or user_id.strip() == "":
         raise HTTPException(status_code=400, detail="user_id is required")
+    # Return 404 for users who haven't completed onboarding yet so the web
+    # app's handleCredential catch block correctly routes them to the
+    # onboarding screen rather than landing straight on the app.
+    user_doc = await asyncio.to_thread(_user_ref(user_id).get)
+    if not user_doc.exists:
+        raise HTTPException(status_code=404, detail="User not onboarded")
     return get_progress(user_id, for_date=date)
 
 
