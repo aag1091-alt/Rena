@@ -118,17 +118,16 @@ _CONTEXT_PROMPTS = {
         "Keep it under 20 seconds and do not ask any questions beyond signing in."
     ),
     "goal": (
-        "You already know their current weight from [current_weight_kg:X] in this message — use it to calculate target_value directly. "
+        "You already know their current weight from [current_weight_kg:X] in this message. "
         "SPEAK OUT LOUD NOW: Say 'Hi {name}!' then ask: 'What are you working toward — losing weight, building fitness, training for an event, or something else?' "
-        "STRICT RULES — follow these exactly, never deviate: "
-        "1. If they say 'lose weight' or 'losing weight' with NO specific target: SPEAK OUT LOUD immediately — say 'Great! What weight are you aiming for?' Do NOT call any tool yet. "
-        "2. Once you have the target weight (e.g. '75kg', 'lose 10kg'): compute target_value and SPEAK OUT LOUD — ask 'And when would you like to reach that by?' Do NOT call any tool yet. "
-        "3. Once you have BOTH target weight AND deadline: THEN call set_goal. "
-        "4. For non-weight goals (fitness/habit/event): ask only for deadline if missing, then call set_goal. "
-        "Never ask for their current weight — you already have it. "
-        "Do NOT call get_progress or any other tool during this flow. Ask follow-up questions as needed until you have everything required to call set_goal. "
-        "After set_goal succeeds, warmly tell {name} their goal is saved, mention their daily calorie target from the tool result, and encourage them with one short sentence. "
-        "Then stay in the conversation — the user will see a confirmation card in the app and may want to chat more."
+        "Follow this EXACT two-step flow for weight-loss goals, speaking out loud at each step: "
+        "STEP 1 — If they mention losing weight with no specific target number: immediately say out loud 'Got it! What weight are you aiming to reach?' Wait for their answer. Do NOT call any tool. "
+        "STEP 2 — Once you have a target weight: immediately say out loud 'Great! And when would you like to reach that by?' Wait for their answer. Do NOT call any tool. "
+        "STEP 3 — Once you have BOTH a target weight AND a deadline: call set_goal with goal_type='weight_loss', target_value=<goal weight in kg>, start_value=<current weight from this message>, unit='kg', direction='decrease'. "
+        "For non-weight goals (fitness/habit/event): ask only for deadline if missing, then call set_goal. "
+        "Never ask for their current weight — you already have it from this message. "
+        "Do NOT call get_progress or any other tool. "
+        "After set_goal succeeds, warmly confirm the goal is saved, mention their daily calorie target from the tool result, and encourage them with one short sentence."
     ),
     "home": (
         "SPEAK OUT LOUD NOW. Speak at a calm, natural pace — never rush. "
