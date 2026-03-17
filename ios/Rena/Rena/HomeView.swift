@@ -57,7 +57,7 @@ struct HomeView: View {
         }
         .navigationBarHidden(true)
         .onAppear { Task { await loadGoal(); await loadProgress(); await loadInsight(); await loadMorningNudge() } }
-        .onChange(of: voice.turnCount) { Task { await loadProgress(); await loadInsight() } }
+        .onChange(of: voice.turnCount) { Task { await loadGoal(); await loadProgress(); await loadInsight() } }
         } // NavigationView
     }
 
