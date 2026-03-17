@@ -1,4 +1,5 @@
 import AuthenticationServices
+import AVFoundation
 import SwiftUI
 
 struct RenaIntroView: View {
@@ -8,8 +9,7 @@ struct RenaIntroView: View {
     @State private var contentOpacity: Double = 0
     @State private var isSigningIn = false
     @State private var errorMessage: String?
-
-    @EnvironmentObject var voice: VoiceManager
+    @State private var introPlayer: AVAudioPlayer?
 
     var body: some View {
         ZStack {
@@ -87,18 +87,27 @@ struct RenaIntroView: View {
                 logoScale = 1.0
                 contentOpacity = 1.0
             }
-            // Short delay so view is fully on screen before connecting
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                speakIntro()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                playIntroAudio()
             }
         }
         .onDisappear {
-            voice.disconnect()
+            introPlayer?.stop()
+            introPlayer = nil
         }
     }
 
-    private func speakIntro() {
-        voice.connectGreetOnly()
+    private func playIntroAudio() {
+        guard let url = Bundle.main.url(forResource: "rena_intro", withExtension: "wav") else { return }
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default)
+            try session.setActive(true)
+            introPlayer = try AVAudioPlayer(contentsOf: url)
+            introPlayer?.play()
+        } catch {
+            // Non-fatal — intro plays silently if audio fails
+        }
     }
 
     private func handleSignIn() {
